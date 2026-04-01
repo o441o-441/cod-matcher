@@ -153,7 +153,12 @@ export default function TeamDetailPage() {
       return
     }
 
-    setMembers(memberData || [])
+    const normalizedMembers = (memberData || []).map((m: any) => ({
+      ...m,
+      users: Array.isArray(m.users) ? m.users[0] : m.users || null,
+    })) as TeamMemberRow[]
+
+    setMembers(normalizedMembers)
 
     const { data: matchData, error: matchError } = await supabase
       .from('matches')
