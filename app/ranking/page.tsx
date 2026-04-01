@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { RealtimeChannel } from '@supabase/supabase-js'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LoadingCard, EmptyCard } from '@/components/UIState'
@@ -25,6 +25,7 @@ export default function RankingPage() {
     const { data, error } = await supabase
       .from('teams')
       .select('id, name, rating, wins, losses, matches_played')
+      .eq('is_disbanded', false)
       .order('rating', { ascending: false })
 
     if (error) {
@@ -38,7 +39,7 @@ export default function RankingPage() {
   }
 
   useEffect(() => {
-    fetchRanking()
+    void fetchRanking()
 
     const channel = supabase
       .channel('ranking-realtime')
@@ -59,7 +60,7 @@ export default function RankingPage() {
 
     return () => {
       if (realtimeRef.current) {
-        supabase.removeChannel(realtimeRef.current)
+        void supabase.removeChannel(realtimeRef.current)
         realtimeRef.current = null
       }
     }
@@ -74,7 +75,7 @@ export default function RankingPage() {
     return (
       <main>
         <h1>ランキング</h1>
-        <LoadingCard />
+        <LoadingCard message="ランキングを読み込み中..." />
       </main>
     )
   }
@@ -92,48 +93,43 @@ export default function RankingPage() {
         </div>
       </div>
 
-      <div className="section card-strong">
-        <h2>順位一覧</h2>
+      <div className="section">
+        <div className="card-strong">
+          <h2>順位一覧</h2>
 
-        {teams.length === 0 ? (
-          <EmptyCard
-            title="チームがまだありません"
-            message="最初のチームが作成されると、ここにランキングが表示されます。"
-          />
-        ) : (
-          <div className="stack">
-            {teams.map((team, index) => (
-              <div key={team.id} className="card">
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <div>
-                    <p>
-                      <strong>順位:</strong> #{index + 1}
-                    </p>
-                    <h3>{team.name}</h3>
-                    <p>
-                      <strong>レート:</strong> {team.rating}
-                    </p>
-                    <p>
-                      <strong>戦績:</strong> {team.wins}勝 {team.losses}敗
-                    </p>
-                    <p>
-                      <strong>試合数:</strong> {team.matches_played}
-                    </p>
-                    <p>
-                      <strong>勝率:</strong> {getWinRate(team)}%
-                    </p>
-                  </div>
+          {teams.length === 0 ? (
+            <EmptyCard title="チームがありません" message="表示できるチームがまだありません。" />
+          ) : (
+            <div className="stack">
+              {teams.map((team, index) => (
+                <div key={team.id} className="card">
+                  <p>
+                    <strong>順位:</strong> #{index + 1}
+                  </p>
+                  <h3>{team.name}</h3>
+                  <p>
+                    <strong>レート:</strong> {team.rating}
+                  </p>
+                  <p>
+                    <strong>戦績:</strong> {team.wins}勝 {team.losses}敗
+                  </p>
+                  <p>
+                    <strong>試合数:</strong> {team.matches_played}
+                  </p>
+                  <p>
+                    <strong>勝率:</strong> {getWinRate(team)}%
+                  </p>
 
-                  <div className="row">
+                  <div className="row" style={{ marginTop: '12px' }}>
                     <button onClick={() => router.push(`/team/${team.id}`)}>
                       チーム詳細
                     </button>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </main>
   )
