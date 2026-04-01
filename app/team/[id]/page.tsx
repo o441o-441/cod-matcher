@@ -712,7 +712,7 @@ export default function TeamDetailPage() {
         confirmText={disbandLoading ? '解散中...' : '解散する'}
         cancelText="キャンセル"
         onConfirm={handleDisbandTeam}
-        onClose={() => {
+        onCancel={() => {
           if (!disbandLoading) setDisbandDialogOpen(false)
         }}
       />
@@ -735,7 +735,7 @@ export default function TeamDetailPage() {
           if (!transferTarget) return
           await handleTransferOwner(transferTarget)
         }}
-        onClose={() => {
+        onCancel={() => {
           if (!transferLoadingId) setTransferTarget(null)
         }}
       />
@@ -747,7 +747,7 @@ export default function TeamDetailPage() {
         confirmText={leaveLoading ? '脱退中...' : '脱退する'}
         cancelText="キャンセル"
         onConfirm={handleLeaveTeam}
-        onClose={() => {
+        onCancel={() => {
           if (!leaveLoading) setLeaveDialogOpen(false)
         }}
       />

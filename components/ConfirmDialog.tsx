@@ -8,8 +8,9 @@ type ConfirmDialogProps = {
   cancelText?: string
   danger?: boolean
   loading?: boolean
-  onConfirm: () => void
-  onCancel: () => void
+  // handlers may be async; accept Promise<void> as well
+  onConfirm: () => void | Promise<void>
+  onCancel: () => void | Promise<void>
 }
 
 export default function ConfirmDialog({
