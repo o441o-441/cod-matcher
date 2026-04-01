@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { RealtimeChannel } from '@supabase/supabase-js'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
@@ -24,21 +24,22 @@ export default function MatchPage() {
 
   const [status, setStatus] = useState('初期化中...')
   const [teamId, setTeamId] = useState<string | null>(null)
-  const [myTeamName, setMyTeamName] = useState<string>('')
-  const [myTeamRating, setMyTeamRating] = useState<number>(1500)
-  const [matchedTeamName, setMatchedTeamName] = useState<string>('')
-  const [matchedTeamId, setMatchedTeamId] = useState<string>('')
-  const [createdMatchId, setCreatedMatchId] = useState<string>('')
+  const [myTeamName, setMyTeamName] = useState('')
+  const [myTeamRating, setMyTeamRating] = useState(1500)
+  const [matchedTeamName, setMatchedTeamName] = useState('')
+  const [matchedTeamId, setMatchedTeamId] = useState('')
+  const [createdMatchId, setCreatedMatchId] = useState('')
   const [isWaiting, setIsWaiting] = useState(false)
   const [cancelLoading, setCancelLoading] = useState(false)
   const [queueCreatedAt, setQueueCreatedAt] = useState<string | null>(null)
   const [nowMs, setNowMs] = useState(Date.now())
-  const [pageError, setPageError] = useState<string>('')
+  const [pageError, setPageError] = useState('')
 
-  const pollingRef = useRef<NodeJS.Timeout | null>(null)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const matchingRef = useRef(false)
-  const clockRef = useRef<NodeJS.Timeout | null>(null)
-  const heartbeatRef = useRef<NodeJS.Timeout | null>(null)
+  const cancellingRef = useRef(false)
+  const clockRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const realtimeRef = useRef<RealtimeChannel | null>(null)
   const matchedOnceRef = useRef(false)
   const originalTitleRef = useRef('COD マッチングサイト')
@@ -53,7 +54,7 @@ export default function MatchPage() {
 
   useEffect(() => {
     if (status === 'マッチ成立！') {
-      document.title = '【マッチ成立！】COD マッチングサイト'
+      document.title = '〖マッチ成立！〗COD マッチングサイト'
 
       if (!matchedOnceRef.current) {
         matchedOnceRef.current = true
@@ -67,8 +68,8 @@ export default function MatchPage() {
           oscillator.frequency.setValueAtTime(880, audioContext.currentTime)
           oscillator.connect(gainNode)
           gainNode.connect(audioContext.destination)
-
           gainNode.gain.setValueAtTime(0.05, audioContext.currentTime)
+
           oscillator.start()
           oscillator.stop(audioContext.currentTime + 0.18)
         } catch (error) {
@@ -101,12 +102,14 @@ export default function MatchPage() {
     }
 
     if (realtimeRef.current) {
-      supabase.removeChannel(realtimeRef.current)
+      void supabase.removeChannel(realtimeRef.current)
       realtimeRef.current = null
     }
   }
 
   const pingHeartbeat = async (targetTeamId: string) => {
+    if (cancellingRef.current) return
+
     const { error } = await supabase
       .from('match_queue')
       .update({
@@ -121,7 +124,11 @@ export default function MatchPage() {
   }
 
   const deleteQueueByTeamId = async (targetTeamId: string) => {
-    return await supabase.from('match_queue').delete().eq('team_id', targetTeamId)
+    return await supabase
+      .from('match_queue')
+      .delete()
+      .eq('team_id', targetTeamId)
+      .select('team_id')
   }
 
   const leaveQueueByEdgeFunctionKeepalive = async (targetTeamId: string) => {
@@ -147,6 +154,9 @@ export default function MatchPage() {
 
   useEffect(() => {
     const init = async () => {
+      cancellingRef.current = false
+      matchedOnceRef.current = false
+
       setStatus('チーム取得中...')
       setPageError('')
 
@@ -263,7 +273,7 @@ export default function MatchPage() {
       setStatus('マッチング中...')
     }
 
-    init()
+    void init()
 
     return () => {
       stopRealtimeAndTimers()
@@ -294,7 +304,7 @@ export default function MatchPage() {
   }, [isWaiting, queueCreatedAt])
 
   useEffect(() => {
-    if (!isWaiting || !teamId) {
+    if (!isWaiting || !teamId || cancellingRef.current) {
       if (heartbeatRef.current) {
         clearInterval(heartbeatRef.current)
         heartbeatRef.current = null
@@ -302,10 +312,10 @@ export default function MatchPage() {
       return
     }
 
-    pingHeartbeat(teamId)
+    void pingHeartbeat(teamId)
 
     heartbeatRef.current = setInterval(() => {
-      pingHeartbeat(teamId)
+      void pingHeartbeat(teamId)
     }, 1000)
 
     return () => {
@@ -318,99 +328,19 @@ export default function MatchPage() {
 
   useEffect(() => {
     const handlePageHide = () => {
-      if (!teamId || !isWaiting) return
+      if (!teamId || !isWaiting || cancellingRef.current) return
       void leaveQueueByEdgeFunctionKeepalive(teamId)
     }
 
     window.addEventListener('pagehide', handlePageHide)
-
     return () => {
       window.removeEventListener('pagehide', handlePageHide)
     }
   }, [teamId, isWaiting])
 
-  useEffect(() => {
-    if (!isWaiting || !teamId || !myTeamName || !queueCreatedAt) {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
-      return
-    }
-
-    const runMatchCycle = async () => {
-      if (matchingRef.current) return
-      matchingRef.current = true
-
-      try {
-        const foundExisting = await checkExistingMatchedGame(
-          teamId,
-          myTeamName,
-          queueCreatedAt
-        )
-
-        if (foundExisting) return
-
-        await tryMatch(teamId, myTeamName, myTeamRating)
-      } finally {
-        matchingRef.current = false
-      }
-    }
-
-    runMatchCycle()
-
-    pollingRef.current = setInterval(() => {
-      runMatchCycle()
-    }, 1500)
-
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
-    }
-  }, [isWaiting, teamId, myTeamName, myTeamRating, queueCreatedAt])
-
-  useEffect(() => {
-    if (!isWaiting || !teamId || !myTeamName || !queueCreatedAt) {
-      if (realtimeRef.current) {
-        supabase.removeChannel(realtimeRef.current)
-        realtimeRef.current = null
-      }
-      return
-    }
-
-    const channel = supabase
-      .channel(`match-realtime-${teamId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'matches',
-        },
-        async (payload) => {
-          const newMatch = payload.new as MatchRow
-          if (newMatch.team1_id === teamId || newMatch.team2_id === teamId) {
-            await completeMatchedState(newMatch, teamId, myTeamName)
-          }
-        }
-      )
-      .subscribe((realtimeStatus) => {
-        console.log('realtime status:', realtimeStatus)
-      })
-
-    realtimeRef.current = channel
-
-    return () => {
-      if (realtimeRef.current) {
-        supabase.removeChannel(realtimeRef.current)
-        realtimeRef.current = null
-      }
-    }
-  }, [isWaiting, teamId, myTeamName, queueCreatedAt])
-
-  const getRecentOpponentTeamIds = async (myTeamIdValue: string): Promise<string[]> => {
+  const getRecentOpponentTeamIds = async (
+    myTeamIdValue: string
+  ): Promise<string[]> => {
     const { data: matches, error } = await supabase
       .from('matches')
       .select('*')
@@ -445,6 +375,7 @@ export default function MatchPage() {
 
   const getAllowedRatingDiff = () => {
     const waitedSec = getWaitedSeconds()
+
     if (waitedSec < 30) return 100
     if (waitedSec < 60) return 200
     if (waitedSec < 90) return 300
@@ -456,6 +387,8 @@ export default function MatchPage() {
     myTeamIdValue: string,
     myTeamNameArg: string
   ) => {
+    if (cancellingRef.current) return
+
     const opponentTeamId =
       match.team1_id === myTeamIdValue ? match.team2_id : match.team1_id
 
@@ -465,6 +398,8 @@ export default function MatchPage() {
       .eq('id', opponentTeamId)
       .single()
 
+    if (cancellingRef.current) return
+
     if (opponentTeamError || !opponentTeam) {
       console.error('opponentTeamError:', opponentTeamError)
       setStatus('相手チーム情報の取得失敗')
@@ -473,7 +408,6 @@ export default function MatchPage() {
     }
 
     stopRealtimeAndTimers()
-
     setIsWaiting(false)
     setMyTeamName(myTeamNameArg)
     setMatchedTeamName(opponentTeam.name)
@@ -488,6 +422,8 @@ export default function MatchPage() {
     myTeamNameArg: string,
     queueStartedAt: string
   ): Promise<boolean> => {
+    if (cancellingRef.current) return false
+
     const { data: recentMatches, error } = await supabase
       .from('matches')
       .select('*')
@@ -495,6 +431,8 @@ export default function MatchPage() {
       .gte('created_at', queueStartedAt)
       .order('created_at', { ascending: false })
       .limit(1)
+
+    if (cancellingRef.current) return false
 
     if (error) {
       console.error('checkExistingMatchedGame error:', error)
@@ -505,17 +443,19 @@ export default function MatchPage() {
 
     const latestMatch = recentMatches[0] as MatchRow
     await completeMatchedState(latestMatch, myTeamIdValue, myTeamNameArg)
-    return true
+    return !cancellingRef.current
   }
 
   const tryMatch = async (
     myTeamIdValue: string,
     myTeamNameArg: string,
-    myRating: number
+    _myRating: number
   ) => {
-    if (!isWaiting) return
+    if (!isWaiting || cancellingRef.current) return
 
     const recentOpponentIds = await getRecentOpponentTeamIds(myTeamIdValue)
+    if (cancellingRef.current) return
+
     const allowedDiff = getAllowedRatingDiff()
     const rpcAllowedDiff = allowedDiff === Infinity ? null : allowedDiff
 
@@ -528,6 +468,8 @@ export default function MatchPage() {
       }
     )
 
+    if (cancellingRef.current) return
+
     if (rpcError) {
       console.error('try_create_match_atomic error:', rpcError)
       setStatus('マッチング失敗')
@@ -538,6 +480,8 @@ export default function MatchPage() {
     const rows = (rpcResult || []) as AtomicMatchResult[]
 
     if (rows.length === 0) {
+      if (cancellingRef.current) return
+
       if (allowedDiff === Infinity) {
         setStatus('相手待ち...')
       } else {
@@ -547,7 +491,6 @@ export default function MatchPage() {
     }
 
     const created = rows[0]
-
     const createdMatch: MatchRow = {
       id: created.match_id,
       team1_id: myTeamIdValue,
@@ -558,43 +501,137 @@ export default function MatchPage() {
     await completeMatchedState(createdMatch, myTeamIdValue, myTeamNameArg)
   }
 
-  const handleCancelWaiting = async () => {
-    if (!teamId) return
+  useEffect(() => {
+    if (!isWaiting || !teamId || !myTeamName || !queueCreatedAt || cancellingRef.current) {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+      return
+    }
 
+    const runMatchCycle = async () => {
+      if (matchingRef.current || cancellingRef.current) return
+
+      matchingRef.current = true
+
+      try {
+        const foundExisting = await checkExistingMatchedGame(
+          teamId,
+          myTeamName,
+          queueCreatedAt
+        )
+
+        if (foundExisting || cancellingRef.current) return
+
+        await tryMatch(teamId, myTeamName, myTeamRating)
+      } finally {
+        matchingRef.current = false
+      }
+    }
+
+    void runMatchCycle()
+
+    pollingRef.current = setInterval(() => {
+      void runMatchCycle()
+    }, 1500)
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+    }
+  }, [isWaiting, teamId, myTeamName, myTeamRating, queueCreatedAt])
+
+  useEffect(() => {
+    if (!isWaiting || !teamId || !myTeamName || !queueCreatedAt || cancellingRef.current) {
+      if (realtimeRef.current) {
+        void supabase.removeChannel(realtimeRef.current)
+        realtimeRef.current = null
+      }
+      return
+    }
+
+    const channel = supabase
+      .channel(`match-realtime-${teamId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'matches',
+        },
+        async (payload) => {
+          if (cancellingRef.current) return
+
+          const newMatch = payload.new as MatchRow
+
+          if (newMatch.team1_id === teamId || newMatch.team2_id === teamId) {
+            await completeMatchedState(newMatch, teamId, myTeamName)
+          }
+        }
+      )
+      .subscribe((realtimeStatus) => {
+        console.log('realtime status:', realtimeStatus)
+      })
+
+    realtimeRef.current = channel
+
+    return () => {
+      if (realtimeRef.current) {
+        void supabase.removeChannel(realtimeRef.current)
+        realtimeRef.current = null
+      }
+    }
+  }, [isWaiting, teamId, myTeamName, queueCreatedAt])
+
+  const handleCancelWaiting = async () => {
+    if (!teamId || cancelLoading) return
+
+    cancellingRef.current = true
     setCancelLoading(true)
 
-    const { error } = await deleteQueueByTeamId(teamId)
+    stopRealtimeAndTimers()
+
+    const { data, error } = await deleteQueueByTeamId(teamId)
 
     if (error) {
       console.error('cancel waiting error:', error)
+      cancellingRef.current = false
       showToast('待機解除に失敗しました', 'error')
       setCancelLoading(false)
       return
     }
 
-    stopRealtimeAndTimers()
+    if (!data || data.length === 0) {
+      console.warn('cancel waiting: queue row was not found')
+    }
 
     setIsWaiting(false)
     setStatus('待機を解除しました')
-    showToast('待機を解除しました', 'info')
+    setPageError('')
+    showToast('マッチング待機を終了しました。', 'info')
     setCancelLoading(false)
   }
 
   const handleBackToMyPage = async () => {
     if (isWaiting && teamId) {
+      cancellingRef.current = true
+      stopRealtimeAndTimers()
+
       const { error } = await deleteQueueByTeamId(teamId)
 
       if (error) {
         console.error('back cancel waiting error:', error)
+        cancellingRef.current = false
         showToast('待機解除に失敗しました', 'error')
         return
       }
 
-      stopRealtimeAndTimers()
-
       setIsWaiting(false)
       setStatus('待機を解除しました')
-      showToast('待機を解除してマイページに戻ります', 'info')
+      showToast('待機解除してマイページに戻ります', 'info')
     }
 
     router.push('/mypage')
@@ -627,17 +664,27 @@ export default function MatchPage() {
         <div className="card-strong">
           <h2>現在の状態</h2>
           <div className="stack">
-            <p><strong>ステータス:</strong> {status}</p>
-            <p><strong>自チーム名:</strong> {myTeamName || '取得中'}</p>
-            <p><strong>自チームレート:</strong> {myTeamRating}</p>
-            <p><strong>チームID:</strong> {teamId || '取得中'}</p>
+            <p>
+              <strong>ステータス:</strong> {status}
+            </p>
+            <p>
+              <strong>自チーム名:</strong> {myTeamName || '取得中'}
+            </p>
+            <p>
+              <strong>自チームレート:</strong> {myTeamRating}
+            </p>
+            <p>
+              <strong>チームID:</strong> {teamId || '取得中'}
+            </p>
           </div>
         </div>
 
         <div className="card-strong">
           <h2>マッチ条件</h2>
           <div className="stack">
-            <p><strong>待機時間:</strong> {isWaiting ? `${getWaitedSeconds()}秒` : '-'}</p>
+            <p>
+              <strong>待機時間:</strong> {isWaiting ? `${getWaitedSeconds()}秒` : '-'}
+            </p>
             <p>
               <strong>現在の許容差:</strong>{' '}
               {getAllowedRatingDiff() === Infinity
@@ -645,7 +692,9 @@ export default function MatchPage() {
                 : `±${getAllowedRatingDiff()}`}
             </p>
             <p className="muted">直近2試合の相手は自動で除外されます</p>
-            <p className="muted">3秒以上 heartbeat が止まった待機は候補外になります</p>
+            <p className="muted">
+              3秒以上 heartbeat が止まった待機は候補外になります
+            </p>
           </div>
         </div>
       </div>
@@ -655,7 +704,6 @@ export default function MatchPage() {
           <div className="card">
             <h2>待機中</h2>
             <p>Realtime と短い heartbeat を併用して相手を探しています。</p>
-
             <div className="row" style={{ marginTop: '12px' }}>
               <button onClick={handleCancelWaiting} disabled={cancelLoading}>
                 {cancelLoading ? '解除中...' : '待機解除'}
@@ -707,7 +755,6 @@ export default function MatchPage() {
           <div className="card">
             <h2>待機解除済み</h2>
             <p>マッチング待機を終了しました。</p>
-
             <div className="section row">
               <button onClick={handleBackToMyPage}>マイページへ戻る</button>
             </div>
