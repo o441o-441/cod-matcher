@@ -76,10 +76,19 @@ export default function TeamDetailPage() {
   const [searchLoading, setSearchLoading] = useState(false)
   const [addLoading, setAddLoading] = useState(false)
   const [removeLoadingId, setRemoveLoadingId] = useState<string | null>(null)
+
+  const [transferLoadingId, setTransferLoadingId] = useState<string | null>(null)
+  const [transferTarget, setTransferTarget] = useState<TeamMemberRow | null>(null)
+
+  const [leaveLoading, setLeaveLoading] = useState(false)
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false)
+
   const [disbandLoading, setDisbandLoading] = useState(false)
   const [disbandDialogOpen, setDisbandDialogOpen] = useState(false)
 
   const canManageTeam = myTeamId === teamId && myRole === 'owner'
+  const canLeaveTeam =
+    myTeamId === teamId && myRole !== null && myRole !== 'owner'
 
   const fetchTeam = async () => {
     setLoading(true)
@@ -132,7 +141,7 @@ export default function TeamDetailPage() {
       return
     }
 
-    setTeam(teamData)
+    setTeam(teamData as TeamRow)
 
     const { data: memberData, error: memberError } = await supabase
       .from('team_members')
@@ -200,7 +209,7 @@ export default function TeamDetailPage() {
 
   useEffect(() => {
     if (!teamId) return
-    fetchTeam()
+    void fetchTeam()
   }, [teamId])
 
   const handleSearchUser = async () => {
@@ -236,7 +245,7 @@ export default function TeamDetailPage() {
       return
     }
 
-    setSearchedUser(data)
+    setSearchedUser(data as UserRow)
     setSearchLoading(false)
     showToast('ユーザーが見つかりました', 'success')
   }
@@ -272,7 +281,6 @@ export default function TeamDetailPage() {
     }
 
     console.log('add member result:', data)
-
     showToast('メンバーを追加しました', 'success')
     setSearchedUser(null)
     setSearchName('')
@@ -294,7 +302,6 @@ export default function TeamDetailPage() {
     const ok = window.confirm(
       `${member.users?.display_name || 'このユーザー'} をチームから削除しますか？`
     )
-
     if (!ok) return
 
     setRemoveLoadingId(member.id)
@@ -316,10 +323,77 @@ export default function TeamDetailPage() {
     }
 
     console.log('remove member result:', data)
-
     showToast('メンバーを削除しました', 'success')
     await fetchTeam()
     setRemoveLoadingId(null)
+  }
+
+  const handleTransferOwner = async (member: TeamMemberRow) => {
+    if (!canManageTeam) {
+      showToast('このチームを管理する権限がありません', 'error')
+      return
+    }
+
+    if (!myUserId) {
+      showToast('必要な情報が足りません', 'error')
+      return
+    }
+
+    setTransferLoadingId(member.id)
+
+    const { data, error } = await supabase.rpc('transfer_team_owner_atomic', {
+      p_team_id: teamId,
+      p_new_owner_user_id: member.user_id,
+      p_actor_user_id: myUserId,
+    })
+
+    if (error) {
+      console.error('transfer_team_owner_atomic error:', error)
+      console.error('message:', error.message)
+      console.error('details:', error.details)
+      console.error('hint:', error.hint)
+      console.error('code:', error.code)
+      showToast(error.message || 'owner譲渡に失敗しました', 'error')
+      setTransferLoadingId(null)
+      return
+    }
+
+    console.log('transfer owner result:', data)
+    showToast('ownerを譲渡しました', 'success')
+    setTransferTarget(null)
+    await fetchTeam()
+    setTransferLoadingId(null)
+  }
+
+  const handleLeaveTeam = async () => {
+    if (!myUserId || !teamId) {
+      showToast('必要な情報が足りません', 'error')
+      return
+    }
+
+    setLeaveLoading(true)
+
+    const { data, error } = await supabase.rpc('leave_team_atomic', {
+      p_team_id: teamId,
+      p_actor_user_id: myUserId,
+    })
+
+    if (error) {
+      console.error('leave_team_atomic error:', error)
+      console.error('message:', error.message)
+      console.error('details:', error.details)
+      console.error('hint:', error.hint)
+      console.error('code:', error.code)
+      showToast(error.message || 'チーム脱退に失敗しました', 'error')
+      setLeaveLoading(false)
+      return
+    }
+
+    console.log('leave team result:', data)
+    showToast('チームから脱退しました', 'success')
+    setLeaveLoading(false)
+    setLeaveDialogOpen(false)
+    router.push('/mypage')
   }
 
   const handleDisbandTeam = async () => {
@@ -347,7 +421,6 @@ export default function TeamDetailPage() {
     }
 
     console.log('disband team result:', data)
-
     showToast('チームを解散しました', 'success')
     setDisbandLoading(false)
     setDisbandDialogOpen(false)
@@ -388,9 +461,7 @@ export default function TeamDetailPage() {
     return (
       <main>
         <h1>チーム詳細</h1>
-        <div className="card">
-          <p>読み込み中...</p>
-        </div>
+        <p>読み込み中...</p>
       </main>
     )
   }
@@ -405,45 +476,50 @@ export default function TeamDetailPage() {
           </div>
 
           <div className="row">
-            <button onClick={() => router.push('/mypage')}>マイページへ戻る</button>
+            <button onClick={() => router.push('/mypage')}>
+              マイページへ戻る
+            </button>
           </div>
         </div>
 
-        <div className="section card-strong">
-          <h2>チーム情報</h2>
-
-          <div className="row" style={{ marginBottom: '12px' }}>
-            <span className="badge">{canManageTeam ? 'owner権限あり' : '閲覧のみ'}</span>
-          </div>
-
-          <div className="grid grid-2">
-            <div className="card">
-              <p className="muted">チーム名</p>
-              <h3>{team?.name}</h3>
+        <div className="section">
+          <div className="card-strong">
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <h2>チーム情報</h2>
+              <span className={canManageTeam ? 'success' : 'muted'}>
+                {canManageTeam ? 'owner権限あり' : '閲覧のみ'}
+              </span>
             </div>
 
-            <div className="card">
-              <p className="muted">レート</p>
-              <h3>{team?.rating ?? '-'}</h3>
+            <div className="grid grid-2">
+              <div className="card">
+                <p className="muted">チーム名</p>
+                <h3>{team?.name}</h3>
+              </div>
+
+              <div className="card">
+                <p className="muted">レート</p>
+                <h3>{team?.rating ?? '-'}</h3>
+              </div>
+
+              <div className="card">
+                <p className="muted">戦績</p>
+                <h3>
+                  {team?.wins ?? 0}勝 {team?.losses ?? 0}敗
+                </h3>
+              </div>
+
+              <div className="card">
+                <p className="muted">試合数</p>
+                <h3>{team?.matches_played ?? 0}</h3>
+              </div>
             </div>
 
-            <div className="card">
-              <p className="muted">戦績</p>
-              <h3>
-                {team?.wins ?? 0}勝 {team?.losses ?? 0}敗
-              </h3>
-            </div>
-
-            <div className="card">
-              <p className="muted">試合数</p>
-              <h3>{team?.matches_played ?? 0}</h3>
-            </div>
-
-            <div className="card">
+            <div className="section">
               <p className="muted">チームID</p>
-              <h3 style={{ wordBreak: 'break-all' }}>{team?.id}</h3>
+              <h3>{team?.id}</h3>
 
-              <div className="section row">
+              <div className="row" style={{ marginTop: '12px' }}>
                 <button
                   onClick={async () => {
                     if (!team?.id) return
@@ -453,33 +529,45 @@ export default function TeamDetailPage() {
                 >
                   チームIDをコピー
                 </button>
+
+                {canManageTeam && (
+                  <>
+                    <button onClick={() => router.push('/team/edit')}>
+                      チーム名を編集
+                    </button>
+                    <button onClick={() => setDisbandDialogOpen(true)}>
+                      チームを解散
+                    </button>
+                  </>
+                )}
+
+                {canLeaveTeam && (
+                  <button onClick={() => setLeaveDialogOpen(true)}>
+                    チームから脱退
+                  </button>
+                )}
               </div>
             </div>
           </div>
-
-          {canManageTeam && (
-            <div className="section row">
-              <button onClick={() => router.push('/team/edit')}>
-                チーム名を編集
-              </button>
-              <button onClick={() => setDisbandDialogOpen(true)}>
-                チームを解散
-              </button>
-            </div>
-          )}
         </div>
 
-        <div className="section card-strong">
-          <h2>メンバー</h2>
+        <div className="section">
+          <div className="card-strong">
+            <h2>メンバー</h2>
 
-          {members.length === 0 ? (
-            <p>メンバーがいません</p>
-          ) : (
-            <div className="stack">
-              {members.map((member) => (
-                <div key={member.id} className="card">
-                  <div className="row" style={{ justifyContent: 'space-between' }}>
-                    <div>
+            {members.length === 0 ? (
+              <p>メンバーがいません</p>
+            ) : (
+              <div className="stack">
+                {members.map((member) => {
+                  const isSelf = member.user_id === myUserId
+                  const canTransfer =
+                    canManageTeam && !isSelf && member.role !== 'owner'
+                  const canRemove =
+                    canManageTeam && member.role !== 'owner'
+
+                  return (
+                    <div key={member.id} className="card">
                       <p>
                         <strong>名前:</strong> {member.users?.display_name || '未設定'}
                       </p>
@@ -490,130 +578,177 @@ export default function TeamDetailPage() {
                       <p>
                         <strong>役割:</strong> {member.role}
                       </p>
+
+                      {(canTransfer || canRemove) && (
+                        <div className="row" style={{ marginTop: '12px' }}>
+                          {canTransfer && (
+                            <button
+                              onClick={() => setTransferTarget(member)}
+                              disabled={transferLoadingId === member.id}
+                            >
+                              {transferLoadingId === member.id
+                                ? '譲渡中...'
+                                : 'ownerを譲渡'}
+                            </button>
+                          )}
+
+                          {canRemove && (
+                            <button
+                              onClick={() => handleRemoveMember(member)}
+                              disabled={removeLoadingId === member.id}
+                            >
+                              {removeLoadingId === member.id
+                                ? '削除中...'
+                                : 'メンバー削除'}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
-
-                    {canManageTeam && member.role !== 'owner' && (
-                      <button
-                        onClick={() => handleRemoveMember(member)}
-                        disabled={removeLoadingId === member.id}
-                      >
-                        {removeLoadingId === member.id ? '削除中...' : 'メンバー削除'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {canManageTeam && (
-          <div className="section card-strong">
-            <h2>メンバー追加</h2>
-
-            <div className="row">
-              <input
-                value={searchName}
-                onChange={(e) => setSearchName(e.target.value)}
-                placeholder="追加したいユーザーの表示名"
-              />
-
-              <button onClick={handleSearchUser} disabled={searchLoading}>
-                {searchLoading ? '検索中...' : '検索'}
-              </button>
-            </div>
-
-            {searchedUser && (
-              <div className="section card">
-                <p>
-                  <strong>名前:</strong> {searchedUser.display_name}
-                </p>
-                <p>
-                  <strong>Activision ID:</strong>{' '}
-                  {searchedUser.activision_id || '未設定'}
-                </p>
-
-                <div className="section row">
-                  <button onClick={handleAddMember} disabled={addLoading}>
-                    {addLoading ? '追加中...' : 'このユーザーを追加'}
-                  </button>
-                </div>
+                  )
+                })}
               </div>
             )}
           </div>
+        </div>
+
+        {canManageTeam && (
+          <div className="section">
+            <div className="card-strong">
+              <h2>メンバー追加</h2>
+
+              <div className="row">
+                <input
+                  value={searchName}
+                  onChange={(e) => setSearchName(e.target.value)}
+                  placeholder="追加したいユーザーの表示名"
+                />
+                <button onClick={handleSearchUser} disabled={searchLoading}>
+                  {searchLoading ? '検索中...' : '検索'}
+                </button>
+              </div>
+
+              {searchedUser && (
+                <div className="card" style={{ marginTop: '12px' }}>
+                  <p>
+                    <strong>名前:</strong> {searchedUser.display_name}
+                  </p>
+                  <p>
+                    <strong>Activision ID:</strong>{' '}
+                    {searchedUser.activision_id || '未設定'}
+                  </p>
+                  <div className="row" style={{ marginTop: '12px' }}>
+                    <button onClick={handleAddMember} disabled={addLoading}>
+                      {addLoading ? '追加中...' : 'このユーザーを追加'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
-        <div className="section card-strong">
-          <h2>最近の試合</h2>
+        <div className="section">
+          <div className="card-strong">
+            <h2>最近の試合</h2>
 
-          {matches.length === 0 ? (
-            <p>まだ試合履歴がありません</p>
-          ) : (
-            <div className="stack">
-              {matches.map((match) => {
-                const opponentId = getOpponentId(match)
-                const opponentName = teamNames[opponentId] || '不明'
-                const resultText = getResultText(match)
-                const resultClass = getResultClass(match)
-                const myBefore = getMyRatingBefore(match)
-                const myAfter = getMyRatingAfter(match)
-                const ratingDiff =
-                  myBefore != null && myAfter != null ? myAfter - myBefore : null
+            {matches.length === 0 ? (
+              <p>まだ試合履歴がありません</p>
+            ) : (
+              <div className="stack">
+                {matches.map((match) => {
+                  const opponentId = getOpponentId(match)
+                  const opponentName = teamNames[opponentId] || '不明'
+                  const resultText = getResultText(match)
+                  const resultClass = getResultClass(match)
+                  const myBefore = getMyRatingBefore(match)
+                  const myAfter = getMyRatingAfter(match)
+                  const ratingDiff =
+                    myBefore != null && myAfter != null ? myAfter - myBefore : null
 
-                return (
-                  <div key={match.id} className="card">
-                    <div className="row" style={{ justifyContent: 'space-between' }}>
-                      <div>
-                        <p>
-                          <strong>対戦相手:</strong> {opponentName}
-                        </p>
-                        <p className={resultClass}>
-                          <strong>結果:</strong> {resultText}
-                        </p>
-                        <p>
-                          <strong>状態:</strong> {match.status}
-                        </p>
-                        <p>
-                          <strong>日時:</strong>{' '}
-                          {new Date(match.created_at).toLocaleString()}
-                        </p>
-                        <p>
-                          <strong>レート:</strong> {myBefore ?? '-'} → {myAfter ?? '-'}
-                          {ratingDiff !== null && (
-                            <>
-                              {' '}
-                              ({ratingDiff >= 0 ? '+' : ''}
-                              {ratingDiff})
-                            </>
-                          )}
-                        </p>
-                      </div>
+                  return (
+                    <div key={match.id} className="card">
+                      <p>
+                        <strong>対戦相手:</strong> {opponentName}
+                      </p>
+                      <p className={resultClass}>
+                        <strong>結果:</strong> {resultText}
+                      </p>
+                      <p>
+                        <strong>状態:</strong> {match.status}
+                      </p>
+                      <p>
+                        <strong>日時:</strong>{' '}
+                        {new Date(match.created_at).toLocaleString()}
+                      </p>
+                      <p>
+                        <strong>レート:</strong> {myBefore ?? '-'} → {myAfter ?? '-'}{' '}
+                        {ratingDiff !== null && (
+                          <>
+                            ({ratingDiff >= 0 ? '+' : ''}
+                            {ratingDiff})
+                          </>
+                        )}
+                      </p>
 
-                      <div className="row">
+                      <div className="row" style={{ marginTop: '12px' }}>
                         <button onClick={() => router.push(`/match/${match.id}`)}>
                           試合詳細を見る
                         </button>
                       </div>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </main>
 
       <ConfirmDialog
         open={disbandDialogOpen}
-        title="チームを解散"
-        message="このチームを解散しますか？ メンバーは全員チームから外れます。未完了の試合がある場合は解散できません。"
-        confirmText="解散する"
-        cancelText="戻る"
-        danger
-        loading={disbandLoading}
+        title="チームを解散しますか？"
+        message="この操作は取り消せません。"
+        confirmText={disbandLoading ? '解散中...' : '解散する'}
+        cancelText="キャンセル"
         onConfirm={handleDisbandTeam}
-        onCancel={() => {
+        onClose={() => {
           if (!disbandLoading) setDisbandDialogOpen(false)
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!transferTarget}
+        title="ownerを譲渡しますか？"
+        message={
+          transferTarget
+            ? `${transferTarget.users?.display_name || 'このメンバー'} にowner権限を譲渡します。実行後、あなたはmemberになります。`
+            : ''
+        }
+        confirmText={
+          transferTarget && transferLoadingId === transferTarget.id
+            ? '譲渡中...'
+            : '譲渡する'
+        }
+        cancelText="キャンセル"
+        onConfirm={async () => {
+          if (!transferTarget) return
+          await handleTransferOwner(transferTarget)
+        }}
+        onClose={() => {
+          if (!transferLoadingId) setTransferTarget(null)
+        }}
+      />
+
+      <ConfirmDialog
+        open={leaveDialogOpen}
+        title="チームから脱退しますか？"
+        message="この操作を行うと、このチームのメンバーではなくなります。"
+        confirmText={leaveLoading ? '脱退中...' : '脱退する'}
+        cancelText="キャンセル"
+        onConfirm={handleLeaveTeam}
+        onClose={() => {
+          if (!leaveLoading) setLeaveDialogOpen(false)
         }}
       />
     </>
