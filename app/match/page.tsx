@@ -199,7 +199,7 @@ export default function MatchPage() {
     if (redirectingMatchIdRef.current === matchId) return
 
     redirectingMatchIdRef.current = matchId
-    router.push(`/match/${matchId}`)
+    router.push(`/match/${matchId}/banpick`)
   }
 
   useEffect(() => {
