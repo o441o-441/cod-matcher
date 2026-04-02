@@ -44,6 +44,7 @@ export default function MatchPage() {
   const matchedOnceRef = useRef(false)
   const originalTitleRef = useRef('COD マッチングサイト')
   const accessTokenRef = useRef<string | null>(null)
+  const notifiedMatchIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     originalTitleRef.current = document.title || 'COD マッチングサイト'
@@ -149,6 +150,47 @@ export default function MatchPage() {
       })
     } catch (error) {
       console.error('leaveQueueByEdgeFunctionKeepalive error:', error)
+    }
+  }
+
+  const notifyDiscordMatchCreated = async (matchId: string) => {
+    if (!matchId) return
+    if (notifiedMatchIdsRef.current.has(matchId)) return
+
+    const accessToken = accessTokenRef.current
+    if (!accessToken) {
+      console.warn('notifyDiscordMatchCreated skipped: no access token')
+      return
+    }
+
+    const functionUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/notify-match-created`
+
+    try {
+      notifiedMatchIdsRef.current.add(matchId)
+
+      const res = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          matchId,
+        }),
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        console.error('notify-match-created failed:', text)
+        notifiedMatchIdsRef.current.delete(matchId)
+        return
+      }
+
+      const result = await res.json().catch(() => null)
+      console.log('notify-match-created success:', result)
+    } catch (error) {
+      console.error('notifyDiscordMatchCreated error:', error)
+      notifiedMatchIdsRef.current.delete(matchId)
     }
   }
 
@@ -415,6 +457,8 @@ export default function MatchPage() {
     setCreatedMatchId(match.id)
     setStatus('マッチ成立！')
     setPageError('')
+
+    void notifyDiscordMatchCreated(match.id)
   }
 
   const checkExistingMatchedGame = async (
