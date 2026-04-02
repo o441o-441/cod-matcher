@@ -106,11 +106,7 @@ export default function MatchDetailPage() {
   const timeoutResolvingRef = useRef(false)
 
   const matchId =
-    typeof params.id === 'string'
-      ? params.id
-      : Array.isArray(params.id)
-      ? params.id[0]
-      : ''
+    typeof params.id === 'string' ? params.id : Array.isArray(params.id) ? params.id[0] : ''
 
   const [loading, setLoading] = useState(true)
   const [match, setMatch] = useState<MatchRow | null>(null)
@@ -203,11 +199,10 @@ export default function MatchDetailPage() {
     console.log('[fetchData] matchData:', matchData)
     setMatch(matchData as MatchRow)
 
-    const [{ data: t1, error: t1Error }, { data: t2, error: t2Error }] =
-      await Promise.all([
-        supabase.from('teams').select('*').eq('id', matchData.team1_id).single(),
-        supabase.from('teams').select('*').eq('id', matchData.team2_id).single(),
-      ])
+    const [{ data: t1, error: t1Error }, { data: t2, error: t2Error }] = await Promise.all([
+      supabase.from('teams').select('*').eq('id', matchData.team1_id).single(),
+      supabase.from('teams').select('*').eq('id', matchData.team2_id).single(),
+    ])
 
     if (t1Error) console.error('[fetchData] t1Error:', t1Error)
     if (t2Error) console.error('[fetchData] t2Error:', t2Error)
@@ -288,18 +283,12 @@ export default function MatchDetailPage() {
       setOvWinner('')
     }
 
-    const { error: createSessionError } = await supabase.rpc(
-      'create_banpick_session_for_match',
-      {
-        p_match_id: matchId,
-      }
-    )
+    const { error: createSessionError } = await supabase.rpc('create_banpick_session_for_match', {
+      p_match_id: matchId,
+    })
 
     if (createSessionError) {
-      console.error(
-        '[fetchData] create_banpick_session_for_match error:',
-        createSessionError
-      )
+      console.error('[fetchData] create_banpick_session_for_match error:', createSessionError)
     }
 
     await fetchBanpick(matchId)
@@ -335,7 +324,7 @@ export default function MatchDetailPage() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` },
-        async (payload) => {
+        async payload => {
           console.log('[realtime] matches:', payload)
           await fetchData()
         }
@@ -343,7 +332,7 @@ export default function MatchDetailPage() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'match_reports', filter: `match_id=eq.${matchId}` },
-        async (payload) => {
+        async payload => {
           console.log('[realtime] match_reports:', payload)
           await fetchData()
         }
@@ -351,15 +340,20 @@ export default function MatchDetailPage() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'match_games', filter: `match_id=eq.${matchId}` },
-        async (payload) => {
+        async payload => {
           console.log('[realtime] match_games:', payload)
           await fetchData()
         }
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'banpick_sessions', filter: `match_id=eq.${matchId}` },
-        async (payload) => {
+        {
+          event: '*',
+          schema: 'public',
+          table: 'banpick_sessions',
+          filter: `match_id=eq.${matchId}`,
+        },
+        async payload => {
           console.log('[realtime] banpick_sessions:', payload)
           await fetchBanpick(matchId)
           await fetchData()
@@ -367,13 +361,18 @@ export default function MatchDetailPage() {
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'banpick_actions', filter: `match_id=eq.${matchId}` },
-        async (payload) => {
+        {
+          event: '*',
+          schema: 'public',
+          table: 'banpick_actions',
+          filter: `match_id=eq.${matchId}`,
+        },
+        async payload => {
           console.log('[realtime] banpick_actions:', payload)
           await fetchBanpick(matchId)
         }
       )
-      .subscribe((status) => {
+      .subscribe(status => {
         console.log('[realtime] status:', status)
       })
 
@@ -406,14 +405,12 @@ export default function MatchDetailPage() {
 
     console.log('[timeout] resolve result:', data)
 
-    const result = data as
-      | {
-          timed_out?: boolean
-          already_completed?: boolean
-          winner_team_id?: string
-          loser_team_id?: string
-        }
-      | null
+    const result = data as {
+      timed_out?: boolean
+      already_completed?: boolean
+      winner_team_id?: string
+      loser_team_id?: string
+    } | null
 
     if (result?.timed_out) {
       showToast('5分間操作がなかったためタイムアウト決着になりました', 'info')
@@ -696,7 +693,7 @@ export default function MatchDetailPage() {
       if (banpickSession.ovl_map) picked.add(banpickSession.ovl_map)
     }
 
-    return pool.filter((item) => !banned.has(item) && !picked.has(item))
+    return pool.filter(item => !banned.has(item) && !picked.has(item))
   }, [banpickSession, currentBanpickStep])
 
   const canOperateBanpick =
@@ -967,11 +964,10 @@ export default function MatchDetailPage() {
                         <strong>タイムアウト決着</strong>
                       </p>
                       <p>
-                        {getTeamName(banpickSession.timeout_loser_team_id)} が5分間操作しなかったため敗北になりました。
+                        {getTeamName(banpickSession.timeout_loser_team_id)}{' '}
+                        が5分間操作しなかったため敗北になりました。
                       </p>
-                      <p>
-                        勝者: {getTeamName(banpickSession.timeout_winner_team_id)}
-                      </p>
+                      <p>勝者: {getTeamName(banpickSession.timeout_winner_team_id)}</p>
                     </div>
                   )}
                 </div>
@@ -1013,7 +1009,7 @@ export default function MatchDetailPage() {
                           </p>
 
                           <div className="row" style={{ flexWrap: 'wrap', gap: '8px' }}>
-                            {availableBanpickTargets.map((target) => (
+                            {availableBanpickTargets.map(target => (
                               <button
                                 key={target}
                                 onClick={() =>
@@ -1106,7 +1102,7 @@ export default function MatchDetailPage() {
                   <p>ゲーム結果がありません</p>
                 ) : (
                   <div className="stack">
-                    {games.map((game) => (
+                    {games.map(game => (
                       <div key={game.id} className="card">
                         <p>
                           <strong>Game {game.order_no}</strong>
@@ -1179,7 +1175,7 @@ export default function MatchDetailPage() {
                 <div className="stack">
                   <div>
                     <label>Hardpoint 勝者</label>
-                    <select value={hpWinner} onChange={(e) => setHpWinner(e.target.value)}>
+                    <select value={hpWinner} onChange={e => setHpWinner(e.target.value)}>
                       <option value="">選択してください</option>
                       <option value={team1?.id}>{team1?.name}</option>
                       <option value={team2?.id}>{team2?.name}</option>
@@ -1188,7 +1184,7 @@ export default function MatchDetailPage() {
 
                   <div>
                     <label>S&amp;D 勝者</label>
-                    <select value={sndWinner} onChange={(e) => setSndWinner(e.target.value)}>
+                    <select value={sndWinner} onChange={e => setSndWinner(e.target.value)}>
                       <option value="">選択してください</option>
                       <option value={team1?.id}>{team1?.name}</option>
                       <option value={team2?.id}>{team2?.name}</option>
@@ -1197,7 +1193,7 @@ export default function MatchDetailPage() {
 
                   <div>
                     <label>Overload 勝者</label>
-                    <select value={ovWinner} onChange={(e) => setOvWinner(e.target.value)}>
+                    <select value={ovWinner} onChange={e => setOvWinner(e.target.value)}>
                       <option value="">選択してください</option>
                       <option value={team1?.id}>{team1?.name}</option>
                       <option value={team2?.id}>{team2?.name}</option>
