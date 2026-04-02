@@ -139,6 +139,8 @@ export default function MatchDetailPage() {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
 
   const fetchBanpick = async (targetMatchId: string) => {
+    console.log('[fetchBanpick] start', { targetMatchId })
+
     const { data: sessionData, error: sessionError } = await supabase
       .from('banpick_sessions')
       .select('*')
@@ -146,12 +148,13 @@ export default function MatchDetailPage() {
       .maybeSingle()
 
     if (sessionError) {
-      console.error('banpick session error:', sessionError)
+      console.error('[fetchBanpick] banpick session error:', sessionError)
       setBanpickSession(null)
       setBanpickActions([])
       return
     }
 
+    console.log('[fetchBanpick] sessionData:', sessionData)
     setBanpickSession((sessionData || null) as BanpickSessionRow | null)
 
     if (!sessionData) {
@@ -166,19 +169,21 @@ export default function MatchDetailPage() {
       .order('created_at', { ascending: true })
 
     if (actionError) {
-      console.error('banpick actions error:', actionError)
+      console.error('[fetchBanpick] banpick actions error:', actionError)
       setBanpickActions([])
       return
     }
 
+    console.log('[fetchBanpick] actionData:', actionData)
     setBanpickActions((actionData || []) as BanpickActionRow[])
   }
 
   const fetchData = async () => {
+    console.log('[fetchData] start', { matchId })
     setLoading(true)
 
     if (!matchId) {
-      console.error('matchId is invalid:', params)
+      console.error('[fetchData] matchId is invalid:', params)
       setLoading(false)
       return
     }
@@ -190,11 +195,12 @@ export default function MatchDetailPage() {
       .maybeSingle()
 
     if (matchError || !matchData) {
-      console.error('matchError:', matchError)
+      console.error('[fetchData] matchError:', matchError)
       setLoading(false)
       return
     }
 
+    console.log('[fetchData] matchData:', matchData)
     setMatch(matchData as MatchRow)
 
     const [{ data: t1, error: t1Error }, { data: t2, error: t2Error }] =
@@ -203,8 +209,8 @@ export default function MatchDetailPage() {
         supabase.from('teams').select('*').eq('id', matchData.team2_id).single(),
       ])
 
-    if (t1Error) console.error('t1Error:', t1Error)
-    if (t2Error) console.error('t2Error:', t2Error)
+    if (t1Error) console.error('[fetchData] t1Error:', t1Error)
+    if (t2Error) console.error('[fetchData] t2Error:', t2Error)
 
     setTeam1((t1 || null) as TeamRow | null)
     setTeam2((t2 || null) as TeamRow | null)
@@ -215,7 +221,8 @@ export default function MatchDetailPage() {
       .eq('match_id', matchId)
       .order('order_no', { ascending: true })
 
-    if (gameError) console.error('gameError:', gameError)
+    if (gameError) console.error('[fetchData] gameError:', gameError)
+    console.log('[fetchData] gameData:', gameData)
     setGames((gameData || []) as MatchGameRow[])
 
     const {
@@ -230,7 +237,7 @@ export default function MatchDetailPage() {
         .single()
 
       if (userError) {
-        console.error('userError:', userError)
+        console.error('[fetchData] userError:', userError)
       }
 
       if (user) {
@@ -243,7 +250,7 @@ export default function MatchDetailPage() {
           .maybeSingle()
 
         if (memberError) {
-          console.error('memberError:', memberError)
+          console.error('[fetchData] memberError:', memberError)
         }
 
         if (member) {
@@ -265,9 +272,10 @@ export default function MatchDetailPage() {
       .maybeSingle()
 
     if (reportError) {
-      console.error('reportError:', reportError)
+      console.error('[fetchData] reportError:', reportError)
     }
 
+    console.log('[fetchData] latestReport:', report)
     setLatestReport((report || null) as MatchReportRow | null)
 
     if (report) {
@@ -288,12 +296,16 @@ export default function MatchDetailPage() {
     )
 
     if (createSessionError) {
-      console.error('create_banpick_session_for_match error:', createSessionError)
+      console.error(
+        '[fetchData] create_banpick_session_for_match error:',
+        createSessionError
+      )
     }
 
     await fetchBanpick(matchId)
 
     setLoading(false)
+    console.log('[fetchData] done')
   }
 
   useEffect(() => {
@@ -316,33 +328,39 @@ export default function MatchDetailPage() {
   useEffect(() => {
     if (!matchId) return
 
+    console.log('[realtime] subscribe start', { matchId })
+
     const channel = supabase
       .channel(`match-detail-${matchId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` },
-        async () => {
+        async (payload) => {
+          console.log('[realtime] matches:', payload)
           await fetchData()
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'match_reports', filter: `match_id=eq.${matchId}` },
-        async () => {
+        async (payload) => {
+          console.log('[realtime] match_reports:', payload)
           await fetchData()
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'match_games', filter: `match_id=eq.${matchId}` },
-        async () => {
+        async (payload) => {
+          console.log('[realtime] match_games:', payload)
           await fetchData()
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'banpick_sessions', filter: `match_id=eq.${matchId}` },
-        async () => {
+        async (payload) => {
+          console.log('[realtime] banpick_sessions:', payload)
           await fetchBanpick(matchId)
           await fetchData()
         }
@@ -350,15 +368,19 @@ export default function MatchDetailPage() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'banpick_actions', filter: `match_id=eq.${matchId}` },
-        async () => {
+        async (payload) => {
+          console.log('[realtime] banpick_actions:', payload)
           await fetchBanpick(matchId)
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('[realtime] status:', status)
+      })
 
     realtimeRef.current = channel
 
     return () => {
+      console.log('[realtime] unsubscribe', { matchId })
       if (realtimeRef.current) {
         void supabase.removeChannel(realtimeRef.current)
         realtimeRef.current = null
@@ -370,16 +392,19 @@ export default function MatchDetailPage() {
     if (!matchId || timeoutResolvingRef.current) return
 
     timeoutResolvingRef.current = true
+    console.log('[timeout] resolve start', { matchId })
 
     const { data, error } = await supabase.rpc('resolve_banpick_timeout', {
       p_match_id: matchId,
     })
 
     if (error) {
-      console.error('resolve_banpick_timeout error:', error)
+      console.error('[timeout] resolve_banpick_timeout error:', error)
       timeoutResolvingRef.current = false
       return
     }
+
+    console.log('[timeout] resolve result:', data)
 
     const result = data as
       | {
@@ -691,6 +716,7 @@ export default function MatchDetailPage() {
       return
     }
 
+    console.log('[banpick] submit start', { actionType, target, matchId, myUserId })
     setBanpickLoading(true)
 
     const { error } = await supabase.rpc('submit_banpick_action', {
@@ -701,13 +727,14 @@ export default function MatchDetailPage() {
     })
 
     if (error) {
-      console.error('submit_banpick_action error:', error)
+      console.error('[banpick] submit_banpick_action error:', error)
       showToast(error.message || 'バンピックの送信に失敗しました', 'error')
       setBanpickLoading(false)
       await fetchData()
       return
     }
 
+    console.log('[banpick] submit success')
     showToast('バンピックを更新しました', 'success')
     await fetchData()
     setBanpickLoading(false)
@@ -1195,7 +1222,7 @@ export default function MatchDetailPage() {
         confirmText={rejecting ? '却下中...' : '却下する'}
         cancelText="キャンセル"
         onConfirm={handleReject}
-        onCancel={() => {
+        onClose={() => {
           if (!rejecting) setRejectDialogOpen(false)
         }}
       />
