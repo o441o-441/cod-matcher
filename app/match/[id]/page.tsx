@@ -1273,7 +1273,7 @@ export default function MatchDetailPage() {
         confirmText={rejecting ? '却下中...' : '却下する'}
         cancelText="キャンセル"
         onConfirm={handleReject}
-        onClose={() => {
+        onCancel={() => {
           if (!rejecting) setRejectDialogOpen(false)
         }}
       />
