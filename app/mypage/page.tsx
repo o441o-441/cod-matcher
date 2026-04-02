@@ -96,7 +96,35 @@ export default function MyPage() {
     }
   }
 
-  const syncDiscordProfile = async (authUserId: string, authUser: any, existingUser: UserRow) => {
+  const createUserIfMissing = async (authUser: any) => {
+    const { discordUserId, discordName } = extractDiscordInfo(authUser)
+
+    const { data, error } = await supabase
+      .from('users')
+      .insert({
+        auth_user_id: authUser.id,
+        display_name: null,
+        activision_id: null,
+        is_profile_complete: false,
+        discord_name: discordName,
+        discord_user_id: discordUserId,
+      })
+      .select('*')
+      .single()
+
+    if (error || !data) {
+      console.error('createUserIfMissing error:', error)
+      return null
+    }
+
+    return data as UserRow
+  }
+
+  const syncDiscordProfile = async (
+    authUserId: string,
+    authUser: any,
+    existingUser: UserRow
+  ) => {
     const { discordUserId, discordName } = extractDiscordInfo(authUser)
 
     const needsUpdate =
@@ -145,20 +173,28 @@ export default function MyPage() {
       .from('users')
       .select('*')
       .eq('auth_user_id', authUser.id)
-      .single()
+      .maybeSingle()
 
-    if (selectError || !existingUser) {
+    if (selectError) {
       console.error('selectError:', selectError)
       setPageError('ユーザー情報の取得に失敗しました')
       setLoading(false)
       return
     }
 
-    const syncedUser = await syncDiscordProfile(
-      authUser.id,
-      authUser,
-      existingUser as UserRow
-    )
+    let userRow = existingUser as UserRow | null
+
+    if (!userRow) {
+      userRow = await createUserIfMissing(authUser)
+
+      if (!userRow) {
+        setPageError('ユーザー初期作成に失敗しました')
+        setLoading(false)
+        return
+      }
+    }
+
+    const syncedUser = await syncDiscordProfile(authUser.id, authUser, userRow)
 
     if (!syncedUser.is_profile_complete) {
       router.push('/onboarding')
