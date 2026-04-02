@@ -32,7 +32,7 @@ type MatchReportRow = {
   reported_winner_team_id: string
   hp_winner_team_id: string
   snd_winner_team_id: string
-  ov_winner_team_id: string
+  ov_winner_team_id: string | null
   approval_status: string
   created_at: string
 }
@@ -79,7 +79,7 @@ export default function MatchReportPage() {
   const [rejecting, setRejecting] = useState(false)
 
   const getTeamName = (id: string | null | undefined) => {
-    if (!id) return '不明'
+    if (!id) return '未実施'
     if (team1?.id === id) return team1.name
     if (team2?.id === id) return team2.name
     return '不明'
@@ -91,6 +91,15 @@ export default function MatchReportPage() {
     if (mode === 'overload' || mode === 'OVERLOAD') return 'Overload'
     return mode
   }
+
+  const isOverloadRequired =
+    !!hpWinner && !!sndWinner && hpWinner !== sndWinner
+
+  useEffect(() => {
+    if (!isOverloadRequired && ovWinner) {
+      setOvWinner('')
+    }
+  }, [isOverloadRequired, ovWinner])
 
   const getApprovalSummary = () => {
     if (!match || !team1 || !team2) {
@@ -163,6 +172,7 @@ export default function MatchReportPage() {
     if (!matchId || fetchingRef.current) return
 
     fetchingRef.current = true
+
     try {
       const { data: matchData, error: matchError } = await supabase
         .from('matches')
@@ -179,10 +189,11 @@ export default function MatchReportPage() {
 
       setMatch(matchData as MatchRow)
 
-      const [{ data: t1, error: t1Error }, { data: t2, error: t2Error }] = await Promise.all([
-        supabase.from('teams').select('id, name').eq('id', matchData.team1_id).single(),
-        supabase.from('teams').select('id, name').eq('id', matchData.team2_id).single(),
-      ])
+      const [{ data: t1, error: t1Error }, { data: t2, error: t2Error }] =
+        await Promise.all([
+          supabase.from('teams').select('id, name').eq('id', matchData.team1_id).single(),
+          supabase.from('teams').select('id, name').eq('id', matchData.team2_id).single(),
+        ])
 
       if (t1Error) console.error('[fetchData] team1 error:', t1Error)
       if (t2Error) console.error('[fetchData] team2 error:', t2Error)
@@ -230,7 +241,8 @@ export default function MatchReportPage() {
 
           const matchedTeamId =
             members?.find(
-              (m) => m.team_id === matchData.team1_id || m.team_id === matchData.team2_id
+              (m) =>
+                m.team_id === matchData.team1_id || m.team_id === matchData.team2_id,
             )?.team_id || null
 
           setMyTeamId(matchedTeamId)
@@ -274,21 +286,31 @@ export default function MatchReportPage() {
         { event: '*', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` },
         async () => {
           await fetchData()
-        }
+        },
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'match_reports', filter: `match_id=eq.${matchId}` },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'match_reports',
+          filter: `match_id=eq.${matchId}`,
+        },
         async () => {
           await fetchData()
-        }
+        },
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'match_games', filter: `match_id=eq.${matchId}` },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'match_games',
+          filter: `match_id=eq.${matchId}`,
+        },
         async () => {
           await fetchData()
-        }
+        },
       )
       .subscribe()
 
@@ -302,7 +324,6 @@ export default function MatchReportPage() {
     }
   }, [matchId])
 
-  // 常時ポーリング
   useEffect(() => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current)
@@ -310,6 +331,8 @@ export default function MatchReportPage() {
     }
 
     if (!matchId) return
+    if (!latestReport) return
+    if (latestReport.approval_status !== 'pending') return
 
     pollingRef.current = setInterval(() => {
       void fetchData()
@@ -321,7 +344,7 @@ export default function MatchReportPage() {
         pollingRef.current = null
       }
     }
-  }, [matchId])
+  }, [matchId, latestReport?.id, latestReport?.approval_status])
 
   const handleReport = async () => {
     if (!team1 || !team2 || !myTeamId) {
@@ -329,13 +352,20 @@ export default function MatchReportPage() {
       return
     }
 
-    if (!hpWinner || !sndWinner || !ovWinner) {
-      showToast('全部入力してください', 'error')
+    if (!hpWinner || !sndWinner) {
+      showToast('Hardpoint と S&D の勝者を選択してください', 'error')
       return
     }
 
     if (match?.status === 'completed') {
       showToast('この試合はすでに完了しています', 'error')
+      return
+    }
+
+    const overloadRequired = hpWinner !== sndWinner
+
+    if (overloadRequired && !ovWinner) {
+      showToast('1-1 の場合は Overload の勝者を選択してください', 'error')
       return
     }
 
@@ -346,7 +376,7 @@ export default function MatchReportPage() {
       p_reporter_team_id: myTeamId,
       p_hp_winner_team_id: hpWinner,
       p_snd_winner_team_id: sndWinner,
-      p_ov_winner_team_id: ovWinner,
+      p_ov_winner_team_id: overloadRequired ? ovWinner : null,
     })
 
     if (error) {
@@ -358,6 +388,9 @@ export default function MatchReportPage() {
 
     showToast('結果を報告しました。相手チームの承認待ちです。', 'success')
     setSaving(false)
+    setHpWinner('')
+    setSndWinner('')
+    setOvWinner('')
     await fetchData()
   }
 
@@ -390,6 +423,7 @@ export default function MatchReportPage() {
     showToast('承認しました', 'success')
     setApproving(false)
     await fetchData()
+    router.push('/ranking')
   }
 
   const handleReject = async () => {
@@ -428,7 +462,7 @@ export default function MatchReportPage() {
 
   if (loading) {
     return (
-      <main>
+      <main style={{ maxWidth: 720, margin: '32px auto', padding: '0 16px' }}>
         <h1>結果報告</h1>
         <p>読み込み中...</p>
       </main>
@@ -437,7 +471,7 @@ export default function MatchReportPage() {
 
   if (!match) {
     return (
-      <main>
+      <main style={{ maxWidth: 720, margin: '32px auto', padding: '0 16px' }}>
         <h1>結果報告</h1>
         <p>試合が見つかりません</p>
         <button onClick={() => router.push('/history')}>履歴へ戻る</button>
@@ -448,193 +482,203 @@ export default function MatchReportPage() {
   const approvalSummary = getApprovalSummary()
 
   return (
-    <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>結果報告</h1>
-          <p className="muted">試合結果の報告、承認、却下を行います</p>
-        </div>
+    <main style={{ maxWidth: 720, margin: '32px auto', padding: '0 16px' }}>
+      <h1>結果報告</h1>
+      <p>試合結果の報告、承認、却下を行います</p>
 
-        <div className="row">
-          <button onClick={() => router.push(`/match/${matchId}/banpick`)}>
-            バンピックへ
-          </button>
-        </div>
-      </div>
-
-      <div className="section">
-        <div className="card-strong">
-          <h2>承認ステータス</h2>
-          <p className={approvalSummary.className}>
-            <strong>{approvalSummary.title}</strong>
-          </p>
-          <p>{approvalSummary.body}</p>
-        </div>
-      </div>
-
-{match.status === 'completed' && (
-  <div className="section">
-    <div className="card-strong">
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>試合結果</h2>
-        <button onClick={() => router.push('/mypage')}>
-          マイページに戻る
+      <div style={{ marginTop: 12 }}>
+        <button onClick={() => router.push(`/match/${matchId}/banpick`)}>
+          バンピックへ
         </button>
       </div>
 
-      <div className="grid grid-2">
-        <div className="card">
-          <p className="muted">勝者</p>
-          <h3>{getTeamName(match.winner_team_id)}</h3>
+      <section style={{ marginTop: 24 }}>
+        <h2>承認ステータス</h2>
+        <div
+          style={{
+            border: '1px solid #ccc',
+            borderRadius: 8,
+            padding: 12,
+            marginTop: 8,
+          }}
+        >
+          <div style={{ fontWeight: 700 }}>{approvalSummary.title}</div>
+          <div style={{ marginTop: 6 }}>{approvalSummary.body}</div>
         </div>
+      </section>
 
-        <div className="card">
-          <p className="muted">敗者</p>
-          <h3>{getTeamName(match.loser_team_id)}</h3>
-        </div>
+      {match.status === 'completed' && (
+        <section style={{ marginTop: 24 }}>
+          <h2>試合結果</h2>
 
-        <div className="card">
-          <p className="muted">{team1?.name} レート</p>
-          <h3>
-            {match.team1_rating_before ?? '-'} → {match.team1_rating_after ?? '-'}
-          </h3>
-        </div>
+          <div style={{ marginTop: 12 }}>
+            <div>勝者</div>
+            <h3>{getTeamName(match.winner_team_id)}</h3>
+          </div>
 
-        <div className="card">
-          <p className="muted">{team2?.name} レート</p>
-          <h3>
-            {match.team2_rating_before ?? '-'} → {match.team2_rating_after ?? '-'}
-          </h3>
-        </div>
-      </div>
+          <div style={{ marginTop: 12 }}>
+            <div>敗者</div>
+            <h3>{getTeamName(match.loser_team_id)}</h3>
+          </div>
 
-      <div className="section">
-        <h3>各ゲーム結果</h3>
+          <div style={{ marginTop: 12 }}>
+            <div>{team1?.name} レート</div>
+            <h3>
+              {match.team1_rating_before ?? '-'} → {match.team1_rating_after ?? '-'}
+            </h3>
+          </div>
 
-        {games.length === 0 ? (
-          <p>ゲーム結果がありません</p>
-        ) : (
-          games.map((game) => (
-            <div key={game.id} className="card">
-              <p>
-                <strong>Game {game.order_no}</strong>
-              </p>
-              <p>モード: {getModeLabel(game.mode)}</p>
-              <p>勝者: {getTeamName(game.winner_team_id)}</p>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  </div>
-)}
+          <div style={{ marginTop: 12 }}>
+            <div>{team2?.name} レート</div>
+            <h3>
+              {match.team2_rating_before ?? '-'} → {match.team2_rating_after ?? '-'}
+            </h3>
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <h3>各ゲーム結果</h3>
+            {games.length === 0 ? (
+              <p>ゲーム結果がありません</p>
+            ) : (
+              games.map((game) => (
+                <div
+                  key={game.id}
+                  style={{
+                    border: '1px solid #ddd',
+                    borderRadius: 8,
+                    padding: 12,
+                    marginTop: 8,
+                  }}
+                >
+                  <div>Game {game.order_no}</div>
+                  <div>モード: {getModeLabel(game.mode)}</div>
+                  <div>勝者: {getTeamName(game.winner_team_id)}</div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      )}
 
       {latestReport && match.status !== 'completed' && (
-        <div className="section">
-          <div className="card-strong">
-            <h2>最新の報告内容</h2>
+        <section style={{ marginTop: 24 }}>
+          <h2>最新の報告内容</h2>
 
-            <div className="grid grid-2">
-              <div className="card">
-                <p className="muted">報告チーム</p>
-                <h3>{getTeamName(latestReport.reporter_team_id)}</h3>
-              </div>
-
-              <div className="card">
-                <p className="muted">報告勝者</p>
-                <h3>{getTeamName(latestReport.reported_winner_team_id)}</h3>
-              </div>
-
-              <div className="card">
-                <p className="muted">Hardpoint</p>
-                <h3>{getTeamName(latestReport.hp_winner_team_id)}</h3>
-              </div>
-
-              <div className="card">
-                <p className="muted">S&amp;D</p>
-                <h3>{getTeamName(latestReport.snd_winner_team_id)}</h3>
-              </div>
-
-              <div className="card">
-                <p className="muted">Overload</p>
-                <h3>{getTeamName(latestReport.ov_winner_team_id)}</h3>
-              </div>
-
-              <div className="card">
-                <p className="muted">承認状態</p>
-                <h3>{latestReport.approval_status}</h3>
-              </div>
-            </div>
-
-            {myTeamId &&
-              latestReport.reporter_team_id !== myTeamId &&
-              latestReport.approval_status === 'pending' && (
-                <div className="row" style={{ marginTop: 16 }}>
-                  <button onClick={handleApprove} disabled={approving}>
-                    {approving ? '承認中...' : 'この結果を承認する'}
-                  </button>
-
-                  <button onClick={handleReject} disabled={rejecting}>
-                    {rejecting ? '却下中...' : 'この結果を却下する'}
-                  </button>
-                </div>
-              )}
+          <div style={{ marginTop: 12 }}>
+            <div>報告チーム</div>
+            <h3>{getTeamName(latestReport.reporter_team_id)}</h3>
           </div>
-        </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div>報告勝者</div>
+            <h3>{getTeamName(latestReport.reported_winner_team_id)}</h3>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div>Hardpoint</div>
+            <h3>{getTeamName(latestReport.hp_winner_team_id)}</h3>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div>S&amp;D</div>
+            <h3>{getTeamName(latestReport.snd_winner_team_id)}</h3>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div>Overload</div>
+            <h3>{latestReport.ov_winner_team_id ? getTeamName(latestReport.ov_winner_team_id) : '未実施'}</h3>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div>承認状態</div>
+            <h3>{latestReport.approval_status}</h3>
+          </div>
+
+          {myTeamId &&
+            latestReport.reporter_team_id !== myTeamId &&
+            latestReport.approval_status === 'pending' && (
+              <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+                <button onClick={handleApprove} disabled={approving || rejecting}>
+                  {approving ? '承認中...' : 'この結果を承認する'}
+                </button>
+                <button onClick={handleReject} disabled={approving || rejecting}>
+                  {rejecting ? '却下中...' : 'この結果を却下する'}
+                </button>
+              </div>
+            )}
+        </section>
       )}
 
       {(!latestReport || latestReport.approval_status === 'rejected') &&
         match.status !== 'completed' && (
-          <div className="section">
-            <div className="card-strong">
-              <h2>結果報告</h2>
+          <section style={{ marginTop: 24 }}>
+            <h2>結果報告</h2>
 
-              <div className="card">
-                <label>Hardpoint 勝者</label>
+            <div style={{ marginTop: 12 }}>
+              <label>
+                Hardpoint 勝者
                 <select
                   value={hpWinner}
                   onChange={(e) => setHpWinner(e.target.value)}
                   style={{ display: 'block', width: '100%', marginTop: 8 }}
                 >
                   <option value="">選択してください</option>
-                  <option value={team1?.id || ''}>{team1?.name}</option>
-                  <option value={team2?.id || ''}>{team2?.name}</option>
+                  <option value={team1?.id}>{team1?.name}</option>
+                  <option value={team2?.id}>{team2?.name}</option>
                 </select>
-              </div>
+              </label>
+            </div>
 
-              <div className="card">
-                <label>S&amp;D 勝者</label>
+            <div style={{ marginTop: 12 }}>
+              <label>
+                S&amp;D 勝者
                 <select
                   value={sndWinner}
                   onChange={(e) => setSndWinner(e.target.value)}
                   style={{ display: 'block', width: '100%', marginTop: 8 }}
                 >
                   <option value="">選択してください</option>
-                  <option value={team1?.id || ''}>{team1?.name}</option>
-                  <option value={team2?.id || ''}>{team2?.name}</option>
+                  <option value={team1?.id}>{team1?.name}</option>
+                  <option value={team2?.id}>{team2?.name}</option>
                 </select>
-              </div>
-
-              <div className="card">
-                <label>Overload 勝者</label>
-                <select
-                  value={ovWinner}
-                  onChange={(e) => setOvWinner(e.target.value)}
-                  style={{ display: 'block', width: '100%', marginTop: 8 }}
-                >
-                  <option value="">選択してください</option>
-                  <option value={team1?.id || ''}>{team1?.name}</option>
-                  <option value={team2?.id || ''}>{team2?.name}</option>
-                </select>
-              </div>
-
-              <div className="row" style={{ marginTop: 16 }}>
-                <button onClick={handleReport} disabled={saving}>
-                  {saving ? '送信中...' : '試合結果を報告'}
-                </button>
-              </div>
+              </label>
             </div>
-          </div>
+
+            {hpWinner && sndWinner && hpWinner === sndWinner ? (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: 12,
+                  border: '1px solid #ddd',
+                  borderRadius: 8,
+                  background: '#f7f7f7',
+                }}
+              >
+                Hardpoint と S&amp;D で同じチームが勝っているため、Overload の入力は不要です。
+              </div>
+            ) : (
+              <div style={{ marginTop: 12 }}>
+                <label>
+                  Overload 勝者
+                  <select
+                    value={ovWinner}
+                    onChange={(e) => setOvWinner(e.target.value)}
+                    style={{ display: 'block', width: '100%', marginTop: 8 }}
+                  >
+                    <option value="">選択してください</option>
+                    <option value={team1?.id}>{team1?.name}</option>
+                    <option value={team2?.id}>{team2?.name}</option>
+                  </select>
+                </label>
+              </div>
+            )}
+
+            <div style={{ marginTop: 16 }}>
+              <button onClick={handleReport} disabled={saving}>
+                {saving ? '送信中...' : '試合結果を報告'}
+              </button>
+            </div>
+          </section>
         )}
     </main>
   )
