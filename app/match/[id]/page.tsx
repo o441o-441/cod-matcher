@@ -70,6 +70,10 @@ type BanpickSessionRow = {
   ovl_ban_a: string | null
   ovl_map: string | null
   ovl_side: string | null
+  last_action_at: string
+  deadline_at: string
+  timeout_loser_team_id: string | null
+  timeout_winner_team_id: string | null
   created_at: string
   updated_at: string
 }
@@ -97,6 +101,9 @@ export default function MatchDetailPage() {
   const router = useRouter()
   const { showToast } = useToast()
   const realtimeRef = useRef<RealtimeChannel | null>(null)
+  const timeoutIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const clockIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timeoutResolvingRef = useRef(false)
 
   const matchId =
     typeof params.id === 'string'
@@ -124,6 +131,8 @@ export default function MatchDetailPage() {
   const [banpickActions, setBanpickActions] = useState<BanpickActionRow[]>([])
   const [banpickLoading, setBanpickLoading] = useState(false)
 
+  const [nowMs, setNowMs] = useState(Date.now())
+
   const [saving, setSaving] = useState(false)
   const [approving, setApproving] = useState(false)
   const [rejecting, setRejecting] = useState(false)
@@ -143,7 +152,7 @@ export default function MatchDetailPage() {
       return
     }
 
-    setBanpickSession(sessionData as BanpickSessionRow | null)
+    setBanpickSession((sessionData || null) as BanpickSessionRow | null)
 
     if (!sessionData) {
       setBanpickActions([])
@@ -188,10 +197,11 @@ export default function MatchDetailPage() {
 
     setMatch(matchData as MatchRow)
 
-    const [{ data: t1, error: t1Error }, { data: t2, error: t2Error }] = await Promise.all([
-      supabase.from('teams').select('*').eq('id', matchData.team1_id).single(),
-      supabase.from('teams').select('*').eq('id', matchData.team2_id).single(),
-    ])
+    const [{ data: t1, error: t1Error }, { data: t2, error: t2Error }] =
+      await Promise.all([
+        supabase.from('teams').select('*').eq('id', matchData.team1_id).single(),
+        supabase.from('teams').select('*').eq('id', matchData.team2_id).single(),
+      ])
 
     if (t1Error) console.error('t1Error:', t1Error)
     if (t2Error) console.error('t2Error:', t2Error)
@@ -291,6 +301,19 @@ export default function MatchDetailPage() {
   }, [matchId])
 
   useEffect(() => {
+    clockIntervalRef.current = setInterval(() => {
+      setNowMs(Date.now())
+    }, 1000)
+
+    return () => {
+      if (clockIntervalRef.current) {
+        clearInterval(clockIntervalRef.current)
+        clockIntervalRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     if (!matchId) return
 
     const channel = supabase
@@ -321,6 +344,7 @@ export default function MatchDetailPage() {
         { event: '*', schema: 'public', table: 'banpick_sessions', filter: `match_id=eq.${matchId}` },
         async () => {
           await fetchBanpick(matchId)
+          await fetchData()
         }
       )
       .on(
@@ -342,6 +366,62 @@ export default function MatchDetailPage() {
     }
   }, [matchId])
 
+  const resolveBanpickTimeout = async () => {
+    if (!matchId || timeoutResolvingRef.current) return
+
+    timeoutResolvingRef.current = true
+
+    const { data, error } = await supabase.rpc('resolve_banpick_timeout', {
+      p_match_id: matchId,
+    })
+
+    if (error) {
+      console.error('resolve_banpick_timeout error:', error)
+      timeoutResolvingRef.current = false
+      return
+    }
+
+    const result = data as
+      | {
+          timed_out?: boolean
+          already_completed?: boolean
+          winner_team_id?: string
+          loser_team_id?: string
+        }
+      | null
+
+    if (result?.timed_out) {
+      showToast('5分間操作がなかったためタイムアウト決着になりました', 'info')
+      await fetchData()
+    }
+
+    timeoutResolvingRef.current = false
+  }
+
+  useEffect(() => {
+    if (timeoutIntervalRef.current) {
+      clearInterval(timeoutIntervalRef.current)
+      timeoutIntervalRef.current = null
+    }
+
+    if (!matchId || !banpickSession || banpickSession.status !== 'in_progress') {
+      return
+    }
+
+    void resolveBanpickTimeout()
+
+    timeoutIntervalRef.current = setInterval(() => {
+      void resolveBanpickTimeout()
+    }, 10000)
+
+    return () => {
+      if (timeoutIntervalRef.current) {
+        clearInterval(timeoutIntervalRef.current)
+        timeoutIntervalRef.current = null
+      }
+    }
+  }, [matchId, banpickSession?.status, banpickSession?.deadline_at])
+
   const getTeamName = (id: string | null | undefined) => {
     if (!id) return '不明'
     if (team1?.id === id) return team1.name
@@ -355,6 +435,25 @@ export default function MatchDetailPage() {
     if (mode === 'overload' || mode === 'OVERLOAD') return 'Overload'
     return mode
   }
+
+  const formatRemainingTime = (seconds: number) => {
+    const min = Math.floor(seconds / 60)
+    const sec = seconds % 60
+    return `${min}:${String(sec).padStart(2, '0')}`
+  }
+
+  const remainingSeconds = useMemo(() => {
+    if (!banpickSession?.deadline_at || banpickSession.status !== 'in_progress') return 0
+    const diff = new Date(banpickSession.deadline_at).getTime() - nowMs
+    return Math.max(0, Math.floor(diff / 1000))
+  }, [banpickSession?.deadline_at, banpickSession?.status, nowMs])
+
+  const timerClassName = useMemo(() => {
+    if (!banpickSession || banpickSession.status !== 'in_progress') return 'muted'
+    if (remainingSeconds <= 10) return 'danger'
+    if (remainingSeconds <= 60) return 'warning'
+    return 'success'
+  }, [banpickSession, remainingSeconds])
 
   const getApprovalSummary = () => {
     if (!match || !team1 || !team2) {
@@ -583,7 +682,10 @@ export default function MatchDetailPage() {
     myRole === 'owner' &&
     currentBanpickStep?.actingTeamId === myTeamId
 
-  const handleBanpickAction = async (actionType: 'ban' | 'pick_map' | 'pick_side', target: string) => {
+  const handleBanpickAction = async (
+    actionType: 'ban' | 'pick_map' | 'pick_side',
+    target: string
+  ) => {
     if (!myUserId) {
       showToast('ユーザー情報が取得できていません', 'error')
       return
@@ -602,11 +704,12 @@ export default function MatchDetailPage() {
       console.error('submit_banpick_action error:', error)
       showToast(error.message || 'バンピックの送信に失敗しました', 'error')
       setBanpickLoading(false)
+      await fetchData()
       return
     }
 
     showToast('バンピックを更新しました', 'success')
-    await fetchBanpick(matchId)
+    await fetchData()
     setBanpickLoading(false)
   }
 
@@ -819,6 +922,31 @@ export default function MatchDetailPage() {
                   <p>
                     <strong>あなたの権限:</strong> {myRole || 'なし'}
                   </p>
+
+                  {banpickSession.status === 'in_progress' && (
+                    <>
+                      <p className={timerClassName}>
+                        <strong>残り時間:</strong> {formatRemainingTime(remainingSeconds)}
+                      </p>
+                      <p className="muted">
+                        5分間操作がない場合、現在の手番チームが敗北になります。
+                      </p>
+                    </>
+                  )}
+
+                  {banpickSession.timeout_loser_team_id && (
+                    <div style={{ marginTop: '12px' }}>
+                      <p className="danger">
+                        <strong>タイムアウト決着</strong>
+                      </p>
+                      <p>
+                        {getTeamName(banpickSession.timeout_loser_team_id)} が5分間操作しなかったため敗北になりました。
+                      </p>
+                      <p>
+                        勝者: {getTeamName(banpickSession.timeout_winner_team_id)}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="section grid grid-3">
@@ -863,7 +991,10 @@ export default function MatchDetailPage() {
                                 key={target}
                                 onClick={() =>
                                   handleBanpickAction(
-                                    currentBanpickStep?.actingAction as 'ban' | 'pick_map' | 'pick_side',
+                                    currentBanpickStep?.actingAction as
+                                      | 'ban'
+                                      | 'pick_map'
+                                      | 'pick_side',
                                     target
                                   )
                                 }
@@ -898,18 +1029,10 @@ export default function MatchDetailPage() {
                             <p>
                               <strong>{index + 1}.</strong> {getTeamName(action.acting_team_id)}
                             </p>
-                            <p>
-                              モード: {getModeLabel(action.game_mode)}
-                            </p>
-                            <p>
-                              操作: {action.action_type}
-                            </p>
-                            <p>
-                              内容: {action.target}
-                            </p>
-                            <p>
-                              時刻: {new Date(action.created_at).toLocaleString()}
-                            </p>
+                            <p>モード: {getModeLabel(action.game_mode)}</p>
+                            <p>操作: {action.action_type}</p>
+                            <p>内容: {action.target}</p>
+                            <p>時刻: {new Date(action.created_at).toLocaleString()}</p>
                           </div>
                         ))}
                       </div>
@@ -1072,7 +1195,7 @@ export default function MatchDetailPage() {
         confirmText={rejecting ? '却下中...' : '却下する'}
         cancelText="キャンセル"
         onConfirm={handleReject}
-        onCancel={() => {
+        onClose={() => {
           if (!rejecting) setRejectDialogOpen(false)
         }}
       />
