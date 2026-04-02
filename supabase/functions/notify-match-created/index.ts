@@ -24,6 +24,7 @@ type UserRow = {
   id: string
   display_name: string | null
   discord_name: string | null
+  discord_user_id: string | null
 }
 
 serve(async (req) => {
@@ -184,7 +185,7 @@ serve(async (req) => {
 
     const { data: ownerUsers, error: ownerUsersError } = await supabase
       .from('users')
-      .select('id, display_name, discord_name')
+      .select('id, display_name, discord_name, discord_user_id')
       .in('id', ownerUserIds)
 
     if (ownerUsersError || !ownerUsers || ownerUsers.length < 2) {
@@ -218,18 +219,38 @@ serve(async (req) => {
       )
     }
 
-    const team1OwnerDiscordName =
+    const team1OwnerLabel =
       team1OwnerUser.discord_name ||
       team1OwnerUser.display_name ||
       '未設定'
 
-    const team2OwnerDiscordName =
+    const team2OwnerLabel =
       team2OwnerUser.discord_name ||
       team2OwnerUser.display_name ||
       '未設定'
 
+    const team1OwnerMention = team1OwnerUser.discord_user_id
+      ? `<@${team1OwnerUser.discord_user_id}>`
+      : team1OwnerLabel
+
+    const team2OwnerMention = team2OwnerUser.discord_user_id
+      ? `<@${team2OwnerUser.discord_user_id}>`
+      : team2OwnerLabel
+
+    const allowedMentionUsers = [
+      ...(team1OwnerUser.discord_user_id ? [team1OwnerUser.discord_user_id] : []),
+      ...(team2OwnerUser.discord_user_id ? [team2OwnerUser.discord_user_id] : []),
+    ]
+
     const payload = {
-      content: '新しいマッチが成立しました',
+      content: [
+        '新しいマッチが成立しました',
+        '',
+        `${team1OwnerMention} ${team2OwnerMention}`,
+      ].join('\n'),
+      allowed_mentions: {
+        users: allowedMentionUsers,
+      },
       embeds: [
         {
           title: 'マッチ成立',
@@ -241,8 +262,8 @@ serve(async (req) => {
               inline: false,
             },
             {
-              name: 'チーム1 owner のDiscord名',
-              value: team1OwnerDiscordName,
+              name: 'チーム1 owner',
+              value: team1OwnerMention,
               inline: false,
             },
             {
@@ -251,8 +272,8 @@ serve(async (req) => {
               inline: false,
             },
             {
-              name: 'チーム2 owner のDiscord名',
-              value: team2OwnerDiscordName,
+              name: 'チーム2 owner',
+              value: team2OwnerMention,
               inline: false,
             },
             {
@@ -314,8 +335,8 @@ serve(async (req) => {
         matchId: match.id,
         team1: team1.name,
         team2: team2.name,
-        team1OwnerDiscordName,
-        team2OwnerDiscordName,
+        team1OwnerMention,
+        team2OwnerMention,
       }),
       {
         status: 200,

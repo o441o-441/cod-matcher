@@ -10,7 +10,8 @@ type UserRow = {
   id: string
   auth_user_id: string
   display_name: string | null
-  discord_id: string | null
+  discord_name: string | null
+  discord_user_id: string | null
   activision_id: string | null
   is_profile_complete: boolean | null
 }
@@ -48,7 +49,7 @@ export default function MyPage() {
   const [pendingMatches, setPendingMatches] = useState<MatchRow[]>([])
   const [teamNames, setTeamNames] = useState<TeamNameMap>({})
   const [pageError, setPageError] = useState('')
-  const [waitingCount, setWaitingCount] = useState<number>(0)
+  const [waitingCount, setWaitingCount] = useState(0)
 
   const realtimeRef = useRef<RealtimeChannel | null>(null)
 
@@ -65,6 +66,67 @@ export default function MyPage() {
     setWaitingCount(count || 0)
   }
 
+  const extractDiscordInfo = (authUser: any) => {
+    const meta = authUser?.user_metadata ?? {}
+    const identities = authUser?.identities ?? []
+    const discordIdentity = identities.find((i: any) => i?.provider === 'discord')
+    const identityData = discordIdentity?.identity_data ?? {}
+    const appMeta = authUser?.app_metadata ?? {}
+
+    const discordUserId =
+      identityData?.provider_id?.toString?.() ||
+      identityData?.user_id?.toString?.() ||
+      meta?.provider_id?.toString?.() ||
+      meta?.sub?.toString?.() ||
+      appMeta?.provider_id?.toString?.() ||
+      null
+
+    const discordName =
+      meta?.full_name?.toString?.() ||
+      meta?.name?.toString?.() ||
+      identityData?.full_name?.toString?.() ||
+      identityData?.name?.toString?.() ||
+      identityData?.global_name?.toString?.() ||
+      identityData?.preferred_username?.toString?.() ||
+      null
+
+    return {
+      discordUserId,
+      discordName,
+    }
+  }
+
+  const syncDiscordProfile = async (authUserId: string, authUser: any, existingUser: UserRow) => {
+    const { discordUserId, discordName } = extractDiscordInfo(authUser)
+
+    const needsUpdate =
+      (discordUserId && existingUser.discord_user_id !== discordUserId) ||
+      (discordName && existingUser.discord_name !== discordName)
+
+    if (!needsUpdate) {
+      return existingUser
+    }
+
+    const updatePayload: Partial<UserRow> = {
+      discord_user_id: discordUserId ?? existingUser.discord_user_id,
+      discord_name: discordName ?? existingUser.discord_name,
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .update(updatePayload)
+      .eq('auth_user_id', authUserId)
+      .select('*')
+      .single()
+
+    if (error || !data) {
+      console.error('syncDiscordProfile error:', error)
+      return existingUser
+    }
+
+    return data as UserRow
+  }
+
   const fetchPageData = async () => {
     setPageError('')
 
@@ -77,12 +139,12 @@ export default function MyPage() {
       return
     }
 
-    const user = session.user
+    const authUser = session.user
 
     const { data: existingUser, error: selectError } = await supabase
       .from('users')
       .select('*')
-      .eq('auth_user_id', user.id)
+      .eq('auth_user_id', authUser.id)
       .single()
 
     if (selectError || !existingUser) {
@@ -92,17 +154,23 @@ export default function MyPage() {
       return
     }
 
-    if (!existingUser.is_profile_complete) {
+    const syncedUser = await syncDiscordProfile(
+      authUser.id,
+      authUser,
+      existingUser as UserRow
+    )
+
+    if (!syncedUser.is_profile_complete) {
       router.push('/onboarding')
       return
     }
 
-    setProfile(existingUser)
+    setProfile(syncedUser)
 
     const { data: memberRow, error: memberError } = await supabase
       .from('team_members')
       .select('team_id')
-      .eq('user_id', existingUser.id)
+      .eq('user_id', syncedUser.id)
       .maybeSingle()
 
     if (memberError) {
@@ -123,7 +191,7 @@ export default function MyPage() {
         console.error('teamError:', teamError)
         setPageError('チーム情報の取得に失敗しました')
       } else {
-        setTeam(teamRow)
+        setTeam(teamRow as TeamRow)
       }
 
       const { data: pendingData, error: pendingError } = await supabase
@@ -176,7 +244,7 @@ export default function MyPage() {
   }
 
   useEffect(() => {
-    fetchPageData()
+    void fetchPageData()
 
     return () => {
       if (realtimeRef.current) {
@@ -188,7 +256,7 @@ export default function MyPage() {
 
   useEffect(() => {
     const channel = supabase
-      .channel(`mypage-realtime-global`)
+      .channel('mypage-realtime-global')
       .on(
         'postgres_changes',
         {
@@ -249,9 +317,7 @@ export default function MyPage() {
     return (
       <main>
         <h1>マイページ</h1>
-        <div className="card">
-          <p>読み込み中...</p>
-        </div>
+        <p>読み込み中...</p>
       </main>
     )
   }
@@ -265,7 +331,7 @@ export default function MyPage() {
         </div>
 
         <div className="row">
-          <span className="badge">ログイン中</span>
+          <span className="muted">ログイン中</span>
           <button onClick={handleLogout}>ログアウト</button>
         </div>
       </div>
@@ -280,10 +346,11 @@ export default function MyPage() {
         </div>
       )}
 
-      <div className="section grid grid-2">
+      <div className="section">
         <div className="card-strong">
           <h2>プロフィール</h2>
-          <div className="stack">
+
+          <div className="grid grid-2">
             <div className="card">
               <p className="muted">表示名</p>
               <h3>{profile?.display_name || '未設定'}</h3>
@@ -295,106 +362,115 @@ export default function MyPage() {
             </div>
 
             <div className="card">
-              <p className="muted">Discord ID</p>
-              <h3>{profile?.discord_id || '未設定'}</h3>
+              <p className="muted">Discord名</p>
+              <h3>{profile?.discord_name || '未設定'}</h3>
             </div>
 
-            <div className="row">
-              <button onClick={() => router.push('/profile/edit')}>
-                プロフィールを編集
-              </button>
+            <div className="card">
+              <p className="muted">Discord User ID</p>
+              <h3>{profile?.discord_user_id || '未設定'}</h3>
             </div>
           </div>
-        </div>
 
+          <div className="section row">
+            <button onClick={() => router.push('/profile/edit')}>
+              プロフィールを編集
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="section">
         <div className="card-strong">
           <h2>現在の状況</h2>
-          <div className="stack">
-            <p>
-              <strong>待機中チーム数:</strong> {waitingCount}チーム
-            </p>
-            <p>
-              <strong>あなたの承認待ち:</strong> {approvalNeededMatches.length}件
-            </p>
-            <p>
-              <strong>相手の承認待ち:</strong> {waitingOpponentMatches.length}件
-            </p>
+
+          <div className="grid grid-3">
+            <div className="card">
+              <p className="muted">待機中チーム数</p>
+              <h3>{waitingCount}チーム</h3>
+            </div>
+
+            <div className="card">
+              <p className="muted">あなたの承認待ち</p>
+              <h3>{approvalNeededMatches.length}件</h3>
+            </div>
+
+            <div className="card">
+              <p className="muted">相手の承認待ち</p>
+              <h3>{waitingOpponentMatches.length}件</h3>
+            </div>
           </div>
         </div>
       </div>
 
       {team && approvalNeededMatches.length > 0 && (
-        <div className="section card-strong">
-          <h2>あなたの承認が必要</h2>
+        <div className="section">
+          <div className="card-strong">
+            <h2>あなたの承認が必要</h2>
 
-          <div className="stack">
-            {approvalNeededMatches.map((match) => {
-              const opponentId = getOpponentId(match, team.id)
-              const opponentName = teamNames[opponentId] || '不明'
+            <div className="stack">
+              {approvalNeededMatches.map((match) => {
+                const opponentId = getOpponentId(match, team.id)
+                const opponentName = teamNames[opponentId] || '不明'
 
-              return (
-                <div key={match.id} className="card">
-                  <div className="row" style={{ justifyContent: 'space-between' }}>
-                    <div>
-                      <p>
-                        <strong>対戦相手:</strong> {opponentName}
-                      </p>
-                      <p className="danger">
-                        <strong>状態:</strong> あなたの承認待ち
-                      </p>
-                      <p>
-                        <strong>試合日時:</strong>{' '}
-                        {new Date(match.created_at).toLocaleString()}
-                      </p>
-                    </div>
+                return (
+                  <div key={match.id} className="card">
+                    <p>
+                      <strong>対戦相手:</strong> {opponentName}
+                    </p>
+                    <p>
+                      <strong>状態:</strong> あなたの承認待ち
+                    </p>
+                    <p>
+                      <strong>試合日時:</strong>{' '}
+                      {new Date(match.created_at).toLocaleString()}
+                    </p>
 
-                    <div className="row">
+                    <div className="row" style={{ marginTop: '12px' }}>
                       <button onClick={() => router.push(`/match/${match.id}`)}>
                         承認しに行く
                       </button>
                     </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
       )}
 
       {team && waitingOpponentMatches.length > 0 && (
-        <div className="section card-strong">
-          <h2>相手の承認待ち</h2>
+        <div className="section">
+          <div className="card-strong">
+            <h2>相手の承認待ち</h2>
 
-          <div className="stack">
-            {waitingOpponentMatches.map((match) => {
-              const opponentId = getOpponentId(match, team.id)
-              const opponentName = teamNames[opponentId] || '不明'
+            <div className="stack">
+              {waitingOpponentMatches.map((match) => {
+                const opponentId = getOpponentId(match, team.id)
+                const opponentName = teamNames[opponentId] || '不明'
 
-              return (
-                <div key={match.id} className="card">
-                  <div className="row" style={{ justifyContent: 'space-between' }}>
-                    <div>
-                      <p>
-                        <strong>対戦相手:</strong> {opponentName}
-                      </p>
-                      <p className="muted">
-                        <strong>状態:</strong> 相手の承認待ち
-                      </p>
-                      <p>
-                        <strong>試合日時:</strong>{' '}
-                        {new Date(match.created_at).toLocaleString()}
-                      </p>
-                    </div>
+                return (
+                  <div key={match.id} className="card">
+                    <p>
+                      <strong>対戦相手:</strong> {opponentName}
+                    </p>
+                    <p>
+                      <strong>状態:</strong> 相手の承認待ち
+                    </p>
+                    <p>
+                      <strong>試合日時:</strong>{' '}
+                      {new Date(match.created_at).toLocaleString()}
+                    </p>
 
-                    <div className="row">
+                    <div className="row" style={{ marginTop: '12px' }}>
                       <button onClick={() => router.push(`/match/${match.id}`)}>
                         試合詳細へ
                       </button>
                     </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -436,9 +512,7 @@ export default function MyPage() {
                 <button onClick={() => router.push(`/team/${team.id}`)}>
                   チーム詳細を見る
                 </button>
-                <button onClick={() => router.push('/match')}>
-                  対戦開始
-                </button>
+                <button onClick={() => router.push('/match')}>対戦開始</button>
                 <button onClick={() => router.push('/ranking')}>
                   ランキングを見る
                 </button>
@@ -450,6 +524,7 @@ export default function MyPage() {
           ) : (
             <>
               <p>まだチームに所属していません</p>
+
               <div className="section row">
                 <button onClick={() => router.push('/team/create')}>
                   チームを作成
