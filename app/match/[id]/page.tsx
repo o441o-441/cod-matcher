@@ -371,11 +371,16 @@ export default function MatchDetailPage() {
         async (payload) => {
           console.log('[[REALTIME-DEBUG-V2]] banpick_sessions NO_FILTER', payload)
 
-          const row = (payload.new || payload.old) as { match_id?: string } | null
+          const row = (payload.new || payload.old) as
+            | { match_id?: string; status?: string }
+            | null
           if (row?.match_id !== matchId) return
 
           await fetchBanpick(matchId)
-          await fetchData()
+
+          if (row?.status === 'completed') {
+            await fetchData()
+          }
         }
       )
       .on(
@@ -388,7 +393,6 @@ export default function MatchDetailPage() {
           if (row?.match_id !== matchId) return
 
           await fetchBanpick(matchId)
-          await fetchData()
         }
       )
       .subscribe((status) => {
@@ -424,7 +428,6 @@ export default function MatchDetailPage() {
     banpickPollingRef.current = setInterval(async () => {
       console.log('[[BANPICK-POLLING]] tick', { matchId })
       await fetchBanpick(matchId)
-      await fetchData()
     }, 2000)
 
     return () => {
@@ -434,7 +437,7 @@ export default function MatchDetailPage() {
         banpickPollingRef.current = null
       }
     }
-  }, [matchId, banpickSession?.status, banpickSession?.phase, banpickSession?.step_no])
+  }, [matchId, banpickSession?.status])
 
   const resolveBanpickTimeout = async () => {
     if (!matchId || timeoutResolvingRef.current) return
@@ -784,7 +787,7 @@ export default function MatchDetailPage() {
 
     console.log('[banpick] submit success')
     showToast('バンピックを更新しました', 'success')
-    await fetchData()
+    await fetchBanpick(matchId)
     setBanpickLoading(false)
   }
 
@@ -1270,7 +1273,7 @@ export default function MatchDetailPage() {
         confirmText={rejecting ? '却下中...' : '却下する'}
         cancelText="キャンセル"
         onConfirm={handleReject}
-        onCancel={() => {
+        onClose={() => {
           if (!rejecting) setRejectDialogOpen(false)
         }}
       />
