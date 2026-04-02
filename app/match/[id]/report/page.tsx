@@ -13,7 +13,7 @@ type MatchRow = {
   winner_team_id: string | null
   loser_team_id: string | null
   status: string
-  approval_status?: string
+  approval_status?: string | null
   team1_rating_before?: number | null
   team2_rating_before?: number | null
   team1_rating_after?: number | null
@@ -52,6 +52,7 @@ export default function MatchReportPage() {
 
   const realtimeRef = useRef<RealtimeChannel | null>(null)
   const fetchingRef = useRef(false)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const matchId =
     typeof params.id === 'string'
@@ -178,19 +179,26 @@ export default function MatchReportPage() {
 
       setMatch(matchData as MatchRow)
 
-      const [{ data: t1 }, { data: t2 }] = await Promise.all([
-        supabase.from('teams').select('*').eq('id', matchData.team1_id).single(),
-        supabase.from('teams').select('*').eq('id', matchData.team2_id).single(),
+      const [{ data: t1, error: t1Error }, { data: t2, error: t2Error }] = await Promise.all([
+        supabase.from('teams').select('id, name').eq('id', matchData.team1_id).single(),
+        supabase.from('teams').select('id, name').eq('id', matchData.team2_id).single(),
       ])
+
+      if (t1Error) console.error('[fetchData] team1 error:', t1Error)
+      if (t2Error) console.error('[fetchData] team2 error:', t2Error)
 
       setTeam1((t1 || null) as TeamRow | null)
       setTeam2((t2 || null) as TeamRow | null)
 
-      const { data: gameData } = await supabase
+      const { data: gameData, error: gameError } = await supabase
         .from('match_games')
         .select('*')
         .eq('match_id', matchId)
         .order('order_no', { ascending: true })
+
+      if (gameError) {
+        console.error('[fetchData] games error:', gameError)
+      }
 
       setGames((gameData || []) as MatchGameRow[])
 
@@ -199,32 +207,51 @@ export default function MatchReportPage() {
       } = await supabase.auth.getSession()
 
       if (session?.user) {
-        const { data: user } = await supabase
+        const { data: user, error: userError } = await supabase
           .from('users')
           .select('id')
           .eq('auth_user_id', session.user.id)
           .single()
 
+        if (userError) {
+          console.error('[fetchData] user error:', userError)
+        }
+
         if (user) {
-          const { data: member } = await supabase
+          const { data: members, error: memberError } = await supabase
             .from('team_members')
             .select('team_id')
             .eq('user_id', user.id)
-            .maybeSingle()
+            .in('team_id', [matchData.team1_id, matchData.team2_id])
 
-          setMyTeamId(member?.team_id || null)
+          if (memberError) {
+            console.error('[fetchData] member error:', memberError)
+          }
+
+          const matchedTeamId =
+            members?.find(
+              (m) => m.team_id === matchData.team1_id || m.team_id === matchData.team2_id
+            )?.team_id || null
+
+          setMyTeamId(matchedTeamId)
+        } else {
+          setMyTeamId(null)
         }
       } else {
         setMyTeamId(null)
       }
 
-      const { data: report } = await supabase
+      const { data: report, error: reportError } = await supabase
         .from('match_reports')
         .select('*')
         .eq('match_id', matchId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
+
+      if (reportError) {
+        console.error('[fetchData] report error:', reportError)
+      }
 
       setLatestReport((report || null) as MatchReportRow | null)
 
@@ -285,6 +312,26 @@ export default function MatchReportPage() {
     }
   }, [matchId])
 
+  useEffect(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+      pollingRef.current = null
+    }
+
+    if (!matchId) return
+
+    pollingRef.current = setInterval(() => {
+      void fetchData()
+    }, 5000)
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+    }
+  }, [matchId])
+
   const handleReport = async () => {
     if (!team1 || !team2 || !myTeamId) {
       showToast('必要な情報が足りません', 'error')
@@ -321,7 +368,7 @@ export default function MatchReportPage() {
     showToast('結果を報告しました。相手チームの承認待ちです。', 'success')
     setSaving(false)
     router.refresh()
-    router.push(`/match/${matchId}/report`)
+    await fetchData()
   }
 
   const handleApprove = async () => {
@@ -352,6 +399,8 @@ export default function MatchReportPage() {
 
     showToast('承認しました', 'success')
     setApproving(false)
+    router.refresh()
+    await fetchData()
     router.push('/ranking')
   }
 
@@ -387,7 +436,7 @@ export default function MatchReportPage() {
     showToast('結果報告を却下しました。再報告を待ってください。', 'info')
     setRejecting(false)
     router.refresh()
-    router.push(`/match/${matchId}/report`)
+    await fetchData()
   }
 
   if (loading) {
