@@ -45,6 +45,7 @@ export default function MatchPage() {
   const originalTitleRef = useRef('COD マッチングサイト')
   const accessTokenRef = useRef<string | null>(null)
   const notifiedMatchIdsRef = useRef<Set<string>>(new Set())
+  const redirectingMatchIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     originalTitleRef.current = document.title || 'COD マッチングサイト'
@@ -192,6 +193,14 @@ export default function MatchPage() {
       console.error('notifyDiscordMatchCreated error:', error)
       notifiedMatchIdsRef.current.delete(matchId)
     }
+  }
+
+  const redirectToMatchDetail = (matchId: string) => {
+    if (!matchId) return
+    if (redirectingMatchIdRef.current === matchId) return
+
+    redirectingMatchIdRef.current = matchId
+    router.push(`/match/${matchId}`)
   }
 
   useEffect(() => {
@@ -459,6 +468,7 @@ export default function MatchPage() {
     setPageError('')
 
     void notifyDiscordMatchCreated(match.id)
+    redirectToMatchDetail(match.id)
   }
 
   const checkExistingMatchedGame = async (
