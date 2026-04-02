@@ -255,15 +255,8 @@ export default function MatchReportPage() {
 
       setLatestReport((report || null) as MatchReportRow | null)
 
-      if (report) {
-        setHpWinner(report.hp_winner_team_id || '')
-        setSndWinner(report.snd_winner_team_id || '')
-        setOvWinner(report.ov_winner_team_id || '')
-      } else {
-        setHpWinner('')
-        setSndWinner('')
-        setOvWinner('')
-      }
+      // ここではフォーム入力値を勝手に上書きしない
+      // 報告済み画面の表示には latestReport を直接使う
     } finally {
       fetchingRef.current = false
       setLoading(false)
@@ -312,6 +305,7 @@ export default function MatchReportPage() {
     }
   }, [matchId])
 
+  // pending 報告がある時だけ軽量ポーリング
   useEffect(() => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current)
@@ -319,6 +313,8 @@ export default function MatchReportPage() {
     }
 
     if (!matchId) return
+    if (!latestReport) return
+    if (latestReport.approval_status !== 'pending') return
 
     pollingRef.current = setInterval(() => {
       void fetchData()
@@ -330,7 +326,7 @@ export default function MatchReportPage() {
         pollingRef.current = null
       }
     }
-  }, [matchId])
+  }, [matchId, latestReport?.id, latestReport?.approval_status])
 
   const handleReport = async () => {
     if (!team1 || !team2 || !myTeamId) {
@@ -367,7 +363,6 @@ export default function MatchReportPage() {
 
     showToast('結果を報告しました。相手チームの承認待ちです。', 'success')
     setSaving(false)
-    router.refresh()
     await fetchData()
   }
 
@@ -399,7 +394,6 @@ export default function MatchReportPage() {
 
     showToast('承認しました', 'success')
     setApproving(false)
-    router.refresh()
     await fetchData()
     router.push('/ranking')
   }
@@ -435,7 +429,6 @@ export default function MatchReportPage() {
 
     showToast('結果報告を却下しました。再報告を待ってください。', 'info')
     setRejecting(false)
-    router.refresh()
     await fetchData()
   }
 
