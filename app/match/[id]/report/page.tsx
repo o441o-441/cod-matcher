@@ -390,7 +390,6 @@ export default function MatchReportPage() {
     showToast('承認しました', 'success')
     setApproving(false)
     await fetchData()
-    router.push('/ranking')
   }
 
   const handleReject = async () => {
