@@ -14,11 +14,6 @@ type MatchRow = {
   loser_team_id: string | null
   status: string
   approval_status?: string
-  reported_by_team_id?: string | null
-  team1_rating_before?: number | null
-  team2_rating_before?: number | null
-  team1_rating_after?: number | null
-  team2_rating_after?: number | null
 }
 
 type TeamRow = {
@@ -86,6 +81,7 @@ export default function MatchBanpickPage() {
   const timeoutResolvingRef = useRef(false)
   const banpickPollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const fetchingRef = useRef(false)
+  const creatingSessionRef = useRef(false)
 
   const matchId =
     typeof params.id === 'string'
@@ -108,7 +104,63 @@ export default function MatchBanpickPage() {
   const [banpickLoading, setBanpickLoading] = useState(false)
   const [nowMs, setNowMs] = useState(Date.now())
 
-  const fetchBanpick = async (targetMatchId: string) => {
+  const getTeamName = (id: string | null | undefined) => {
+    if (!id) return '不明'
+    if (team1?.id === id) return team1.name
+    if (team2?.id === id) return team2.name
+    return '不明'
+  }
+
+  const getModeLabel = (mode: string) => {
+    if (mode === 'hardpoint' || mode === 'HARDPOINT') return 'Hardpoint'
+    if (mode === 'snd' || mode === 'SEARCH_AND_DESTROY') return 'S&D'
+    if (mode === 'overload' || mode === 'OVERLOAD') return 'Overload'
+    return mode
+  }
+
+  const formatRemainingTime = (seconds: number) => {
+    const min = Math.floor(seconds / 60)
+    const sec = seconds % 60
+    return `${min}:${String(sec).padStart(2, '0')}`
+  }
+
+  const ensureBanpickSession = async (targetMatch: MatchRow) => {
+    if (creatingSessionRef.current) return
+
+    creatingSessionRef.current = true
+    try {
+      const now = new Date()
+      const deadline = new Date(now.getTime() + 5 * 60 * 1000)
+
+      const { error } = await supabase.from('banpick_sessions').insert({
+        match_id: targetMatch.id,
+        team_a_id: targetMatch.team1_id,
+        team_b_id: targetMatch.team2_id,
+        phase: 'phase1_hp',
+        step_no: 1,
+        status: 'in_progress',
+        last_action_at: now.toISOString(),
+        deadline_at: deadline.toISOString(),
+      })
+
+      if (error) {
+        // すでに別処理で作られていた場合もあるので、duplicate系は握りつぶす
+        const msg = String(error.message || '')
+        if (
+          !msg.includes('duplicate') &&
+          !msg.includes('unique') &&
+          !msg.includes('23505')
+        ) {
+          console.error('[ensureBanpickSession] insert error:', error)
+          showToast('バンピック開始準備に失敗しました', 'error')
+        }
+      }
+    } finally {
+      creatingSessionRef.current = false
+    }
+  }
+
+  const fetchBanpick = async (targetMatchId: string, targetMatch?: MatchRow | null) => {
     const { data: sessionData, error: sessionError } = await supabase
       .from('banpick_sessions')
       .select('*')
@@ -119,6 +171,45 @@ export default function MatchBanpickPage() {
       console.error('[fetchBanpick] session error:', sessionError)
       setBanpickSession(null)
       setBanpickActions([])
+      return
+    }
+
+    if (!sessionData && targetMatch) {
+      await ensureBanpickSession(targetMatch)
+
+      const { data: retrySessionData, error: retrySessionError } = await supabase
+        .from('banpick_sessions')
+        .select('*')
+        .eq('match_id', targetMatchId)
+        .maybeSingle()
+
+      if (retrySessionError) {
+        console.error('[fetchBanpick] retry session error:', retrySessionError)
+        setBanpickSession(null)
+        setBanpickActions([])
+        return
+      }
+
+      setBanpickSession((retrySessionData || null) as BanpickSessionRow | null)
+
+      if (!retrySessionData) {
+        setBanpickActions([])
+        return
+      }
+
+      const { data: retryActionData, error: retryActionError } = await supabase
+        .from('banpick_actions')
+        .select('*')
+        .eq('match_id', targetMatchId)
+        .order('created_at', { ascending: true })
+
+      if (retryActionError) {
+        console.error('[fetchBanpick] retry action error:', retryActionError)
+        setBanpickActions([])
+        return
+      }
+
+      setBanpickActions((retryActionData || []) as BanpickActionRow[])
       return
     }
 
@@ -162,15 +253,13 @@ export default function MatchBanpickPage() {
         return
       }
 
-      setMatch(matchData as MatchRow)
+      const currentMatch = matchData as MatchRow
+      setMatch(currentMatch)
 
-      const [{ data: t1, error: t1Error }, { data: t2, error: t2Error }] = await Promise.all([
-        supabase.from('teams').select('*').eq('id', matchData.team1_id).single(),
-        supabase.from('teams').select('*').eq('id', matchData.team2_id).single(),
+      const [{ data: t1 }, { data: t2 }] = await Promise.all([
+        supabase.from('teams').select('*').eq('id', currentMatch.team1_id).single(),
+        supabase.from('teams').select('*').eq('id', currentMatch.team2_id).single(),
       ])
-
-      if (t1Error) console.error('[fetchData] team1 error:', t1Error)
-      if (t2Error) console.error('[fetchData] team2 error:', t2Error)
 
       setTeam1((t1 || null) as TeamRow | null)
       setTeam2((t2 || null) as TeamRow | null)
@@ -180,28 +269,20 @@ export default function MatchBanpickPage() {
       } = await supabase.auth.getSession()
 
       if (session?.user) {
-        const { data: user, error: userError } = await supabase
+        const { data: user } = await supabase
           .from('users')
           .select('id')
           .eq('auth_user_id', session.user.id)
           .single()
 
-        if (userError) {
-          console.error('[fetchData] user error:', userError)
-        }
-
         if (user) {
           setMyUserId(user.id)
 
-          const { data: member, error: memberError } = await supabase
+          const { data: member } = await supabase
             .from('team_members')
             .select('team_id, role')
             .eq('user_id', user.id)
             .maybeSingle()
-
-          if (memberError) {
-            console.error('[fetchData] member error:', memberError)
-          }
 
           if (member) {
             setMyTeamId(member.team_id)
@@ -217,7 +298,7 @@ export default function MatchBanpickPage() {
         setMyRole(null)
       }
 
-      await fetchBanpick(matchId)
+      await fetchBanpick(matchId, currentMatch)
     } finally {
       fetchingRef.current = false
       setLoading(false)
@@ -260,7 +341,7 @@ export default function MatchBanpickPage() {
           const row = (payload.new || payload.old) as { match_id?: string; status?: string } | null
           if (row?.match_id !== matchId) return
 
-          await fetchBanpick(matchId)
+          await fetchBanpick(matchId, match)
 
           if (row?.status === 'completed') {
             await fetchData()
@@ -273,7 +354,7 @@ export default function MatchBanpickPage() {
         async (payload) => {
           const row = (payload.new || payload.old) as { match_id?: string } | null
           if (row?.match_id !== matchId) return
-          await fetchBanpick(matchId)
+          await fetchBanpick(matchId, match)
         }
       )
       .subscribe()
@@ -286,7 +367,7 @@ export default function MatchBanpickPage() {
         realtimeRef.current = null
       }
     }
-  }, [matchId])
+  }, [matchId, match])
 
   useEffect(() => {
     if (banpickPollingRef.current) {
@@ -297,7 +378,7 @@ export default function MatchBanpickPage() {
     if (!matchId || banpickSession?.status !== 'in_progress') return
 
     banpickPollingRef.current = setInterval(() => {
-      void fetchBanpick(matchId)
+      void fetchBanpick(matchId, match)
     }, 15000)
 
     return () => {
@@ -306,7 +387,7 @@ export default function MatchBanpickPage() {
         banpickPollingRef.current = null
       }
     }
-  }, [matchId, banpickSession?.status])
+  }, [matchId, banpickSession?.status, match])
 
   const resolveBanpickTimeout = async () => {
     if (!matchId || timeoutResolvingRef.current) return
@@ -323,14 +404,7 @@ export default function MatchBanpickPage() {
         return
       }
 
-      const result = data as
-        | {
-            timed_out?: boolean
-            already_completed?: boolean
-            winner_team_id?: string
-            loser_team_id?: string
-          }
-        | null
+      const result = data as { timed_out?: boolean } | null
 
       if (result?.timed_out) {
         showToast('5分間操作がなかったためタイムアウト決着になりました', 'info')
@@ -363,26 +437,6 @@ export default function MatchBanpickPage() {
     }
   }, [matchId, banpickSession?.status, banpickSession?.deadline_at])
 
-  const getTeamName = (id: string | null | undefined) => {
-    if (!id) return '不明'
-    if (team1?.id === id) return team1.name
-    if (team2?.id === id) return team2.name
-    return '不明'
-  }
-
-  const getModeLabel = (mode: string) => {
-    if (mode === 'hardpoint' || mode === 'HARDPOINT') return 'Hardpoint'
-    if (mode === 'snd' || mode === 'SEARCH_AND_DESTROY') return 'S&D'
-    if (mode === 'overload' || mode === 'OVERLOAD') return 'Overload'
-    return mode
-  }
-
-  const formatRemainingTime = (seconds: number) => {
-    const min = Math.floor(seconds / 60)
-    const sec = seconds % 60
-    return `${min}:${String(sec).padStart(2, '0')}`
-  }
-
   const remainingSeconds = useMemo(() => {
     if (!banpickSession?.deadline_at || banpickSession.status !== 'in_progress') return 0
     const diff = new Date(banpickSession.deadline_at).getTime() - nowMs
@@ -409,7 +463,6 @@ export default function MatchBanpickPage() {
           description: `${getTeamName(banpickSession.team_a_id)} が Hardpoint のマップを1つBANしてください。`,
         }
       }
-
       if (banpickSession.step_no === 2) {
         return {
           title: 'フェーズ1 HARDPOINT',
@@ -419,7 +472,6 @@ export default function MatchBanpickPage() {
           description: `${getTeamName(banpickSession.team_b_id)} が Hardpoint のマップを1つBANしてください。`,
         }
       }
-
       if (banpickSession.step_no === 3) {
         return {
           title: 'フェーズ1 HARDPOINT',
@@ -429,7 +481,6 @@ export default function MatchBanpickPage() {
           description: `${getTeamName(banpickSession.team_a_id)} が Game 1 の Hardpoint マップを選択してください。`,
         }
       }
-
       return {
         title: 'フェーズ1 HARDPOINT',
         actingTeamId: banpickSession.team_b_id,
@@ -449,7 +500,6 @@ export default function MatchBanpickPage() {
           description: `${getTeamName(banpickSession.team_b_id)} が S&D のマップを1つBANしてください。`,
         }
       }
-
       if (banpickSession.step_no === 2) {
         return {
           title: 'フェーズ2 SEARCH & DESTROY',
@@ -459,7 +509,6 @@ export default function MatchBanpickPage() {
           description: `${getTeamName(banpickSession.team_a_id)} が S&D のマップを1つBANしてください。`,
         }
       }
-
       if (banpickSession.step_no === 3) {
         return {
           title: 'フェーズ2 SEARCH & DESTROY',
@@ -469,7 +518,6 @@ export default function MatchBanpickPage() {
           description: `${getTeamName(banpickSession.team_b_id)} が Game 2 の S&D マップを選択してください。`,
         }
       }
-
       return {
         title: 'フェーズ2 SEARCH & DESTROY',
         actingTeamId: banpickSession.team_a_id,
@@ -489,7 +537,6 @@ export default function MatchBanpickPage() {
           description: `${getTeamName(banpickSession.team_a_id)} が Overload のマップを1つBANしてください。`,
         }
       }
-
       if (banpickSession.step_no === 2) {
         return {
           title: 'フェーズ3 OVERLOAD',
@@ -499,7 +546,6 @@ export default function MatchBanpickPage() {
           description: `${getTeamName(banpickSession.team_b_id)} が Game 3 の Overload マップを選択してください。`,
         }
       }
-
       return {
         title: 'フェーズ3 OVERLOAD',
         actingTeamId: banpickSession.team_a_id,
@@ -591,7 +637,7 @@ export default function MatchBanpickPage() {
     }
 
     showToast('バンピックを更新しました', 'success')
-    await fetchBanpick(matchId)
+    await fetchBanpick(matchId, match)
     setBanpickLoading(false)
   }
 
@@ -631,35 +677,6 @@ export default function MatchBanpickPage() {
 
       <div className="section">
         <div className="card-strong">
-          <h2>対戦情報</h2>
-
-          <div className="grid grid-2">
-            <div className="card">
-              <p className="muted">マッチID</p>
-              <h3>{match.id}</h3>
-            </div>
-
-            <div className="card">
-              <p className="muted">状態</p>
-              <h3>{match.status}</h3>
-              <p>承認状態: {match.approval_status || 'none'}</p>
-            </div>
-
-            <div className="card">
-              <p className="muted">チーム1</p>
-              <h3>{team1?.name}</h3>
-            </div>
-
-            <div className="card">
-              <p className="muted">チーム2</p>
-              <h3>{team2?.name}</h3>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="section">
-        <div className="card-strong">
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <h2>バンピック</h2>
             <p className={banpickSession?.status === 'completed' ? 'success' : 'warning'}>
@@ -668,20 +685,10 @@ export default function MatchBanpickPage() {
           </div>
 
           {!banpickSession ? (
-            <p>バンピック情報を準備中です...</p>
+            <p>バンピック開始準備中です...</p>
           ) : (
             <>
               <div className="grid grid-2">
-                <div className="card">
-                  <p className="muted">チームA</p>
-                  <h3>{getTeamName(banpickSession.team_a_id)}</h3>
-                </div>
-
-                <div className="card">
-                  <p className="muted">チームB</p>
-                  <h3>{getTeamName(banpickSession.team_b_id)}</h3>
-                </div>
-
                 <div className="card">
                   <p className="muted">現在フェーズ</p>
                   <h3>{currentBanpickStep?.title || '-'}</h3>

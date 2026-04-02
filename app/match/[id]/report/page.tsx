@@ -14,7 +14,6 @@ type MatchRow = {
   loser_team_id: string | null
   status: string
   approval_status?: string
-  reported_by_team_id?: string | null
   team1_rating_before?: number | null
   team2_rating_before?: number | null
   team1_rating_after?: number | null
@@ -24,10 +23,6 @@ type MatchRow = {
 type TeamRow = {
   id: string
   name: string
-  rating: number
-  wins: number
-  losses: number
-  matches_played: number
 }
 
 type MatchReportRow = {
@@ -183,24 +178,20 @@ export default function MatchReportPage() {
 
       setMatch(matchData as MatchRow)
 
-      const [{ data: t1, error: t1Error }, { data: t2, error: t2Error }] = await Promise.all([
+      const [{ data: t1 }, { data: t2 }] = await Promise.all([
         supabase.from('teams').select('*').eq('id', matchData.team1_id).single(),
         supabase.from('teams').select('*').eq('id', matchData.team2_id).single(),
       ])
 
-      if (t1Error) console.error('[fetchData] team1 error:', t1Error)
-      if (t2Error) console.error('[fetchData] team2 error:', t2Error)
-
       setTeam1((t1 || null) as TeamRow | null)
       setTeam2((t2 || null) as TeamRow | null)
 
-      const { data: gameData, error: gameError } = await supabase
+      const { data: gameData } = await supabase
         .from('match_games')
         .select('*')
         .eq('match_id', matchId)
         .order('order_no', { ascending: true })
 
-      if (gameError) console.error('[fetchData] games error:', gameError)
       setGames((gameData || []) as MatchGameRow[])
 
       const {
@@ -208,26 +199,18 @@ export default function MatchReportPage() {
       } = await supabase.auth.getSession()
 
       if (session?.user) {
-        const { data: user, error: userError } = await supabase
+        const { data: user } = await supabase
           .from('users')
           .select('id')
           .eq('auth_user_id', session.user.id)
           .single()
 
-        if (userError) {
-          console.error('[fetchData] user error:', userError)
-        }
-
         if (user) {
-          const { data: member, error: memberError } = await supabase
+          const { data: member } = await supabase
             .from('team_members')
             .select('team_id')
             .eq('user_id', user.id)
             .maybeSingle()
-
-          if (memberError) {
-            console.error('[fetchData] member error:', memberError)
-          }
 
           setMyTeamId(member?.team_id || null)
         }
@@ -235,17 +218,13 @@ export default function MatchReportPage() {
         setMyTeamId(null)
       }
 
-      const { data: report, error: reportError } = await supabase
+      const { data: report } = await supabase
         .from('match_reports')
         .select('*')
         .eq('match_id', matchId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
-
-      if (reportError) {
-        console.error('[fetchData] report error:', reportError)
-      }
 
       setLatestReport((report || null) as MatchReportRow | null)
 
@@ -454,35 +433,6 @@ export default function MatchReportPage() {
             <strong>{approvalSummary.title}</strong>
           </p>
           <p>{approvalSummary.body}</p>
-        </div>
-      </div>
-
-      <div className="section">
-        <div className="card-strong">
-          <h2>対戦情報</h2>
-
-          <div className="grid grid-2">
-            <div className="card">
-              <p className="muted">マッチID</p>
-              <h3>{match.id}</h3>
-            </div>
-
-            <div className="card">
-              <p className="muted">状態</p>
-              <h3>{match.status}</h3>
-              <p>承認状態: {match.approval_status || 'none'}</p>
-            </div>
-
-            <div className="card">
-              <p className="muted">チーム1</p>
-              <h3>{team1?.name}</h3>
-            </div>
-
-            <div className="card">
-              <p className="muted">チーム2</p>
-              <h3>{team2?.name}</h3>
-            </div>
-          </div>
         </div>
       </div>
 
