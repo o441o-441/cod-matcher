@@ -254,9 +254,6 @@ export default function MatchReportPage() {
       }
 
       setLatestReport((report || null) as MatchReportRow | null)
-
-      // ここではフォーム入力値を勝手に上書きしない
-      // 報告済み画面の表示には latestReport を直接使う
     } finally {
       fetchingRef.current = false
       setLoading(false)
@@ -305,7 +302,7 @@ export default function MatchReportPage() {
     }
   }, [matchId])
 
-  // pending 報告がある時だけ軽量ポーリング
+  // 常時ポーリング
   useEffect(() => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current)
@@ -313,8 +310,6 @@ export default function MatchReportPage() {
     }
 
     if (!matchId) return
-    if (!latestReport) return
-    if (latestReport.approval_status !== 'pending') return
 
     pollingRef.current = setInterval(() => {
       void fetchData()
@@ -326,7 +321,7 @@ export default function MatchReportPage() {
         pollingRef.current = null
       }
     }
-  }, [matchId, latestReport?.id, latestReport?.approval_status])
+  }, [matchId])
 
   const handleReport = async () => {
     if (!team1 || !team2 || !myTeamId) {
@@ -478,57 +473,62 @@ export default function MatchReportPage() {
         </div>
       </div>
 
-      {match.status === 'completed' && (
-        <div className="section">
-          <div className="card-strong">
-            <h2>試合結果</h2>
+{match.status === 'completed' && (
+  <div className="section">
+    <div className="card-strong">
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>試合結果</h2>
+        <button onClick={() => router.push('/mypage')}>
+          マイページに戻る
+        </button>
+      </div>
 
-            <div className="grid grid-2">
-              <div className="card">
-                <p className="muted">勝者</p>
-                <h3>{getTeamName(match.winner_team_id)}</h3>
-              </div>
-
-              <div className="card">
-                <p className="muted">敗者</p>
-                <h3>{getTeamName(match.loser_team_id)}</h3>
-              </div>
-
-              <div className="card">
-                <p className="muted">{team1?.name} レート</p>
-                <h3>
-                  {match.team1_rating_before ?? '-'} → {match.team1_rating_after ?? '-'}
-                </h3>
-              </div>
-
-              <div className="card">
-                <p className="muted">{team2?.name} レート</p>
-                <h3>
-                  {match.team2_rating_before ?? '-'} → {match.team2_rating_after ?? '-'}
-                </h3>
-              </div>
-            </div>
-
-            <div className="section">
-              <h3>各ゲーム結果</h3>
-
-              {games.length === 0 ? (
-                <p>ゲーム結果がありません</p>
-              ) : (
-                games.map((game) => (
-                  <div key={game.id} className="card">
-                    <p>
-                      <strong>Game {game.order_no}</strong>
-                    </p>
-                    <p>モード: {getModeLabel(game.mode)}</p>
-                    <p>勝者: {getTeamName(game.winner_team_id)}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+      <div className="grid grid-2">
+        <div className="card">
+          <p className="muted">勝者</p>
+          <h3>{getTeamName(match.winner_team_id)}</h3>
         </div>
-      )}
+
+        <div className="card">
+          <p className="muted">敗者</p>
+          <h3>{getTeamName(match.loser_team_id)}</h3>
+        </div>
+
+        <div className="card">
+          <p className="muted">{team1?.name} レート</p>
+          <h3>
+            {match.team1_rating_before ?? '-'} → {match.team1_rating_after ?? '-'}
+          </h3>
+        </div>
+
+        <div className="card">
+          <p className="muted">{team2?.name} レート</p>
+          <h3>
+            {match.team2_rating_before ?? '-'} → {match.team2_rating_after ?? '-'}
+          </h3>
+        </div>
+      </div>
+
+      <div className="section">
+        <h3>各ゲーム結果</h3>
+
+        {games.length === 0 ? (
+          <p>ゲーム結果がありません</p>
+        ) : (
+          games.map((game) => (
+            <div key={game.id} className="card">
+              <p>
+                <strong>Game {game.order_no}</strong>
+              </p>
+              <p>モード: {getModeLabel(game.mode)}</p>
+              <p>勝者: {getTeamName(game.winner_team_id)}</p>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
       {latestReport && match.status !== 'completed' && (
         <div className="section">
