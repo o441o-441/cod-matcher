@@ -1,0 +1,2 @@
+[functions.notify-match-created]
+verify_jwt = false
