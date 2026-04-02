@@ -109,8 +109,8 @@ export default function MatchDetailPage() {
     typeof params.id === 'string'
       ? params.id
       : Array.isArray(params.id)
-      ? params.id[0]
-      : ''
+        ? params.id[0]
+        : ''
 
   const [loading, setLoading] = useState(true)
   const [match, setMatch] = useState<MatchRow | null>(null)
@@ -325,69 +325,71 @@ export default function MatchDetailPage() {
     }
   }, [])
 
+  // Realtime購読はこの1本だけ
   useEffect(() => {
     if (!matchId) return
 
-    console.log('[realtime] subscribe start', { matchId })
+    console.log('[[REALTIME-DEBUG-V2]] subscribe start', { matchId })
 
-const channel = supabase
-  .channel(`match-detail-${matchId}`)
-  .on(
-    'postgres_changes',
-    { event: '*', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` },
-    async (payload) => {
-      console.log('[realtime] matches:', payload)
-      await fetchData()
-    }
-  )
-  .on(
-    'postgres_changes',
-    { event: '*', schema: 'public', table: 'match_reports', filter: `match_id=eq.${matchId}` },
-    async (payload) => {
-      console.log('[realtime] match_reports:', payload)
-      await fetchData()
-    }
-  )
-  .on(
-    'postgres_changes',
-    { event: '*', schema: 'public', table: 'match_games', filter: `match_id=eq.${matchId}` },
-    async (payload) => {
-      console.log('[realtime] match_games:', payload)
-      await fetchData()
-    }
-  )
-  .on(
-    'postgres_changes',
-    { event: '*', schema: 'public', table: 'banpick_sessions' },
-    async (payload) => {
-      console.log('[realtime] banpick_sessions (no filter):', payload)
+    const channel = supabase
+      .channel(`match-detail-${matchId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` },
+        async (payload) => {
+          console.log('[[REALTIME-DEBUG-V2]] matches', payload)
+          await fetchData()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'match_reports', filter: `match_id=eq.${matchId}` },
+        async (payload) => {
+          console.log('[[REALTIME-DEBUG-V2]] match_reports', payload)
+          await fetchData()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'match_games', filter: `match_id=eq.${matchId}` },
+        async (payload) => {
+          console.log('[[REALTIME-DEBUG-V2]] match_games', payload)
+          await fetchData()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'banpick_sessions' },
+        async (payload) => {
+          console.log('[[REALTIME-DEBUG-V2]] banpick_sessions NO_FILTER', payload)
 
-      const row = (payload.new || payload.old) as { match_id?: string } | null
-      if (row?.match_id !== matchId) return
+          const row = (payload.new || payload.old) as { match_id?: string } | null
+          if (row?.match_id !== matchId) return
 
-      await fetchBanpick(matchId)
-      await fetchData()
-    }
-  )
-  .on(
-    'postgres_changes',
-    { event: '*', schema: 'public', table: 'banpick_actions' },
-    async (payload) => {
-      console.log('[realtime] banpick_actions (no filter):', payload)
+          await fetchBanpick(matchId)
+          await fetchData()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'banpick_actions' },
+        async (payload) => {
+          console.log('[[REALTIME-DEBUG-V2]] banpick_actions NO_FILTER', payload)
 
-      const row = (payload.new || payload.old) as { match_id?: string } | null
-      if (row?.match_id !== matchId) return
+          const row = (payload.new || payload.old) as { match_id?: string } | null
+          if (row?.match_id !== matchId) return
 
-      await fetchBanpick(matchId)
-    }
-  )
-  .subscribe((status) => {
-    console.log('[realtime] status:', status)
-  })
+          await fetchBanpick(matchId)
+        }
+      )
+      .subscribe((status) => {
+        console.log('[[REALTIME-DEBUG-V2]] status', status)
+      })
+
     realtimeRef.current = channel
 
     return () => {
-      console.log('[realtime] unsubscribe', { matchId })
+      console.log('[[REALTIME-DEBUG-V2]] unsubscribe', { matchId })
       if (realtimeRef.current) {
         void supabase.removeChannel(realtimeRef.current)
         realtimeRef.current = null
@@ -430,76 +432,29 @@ const channel = supabase
     timeoutResolvingRef.current = false
   }
 
-useEffect(() => {
-  if (!matchId) return
-
-  console.log('[[REALTIME-DEBUG-V2]] subscribe start', { matchId })
-
-  const channel = supabase
-    .channel(`match-detail-${matchId}`)
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` },
-      async (payload) => {
-        console.log('[[REALTIME-DEBUG-V2]] matches', payload)
-        await fetchData()
-      }
-    )
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'match_reports', filter: `match_id=eq.${matchId}` },
-      async (payload) => {
-        console.log('[[REALTIME-DEBUG-V2]] match_reports', payload)
-        await fetchData()
-      }
-    )
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'match_games', filter: `match_id=eq.${matchId}` },
-      async (payload) => {
-        console.log('[[REALTIME-DEBUG-V2]] match_games', payload)
-        await fetchData()
-      }
-    )
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'banpick_sessions' },
-      async (payload) => {
-        console.log('[[REALTIME-DEBUG-V2]] banpick_sessions NO_FILTER', payload)
-
-        const row = (payload.new || payload.old) as { match_id?: string } | null
-        if (row?.match_id !== matchId) return
-
-        await fetchBanpick(matchId)
-        await fetchData()
-      }
-    )
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'banpick_actions' },
-      async (payload) => {
-        console.log('[[REALTIME-DEBUG-V2]] banpick_actions NO_FILTER', payload)
-
-        const row = (payload.new || payload.old) as { match_id?: string } | null
-        if (row?.match_id !== matchId) return
-
-        await fetchBanpick(matchId)
-      }
-    )
-    .subscribe((status) => {
-      console.log('[[REALTIME-DEBUG-V2]] status', status)
-    })
-
-  realtimeRef.current = channel
-
-  return () => {
-    console.log('[[REALTIME-DEBUG-V2]] unsubscribe', { matchId })
-    if (realtimeRef.current) {
-      void supabase.removeChannel(realtimeRef.current)
-      realtimeRef.current = null
+  useEffect(() => {
+    if (timeoutIntervalRef.current) {
+      clearInterval(timeoutIntervalRef.current)
+      timeoutIntervalRef.current = null
     }
-  }
-}, [matchId])
+
+    if (!matchId || !banpickSession || banpickSession.status !== 'in_progress') {
+      return
+    }
+
+    void resolveBanpickTimeout()
+
+    timeoutIntervalRef.current = setInterval(() => {
+      void resolveBanpickTimeout()
+    }, 10000)
+
+    return () => {
+      if (timeoutIntervalRef.current) {
+        clearInterval(timeoutIntervalRef.current)
+        timeoutIntervalRef.current = null
+      }
+    }
+  }, [matchId, banpickSession?.status, banpickSession?.deadline_at])
 
   const getTeamName = (id: string | null | undefined) => {
     if (!id) return '不明'
@@ -1276,7 +1231,7 @@ useEffect(() => {
         confirmText={rejecting ? '却下中...' : '却下する'}
         cancelText="キャンセル"
         onConfirm={handleReject}
-        onCancel={() => {
+        onClose={() => {
           if (!rejecting) setRejectDialogOpen(false)
         }}
       />
