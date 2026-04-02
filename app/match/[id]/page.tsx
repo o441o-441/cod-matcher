@@ -104,6 +104,8 @@ export default function MatchDetailPage() {
   const timeoutIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const clockIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const timeoutResolvingRef = useRef(false)
+  const banpickPollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const fetchingRef = useRef(false)
 
   const matchId =
     typeof params.id === 'string'
@@ -179,133 +181,140 @@ export default function MatchDetailPage() {
   }
 
   const fetchData = async () => {
+    if (fetchingRef.current) return
+    fetchingRef.current = true
+
     console.log('[fetchData] start', { matchId })
     setLoading(true)
 
-    if (!matchId) {
-      console.error('[fetchData] matchId is invalid:', params)
-      setLoading(false)
-      return
-    }
-
-    const { data: matchData, error: matchError } = await supabase
-      .from('matches')
-      .select('*')
-      .eq('id', matchId)
-      .maybeSingle()
-
-    if (matchError || !matchData) {
-      console.error('[fetchData] matchError:', matchError)
-      setLoading(false)
-      return
-    }
-
-    console.log('[fetchData] matchData:', matchData)
-    setMatch(matchData as MatchRow)
-
-    const [{ data: t1, error: t1Error }, { data: t2, error: t2Error }] =
-      await Promise.all([
-        supabase.from('teams').select('*').eq('id', matchData.team1_id).single(),
-        supabase.from('teams').select('*').eq('id', matchData.team2_id).single(),
-      ])
-
-    if (t1Error) console.error('[fetchData] t1Error:', t1Error)
-    if (t2Error) console.error('[fetchData] t2Error:', t2Error)
-
-    setTeam1((t1 || null) as TeamRow | null)
-    setTeam2((t2 || null) as TeamRow | null)
-
-    const { data: gameData, error: gameError } = await supabase
-      .from('match_games')
-      .select('*')
-      .eq('match_id', matchId)
-      .order('order_no', { ascending: true })
-
-    if (gameError) console.error('[fetchData] gameError:', gameError)
-    console.log('[fetchData] gameData:', gameData)
-    setGames((gameData || []) as MatchGameRow[])
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (session?.user) {
-      const { data: user, error: userError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('auth_user_id', session.user.id)
-        .single()
-
-      if (userError) {
-        console.error('[fetchData] userError:', userError)
+    try {
+      if (!matchId) {
+        console.error('[fetchData] matchId is invalid:', params)
+        setLoading(false)
+        return
       }
 
-      if (user) {
-        setMyUserId(user.id)
+      const { data: matchData, error: matchError } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('id', matchId)
+        .maybeSingle()
 
-        const { data: member, error: memberError } = await supabase
-          .from('team_members')
-          .select('team_id, role')
-          .eq('user_id', user.id)
-          .maybeSingle()
+      if (matchError || !matchData) {
+        console.error('[fetchData] matchError:', matchError)
+        setLoading(false)
+        return
+      }
 
-        if (memberError) {
-          console.error('[fetchData] memberError:', memberError)
+      console.log('[fetchData] matchData:', matchData)
+      setMatch(matchData as MatchRow)
+
+      const [{ data: t1, error: t1Error }, { data: t2, error: t2Error }] =
+        await Promise.all([
+          supabase.from('teams').select('*').eq('id', matchData.team1_id).single(),
+          supabase.from('teams').select('*').eq('id', matchData.team2_id).single(),
+        ])
+
+      if (t1Error) console.error('[fetchData] t1Error:', t1Error)
+      if (t2Error) console.error('[fetchData] t2Error:', t2Error)
+
+      setTeam1((t1 || null) as TeamRow | null)
+      setTeam2((t2 || null) as TeamRow | null)
+
+      const { data: gameData, error: gameError } = await supabase
+        .from('match_games')
+        .select('*')
+        .eq('match_id', matchId)
+        .order('order_no', { ascending: true })
+
+      if (gameError) console.error('[fetchData] gameError:', gameError)
+      console.log('[fetchData] gameData:', gameData)
+      setGames((gameData || []) as MatchGameRow[])
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (session?.user) {
+        const { data: user, error: userError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', session.user.id)
+          .single()
+
+        if (userError) {
+          console.error('[fetchData] userError:', userError)
         }
 
-        if (member) {
-          setMyTeamId(member.team_id)
-          setMyRole(member.role)
-        } else {
-          setMyTeamId(null)
-          setMyRole(null)
+        if (user) {
+          setMyUserId(user.id)
+
+          const { data: member, error: memberError } = await supabase
+            .from('team_members')
+            .select('team_id, role')
+            .eq('user_id', user.id)
+            .maybeSingle()
+
+          if (memberError) {
+            console.error('[fetchData] memberError:', memberError)
+          }
+
+          if (member) {
+            setMyTeamId(member.team_id)
+            setMyRole(member.role)
+          } else {
+            setMyTeamId(null)
+            setMyRole(null)
+          }
         }
       }
-    }
 
-    const { data: report, error: reportError } = await supabase
-      .from('match_reports')
-      .select('*')
-      .eq('match_id', matchId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      const { data: report, error: reportError } = await supabase
+        .from('match_reports')
+        .select('*')
+        .eq('match_id', matchId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
-    if (reportError) {
-      console.error('[fetchData] reportError:', reportError)
-    }
-
-    console.log('[fetchData] latestReport:', report)
-    setLatestReport((report || null) as MatchReportRow | null)
-
-    if (report) {
-      setHpWinner(report.hp_winner_team_id || '')
-      setSndWinner(report.snd_winner_team_id || '')
-      setOvWinner(report.ov_winner_team_id || '')
-    } else {
-      setHpWinner('')
-      setSndWinner('')
-      setOvWinner('')
-    }
-
-    const { error: createSessionError } = await supabase.rpc(
-      'create_banpick_session_for_match',
-      {
-        p_match_id: matchId,
+      if (reportError) {
+        console.error('[fetchData] reportError:', reportError)
       }
-    )
 
-    if (createSessionError) {
-      console.error(
-        '[fetchData] create_banpick_session_for_match error:',
-        createSessionError
+      console.log('[fetchData] latestReport:', report)
+      setLatestReport((report || null) as MatchReportRow | null)
+
+      if (report) {
+        setHpWinner(report.hp_winner_team_id || '')
+        setSndWinner(report.snd_winner_team_id || '')
+        setOvWinner(report.ov_winner_team_id || '')
+      } else {
+        setHpWinner('')
+        setSndWinner('')
+        setOvWinner('')
+      }
+
+      const { error: createSessionError } = await supabase.rpc(
+        'create_banpick_session_for_match',
+        {
+          p_match_id: matchId,
+        }
       )
+
+      if (createSessionError) {
+        console.error(
+          '[fetchData] create_banpick_session_for_match error:',
+          createSessionError
+        )
+      }
+
+      await fetchBanpick(matchId)
+
+      setLoading(false)
+      console.log('[fetchData] done')
+    } finally {
+      fetchingRef.current = false
     }
-
-    await fetchBanpick(matchId)
-
-    setLoading(false)
-    console.log('[fetchData] done')
   }
 
   useEffect(() => {
@@ -325,7 +334,6 @@ export default function MatchDetailPage() {
     }
   }, [])
 
-  // Realtime購読はこの1本だけ
   useEffect(() => {
     if (!matchId) return
 
@@ -380,6 +388,7 @@ export default function MatchDetailPage() {
           if (row?.match_id !== matchId) return
 
           await fetchBanpick(matchId)
+          await fetchData()
         }
       )
       .subscribe((status) => {
@@ -396,6 +405,36 @@ export default function MatchDetailPage() {
       }
     }
   }, [matchId])
+
+  useEffect(() => {
+    if (banpickPollingRef.current) {
+      clearInterval(banpickPollingRef.current)
+      banpickPollingRef.current = null
+    }
+
+    if (!matchId) return
+    if (!banpickSession || banpickSession.status !== 'in_progress') return
+
+    console.log('[[BANPICK-POLLING]] start', {
+      matchId,
+      phase: banpickSession.phase,
+      step_no: banpickSession.step_no,
+    })
+
+    banpickPollingRef.current = setInterval(async () => {
+      console.log('[[BANPICK-POLLING]] tick', { matchId })
+      await fetchBanpick(matchId)
+      await fetchData()
+    }, 2000)
+
+    return () => {
+      console.log('[[BANPICK-POLLING]] stop', { matchId })
+      if (banpickPollingRef.current) {
+        clearInterval(banpickPollingRef.current)
+        banpickPollingRef.current = null
+      }
+    }
+  }, [matchId, banpickSession?.status, banpickSession?.phase, banpickSession?.step_no])
 
   const resolveBanpickTimeout = async () => {
     if (!matchId || timeoutResolvingRef.current) return
@@ -1231,7 +1270,7 @@ export default function MatchDetailPage() {
         confirmText={rejecting ? '却下中...' : '却下する'}
         cancelText="キャンセル"
         onConfirm={handleReject}
-        onCancel={() => {
+        onClose={() => {
           if (!rejecting) setRejectDialogOpen(false)
         }}
       />
