@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -51,8 +51,9 @@ export default function MatchReportPage() {
   const { showToast } = useToast()
 
   const realtimeRef = useRef<RealtimeChannel | null>(null)
-  const fetchingRef = useRef(false)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const fetchingRef = useRef(false)
+  const mountedRef = useRef(false)
 
   const matchId =
     typeof params.id === 'string'
@@ -86,9 +87,10 @@ export default function MatchReportPage() {
   }
 
   const getModeLabel = (mode: string) => {
-    if (mode === 'hardpoint' || mode === 'HARDPOINT') return 'Hardpoint'
-    if (mode === 'snd' || mode === 'SEARCH_AND_DESTROY') return 'S&D'
-    if (mode === 'overload' || mode === 'OVERLOAD') return 'Overload'
+    const v = mode?.toLowerCase?.() || ''
+    if (v === 'hardpoint') return 'Hardpoint'
+    if (v === 'snd' || v === 'search_and_destroy') return 'S&D'
+    if (v === 'overload') return 'Overload'
     return mode
   }
 
@@ -101,74 +103,7 @@ export default function MatchReportPage() {
     }
   }, [isOverloadRequired, ovWinner])
 
-  const getApprovalSummary = () => {
-    if (!match || !team1 || !team2) {
-      return {
-        title: '確認中',
-        body: '試合情報を読み込み中です。',
-        className: 'muted',
-      }
-    }
-
-    if (match.status === 'completed') {
-      return {
-        title: '試合確定済み',
-        body: 'この試合は承認済みで、結果とレートが確定しています。',
-        className: 'success',
-      }
-    }
-
-    if (!latestReport) {
-      return {
-        title: '未報告',
-        body: 'まだどちらのチームからも結果報告がありません。',
-        className: 'muted',
-      }
-    }
-
-    const reporterName = getTeamName(latestReport.reporter_team_id)
-
-    if (latestReport.approval_status === 'rejected') {
-      return {
-        title: '報告却下',
-        body: `${reporterName} の報告は却下されました。再報告してください。`,
-        className: 'danger',
-      }
-    }
-
-    if (latestReport.approval_status === 'pending') {
-      if (myTeamId && latestReport.reporter_team_id === myTeamId) {
-        const opponentId = myTeamId === team1.id ? team2.id : team1.id
-        return {
-          title: '相手チームの承認待ち',
-          body: `あなたのチームが報告済みです。${getTeamName(opponentId)} の承認を待っています。`,
-          className: 'muted',
-        }
-      }
-
-      return {
-        title: 'あなたの承認待ち',
-        body: `${reporterName} が結果を報告しています。内容を確認して承認または却下してください。`,
-        className: 'danger',
-      }
-    }
-
-    if (latestReport.approval_status === 'approved') {
-      return {
-        title: '承認済み',
-        body: '報告は承認済みです。',
-        className: 'success',
-      }
-    }
-
-    return {
-      title: '確認中',
-      body: '現在の状態を確認中です。',
-      className: 'muted',
-    }
-  }
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!matchId || fetchingRef.current) return
 
     fetchingRef.current = true
@@ -182,24 +117,29 @@ export default function MatchReportPage() {
 
       if (matchError || !matchData) {
         console.error('[fetchData] match error:', matchError)
-        setMatch(null)
-        setLoading(false)
+        if (mountedRef.current) {
+          setMatch(null)
+          setLoading(false)
+        }
         return
       }
 
-      setMatch(matchData as MatchRow)
-
       const [{ data: t1, error: t1Error }, { data: t2, error: t2Error }] =
         await Promise.all([
-          supabase.from('teams').select('id, name').eq('id', matchData.team1_id).single(),
-          supabase.from('teams').select('id, name').eq('id', matchData.team2_id).single(),
+          supabase
+            .from('teams')
+            .select('id, name')
+            .eq('id', matchData.team1_id)
+            .maybeSingle(),
+          supabase
+            .from('teams')
+            .select('id, name')
+            .eq('id', matchData.team2_id)
+            .maybeSingle(),
         ])
 
       if (t1Error) console.error('[fetchData] team1 error:', t1Error)
       if (t2Error) console.error('[fetchData] team2 error:', t2Error)
-
-      setTeam1((t1 || null) as TeamRow | null)
-      setTeam2((t2 || null) as TeamRow | null)
 
       const { data: gameData, error: gameError } = await supabase
         .from('match_games')
@@ -211,46 +151,39 @@ export default function MatchReportPage() {
         console.error('[fetchData] games error:', gameError)
       }
 
-      setGames((gameData || []) as MatchGameRow[])
-
       const {
         data: { session },
       } = await supabase.auth.getSession()
+
+      let matchedTeamId: string | null = null
 
       if (session?.user) {
         const { data: user, error: userError } = await supabase
           .from('users')
           .select('id')
           .eq('auth_user_id', session.user.id)
-          .single()
+          .maybeSingle()
 
         if (userError) {
           console.error('[fetchData] user error:', userError)
         }
 
-        if (user) {
+        if (user?.id) {
           const { data: members, error: memberError } = await supabase
             .from('team_members')
             .select('team_id')
             .eq('user_id', user.id)
-            .in('team_id', [matchData.team1_id, matchData.team2_id])
 
           if (memberError) {
-            console.error('[fetchData] member error:', memberError)
+            console.error('[fetchData] memberError:', memberError)
           }
 
-          const matchedTeamId =
+          matchedTeamId =
             members?.find(
               (m) =>
                 m.team_id === matchData.team1_id || m.team_id === matchData.team2_id,
             )?.team_id || null
-
-          setMyTeamId(matchedTeamId)
-        } else {
-          setMyTeamId(null)
         }
-      } else {
-        setMyTeamId(null)
       }
 
       const { data: report, error: reportError } = await supabase
@@ -265,19 +198,47 @@ export default function MatchReportPage() {
         console.error('[fetchData] report error:', reportError)
       }
 
+      console.log('[report-page debug]', {
+        matchId,
+        matchStatus: matchData?.status,
+        myTeamId: matchedTeamId,
+        latestReportId: report?.id ?? null,
+        latestReportReporterTeamId: report?.reporter_team_id ?? null,
+        latestReportApprovalStatus: report?.approval_status ?? null,
+      })
+
+      if (!mountedRef.current) return
+
+      setMatch(matchData as MatchRow)
+      setTeam1((t1 || null) as TeamRow | null)
+      setTeam2((t2 || null) as TeamRow | null)
+      setGames((gameData || []) as MatchGameRow[])
+      setMyTeamId(matchedTeamId)
       setLatestReport((report || null) as MatchReportRow | null)
+      setLoading(false)
     } finally {
       fetchingRef.current = false
-      setLoading(false)
     }
-  }
-
-  useEffect(() => {
-    void fetchData()
   }, [matchId])
 
   useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    void fetchData()
+  }, [fetchData])
+
+  useEffect(() => {
     if (!matchId) return
+
+    if (realtimeRef.current) {
+      supabase.removeChannel(realtimeRef.current)
+      realtimeRef.current = null
+    }
 
     const channel = supabase
       .channel(`match-report-${matchId}`)
@@ -285,6 +246,7 @@ export default function MatchReportPage() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` },
         async () => {
+          console.log('realtime: matches changed')
           await fetchData()
         },
       )
@@ -297,6 +259,7 @@ export default function MatchReportPage() {
           filter: `match_id=eq.${matchId}`,
         },
         async () => {
+          console.log('realtime: match_reports changed')
           await fetchData()
         },
       )
@@ -309,10 +272,13 @@ export default function MatchReportPage() {
           filter: `match_id=eq.${matchId}`,
         },
         async () => {
+          console.log('realtime: match_games changed')
           await fetchData()
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('realtime status:', status)
+      })
 
     realtimeRef.current = channel
 
@@ -322,7 +288,7 @@ export default function MatchReportPage() {
         realtimeRef.current = null
       }
     }
-  }, [matchId])
+  }, [matchId, fetchData])
 
   useEffect(() => {
     if (pollingRef.current) {
@@ -331,12 +297,11 @@ export default function MatchReportPage() {
     }
 
     if (!matchId) return
-    if (!latestReport) return
-    if (latestReport.approval_status !== 'pending') return
+    if (match?.status === 'completed') return
 
     pollingRef.current = setInterval(() => {
       void fetchData()
-    }, 5000)
+    }, 3000)
 
     return () => {
       if (pollingRef.current) {
@@ -344,7 +309,86 @@ export default function MatchReportPage() {
         pollingRef.current = null
       }
     }
-  }, [matchId, latestReport?.id, latestReport?.approval_status])
+  }, [matchId, match?.status, fetchData])
+
+  useEffect(() => {
+    const onFocus = () => {
+      void fetchData()
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchData()
+      }
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [fetchData])
+
+  const getApprovalSummary = () => {
+    if (!match || !team1 || !team2) {
+      return {
+        title: '確認中',
+        body: '試合情報を読み込み中です。',
+      }
+    }
+
+    if (match.status === 'completed') {
+      return {
+        title: '試合確定済み',
+        body: 'この試合は承認済みで、結果とレートが確定しています。',
+      }
+    }
+
+    if (!latestReport) {
+      return {
+        title: '未報告',
+        body: 'まだどちらのチームからも結果報告がありません。',
+      }
+    }
+
+    const reporterName = getTeamName(latestReport.reporter_team_id)
+
+    if (latestReport.approval_status === 'rejected') {
+      return {
+        title: '報告却下',
+        body: `${reporterName} の報告は却下されました。再報告してください。`,
+      }
+    }
+
+    if (latestReport.approval_status === 'pending') {
+      if (myTeamId && latestReport.reporter_team_id === myTeamId) {
+        const opponentId = myTeamId === team1.id ? team2.id : team1.id
+        return {
+          title: '相手チームの承認待ち',
+          body: `あなたのチームが報告済みです。${getTeamName(opponentId)} の承認を待っています。`,
+        }
+      }
+
+      return {
+        title: 'あなたの承認待ち',
+        body: `${reporterName} が結果を報告しています。内容を確認して承認または却下してください。`,
+      }
+    }
+
+    if (latestReport.approval_status === 'approved') {
+      return {
+        title: '承認済み',
+        body: '報告は承認済みです。',
+      }
+    }
+
+    return {
+      title: '確認中',
+      body: '現在の状態を確認中です。',
+    }
+  }
 
   const handleReport = async () => {
     if (!team1 || !team2 || !myTeamId) {
@@ -395,7 +439,7 @@ export default function MatchReportPage() {
   }
 
   const handleApprove = async () => {
-    if (!latestReport || !team1 || !team2 || !myTeamId) {
+    if (!latestReport || !myTeamId) {
       showToast('必要な情報が足りません', 'error')
       return
     }
@@ -423,7 +467,6 @@ export default function MatchReportPage() {
     showToast('承認しました', 'success')
     setApproving(false)
     await fetchData()
-    router.push('/ranking')
   }
 
   const handleReject = async () => {
@@ -486,7 +529,11 @@ export default function MatchReportPage() {
       <h1>結果報告</h1>
       <p>試合結果の報告、承認、却下を行います</p>
 
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <button onClick={() => router.push('/mypage')}>
+          マイページに戻る
+        </button>
+
         <button onClick={() => router.push(`/match/${matchId}/banpick`)}>
           バンピックへ
         </button>
@@ -557,6 +604,16 @@ export default function MatchReportPage() {
               ))
             )}
           </div>
+
+          <div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <button onClick={() => router.push('/mypage')}>
+              マイページに戻る
+            </button>
+
+            <button onClick={() => router.push('/history')}>
+              履歴へ
+            </button>
+          </div>
         </section>
       )}
 
@@ -586,7 +643,11 @@ export default function MatchReportPage() {
 
           <div style={{ marginTop: 12 }}>
             <div>Overload</div>
-            <h3>{latestReport.ov_winner_team_id ? getTeamName(latestReport.ov_winner_team_id) : '未実施'}</h3>
+            <h3>
+              {latestReport.ov_winner_team_id
+                ? getTeamName(latestReport.ov_winner_team_id)
+                : '未実施'}
+            </h3>
           </div>
 
           <div style={{ marginTop: 12 }}>
@@ -597,7 +658,7 @@ export default function MatchReportPage() {
           {myTeamId &&
             latestReport.reporter_team_id !== myTeamId &&
             latestReport.approval_status === 'pending' && (
-              <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+              <div style={{ display: 'flex', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
                 <button onClick={handleApprove} disabled={approving || rejecting}>
                   {approving ? '承認中...' : 'この結果を承認する'}
                 </button>
