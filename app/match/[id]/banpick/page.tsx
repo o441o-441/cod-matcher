@@ -45,6 +45,7 @@ type BanpickSessionRow = {
 
 type BanpickActionRow = {
   id: string
+  match_id: string
   acting_team_id: string
   action_type: string
   game_mode: string
@@ -262,7 +263,7 @@ export default function BanpickPage() {
     banpickSession.status === 'in_progress' &&
     myRole === 'owner' &&
     !!myTeamId &&
-    currentBanpickStep?.actingTeam &&
+    !!currentBanpickStep &&
     (
       (currentBanpickStep.actingTeam === 'A' && myTeamId === match?.team1_id) ||
       (currentBanpickStep.actingTeam === 'B' && myTeamId === match?.team2_id)
@@ -298,6 +299,21 @@ export default function BanpickPage() {
 
       if (sessionError) {
         console.error('[banpick] session error:', sessionError)
+      }
+
+      let resolvedSession = (sessionData || null) as BanpickSessionRow | null
+
+      if (!resolvedSession) {
+        const { data: createdSession, error: ensureError } = await supabase.rpc(
+          'ensure_banpick_session',
+          { p_match_id: matchId },
+        )
+
+        if (ensureError) {
+          console.error('[banpick] ensure session error:', ensureError)
+        } else {
+          resolvedSession = (createdSession || null) as BanpickSessionRow | null
+        }
       }
 
       const { data: actionsData, error: actionsError } = await supabase
@@ -343,10 +359,18 @@ export default function BanpickPage() {
         }
       }
 
+      console.log('[banpick debug]', {
+        matchId,
+        sessionData,
+        resolvedSession,
+        myTeamId: resolvedMyTeamId,
+        myRole: resolvedMyRole,
+      })
+
       setMatch(matchData as MatchRow)
       setTeam1((t1 || null) as TeamRow | null)
       setTeam2((t2 || null) as TeamRow | null)
-      setBanpickSession((sessionData || null) as BanpickSessionRow | null)
+      setBanpickSession(resolvedSession)
       setBanpickActions((actionsData || []) as BanpickActionRow[])
       setMyTeamId(resolvedMyTeamId)
       setMyRole(resolvedMyRole)
@@ -371,9 +395,13 @@ export default function BanpickPage() {
     }
 
     const update = () => {
-      const diff = Math.floor(
-        (new Date(banpickSession.deadline_at as string).getTime() - Date.now()) / 1000,
-      )
+      const deadline = banpickSession.deadline_at
+      if (!deadline) {
+        setRemainingSeconds(0)
+        return
+      }
+
+      const diff = Math.floor((new Date(deadline).getTime() - Date.now()) / 1000)
       setRemainingSeconds(Math.max(0, diff))
     }
 
@@ -626,10 +654,7 @@ export default function BanpickPage() {
                           key={target}
                           onClick={() =>
                             handleBanpickAction(
-                              currentBanpickStep?.actingAction as
-                                | 'ban'
-                                | 'pick_map'
-                                | 'pick_side',
+                              currentBanpickStep.actingAction,
                               target,
                             )
                           }
@@ -713,8 +738,12 @@ export default function BanpickPage() {
                       padding: 12,
                     }}
                   >
-                    <div style={{ fontWeight: 700 }}>{index + 1}. {getTeamName(action.acting_team_id)}</div>
-                    <div style={{ marginTop: 6 }}>モード: {getModeLabel(action.game_mode)}</div>
+                    <div style={{ fontWeight: 700 }}>
+                      {index + 1}. {getTeamName(action.acting_team_id)}
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      モード: {getModeLabel(action.game_mode)}
+                    </div>
                     <div>操作: {action.action_type}</div>
                     <div>内容: {action.target}</div>
                     <div style={{ marginTop: 6, fontSize: 12 }}>
