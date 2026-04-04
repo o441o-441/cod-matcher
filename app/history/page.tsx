@@ -122,7 +122,7 @@ export default function HistoryPage() {
         <h2>履歴一覧</h2>
 
         {matches.length === 0 ? (
-          <EmptyCard title="履歴がありません" description="完了した試合がまだありません。" />
+          <EmptyCard title="履歴がありません" message="完了した試合がまだありません。" />
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
             {matches.map((m) => (
