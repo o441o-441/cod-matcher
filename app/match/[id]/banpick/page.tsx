@@ -724,31 +724,6 @@ export default function MatchBanpickPage() {
                 </div>
               )}
 
-              <div className="grid grid-3" style={{ marginTop: 16 }}>
-                <div className="card">
-                  <h3>Game 1 Hardpoint</h3>
-                  <p>Team A BAN: {banpickSession.hp_ban_a || '-'}</p>
-                  <p>Team B BAN: {banpickSession.hp_ban_b || '-'}</p>
-                  <p>Map: {banpickSession.hp_map || '-'}</p>
-                  <p>Side: {banpickSession.hp_side || '-'}</p>
-                </div>
-
-                <div className="card">
-                  <h3>Game 2 S&amp;D</h3>
-                  <p>Team B BAN: {banpickSession.snd_ban_b || '-'}</p>
-                  <p>Team A BAN: {banpickSession.snd_ban_a || '-'}</p>
-                  <p>Map: {banpickSession.snd_map || '-'}</p>
-                  <p>Side: {banpickSession.snd_side || '-'}</p>
-                </div>
-
-                <div className="card">
-                  <h3>Game 3 Overload</h3>
-                  <p>Team A BAN: {banpickSession.ovl_ban_a || '-'}</p>
-                  <p>Map: {banpickSession.ovl_map || '-'}</p>
-                  <p>Side: {banpickSession.ovl_side || '-'}</p>
-                </div>
-              </div>
-
               {banpickSession.status === 'in_progress' && (
                 <div className="card" style={{ marginTop: 16 }}>
                   <h3>現在の操作</h3>
@@ -783,6 +758,31 @@ export default function MatchBanpickPage() {
                   )}
                 </div>
               )}
+              
+              <div className="grid grid-3" style={{ marginTop: 16 }}>
+                <div className="card">
+                  <h3>Game 1 Hardpoint</h3>
+                  <p>Team A BAN: {banpickSession.hp_ban_a || '-'}</p>
+                  <p>Team B BAN: {banpickSession.hp_ban_b || '-'}</p>
+                  <p>Map: {banpickSession.hp_map || '-'}</p>
+                  <p>Side: {banpickSession.hp_side || '-'}</p>
+                </div>
+
+                <div className="card">
+                  <h3>Game 2 S&amp;D</h3>
+                  <p>Team B BAN: {banpickSession.snd_ban_b || '-'}</p>
+                  <p>Team A BAN: {banpickSession.snd_ban_a || '-'}</p>
+                  <p>Map: {banpickSession.snd_map || '-'}</p>
+                  <p>Side: {banpickSession.snd_side || '-'}</p>
+                </div>
+
+                <div className="card">
+                  <h3>Game 3 Overload</h3>
+                  <p>Team A BAN: {banpickSession.ovl_ban_a || '-'}</p>
+                  <p>Map: {banpickSession.ovl_map || '-'}</p>
+                  <p>Side: {banpickSession.ovl_side || '-'}</p>
+                </div>
+              </div>
 
               <div className="card" style={{ marginTop: 16 }}>
                 <h3>バンピック履歴</h3>
