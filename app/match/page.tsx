@@ -1,819 +1,1050 @@
-'use client'
+"use client";
 
-import { useEffect, useRef, useState } from 'react'
-import type { RealtimeChannel } from '@supabase/supabase-js'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
-import { useToast } from '@/components/ToastProvider'
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { useRouter } from "next/navigation";
+
+type ProfileRow = {
+  id: string;
+  display_name: string;
+  current_rating: number;
+  is_banned: boolean;
+  is_onboarded: boolean;
+};
+
+type PartyRow = {
+  id: string;
+  leader_user_id: string;
+  source_team_id: string | null;
+  party_type: "solo" | "duo" | "trio" | "full";
+  status: "open" | "queued" | "matched" | "cancelled" | "closed";
+  created_at: string;
+  updated_at: string;
+};
+
+type PartyMemberRow = {
+  id: string;
+  party_id: string;
+  user_id: string;
+  profiles?: {
+    id: string;
+    display_name: string;
+  } | null;
+};
+
+type PartyInviteRow = {
+  id: string;
+  party_id: string;
+  inviter_user_id: string;
+  invitee_user_id: string;
+  status: "pending" | "accepted" | "rejected" | "cancelled";
+  created_at: string;
+  responded_at: string | null;
+};
+
+type PendingInviteListRow = {
+  invite_id: string;
+  party_id: string;
+  inviter_user_id: string;
+  inviter_display_name: string;
+  invitee_user_id: string;
+  created_at: string;
+};
+
+type QueueEntryRow = {
+  id: string;
+  party_id: string;
+  queue_type: "ranked" | "casual" | "fullparty_only" | "mixed";
+  status: "waiting" | "matched" | "cancelled" | "expired";
+  party_size: number;
+  avg_rating: number;
+  min_rating: number | null;
+  max_rating: number | null;
+  party_size_bonus: number;
+  wait_expand_level: number;
+  created_at: string;
+  matched_at: string | null;
+  cancelled_at: string | null;
+  expired_at: string | null;
+};
 
 type MatchRow = {
-  id: string
-  team1_id: string
-  team2_id: string
-  created_at: string
+  id: string;
+  status: string;
+  matched_at: string;
+};
+
+type RpcCreateMatchResult = {
+  match_id: string;
+  alpha_match_team_id: string;
+  bravo_match_team_id: string;
+  alpha_member_count: number;
+  bravo_member_count: number;
+};
+
+function getSupabaseClient(): SupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !anon) {
+    throw new Error("Supabase env is missing");
+  }
+
+  return createClient(url, anon, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
 }
 
-type AtomicMatchResult = {
-  match_id: string
-  opponent_team_id: string
+function inferPartyLabel(size: number): "solo" | "duo" | "trio" | "full" | "invalid" {
+  if (size === 1) return "solo";
+  if (size === 2) return "duo";
+  if (size === 3) return "trio";
+  if (size === 4) return "full";
+  return "invalid";
+}
+
+function isExpectedAutoMatchMiss(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("not enough compatible waiting players") ||
+    normalized.includes("failed to split teams into 4v4") ||
+    normalized.includes("anchor waiting queue entry not found")
+  );
 }
 
 export default function MatchPage() {
-  const router = useRouter()
-  const { showToast } = useToast()
+  const router = useRouter();
+  const [supabase] = useState(() => getSupabaseClient());
 
-  const [status, setStatus] = useState('初期化中...')
-  const [teamId, setTeamId] = useState<string | null>(null)
-  const [myTeamName, setMyTeamName] = useState('')
-  const [myTeamRating, setMyTeamRating] = useState(1500)
-  const [matchedTeamName, setMatchedTeamName] = useState('')
-  const [matchedTeamId, setMatchedTeamId] = useState('')
-  const [createdMatchId, setCreatedMatchId] = useState('')
-  const [isWaiting, setIsWaiting] = useState(false)
-  const [cancelLoading, setCancelLoading] = useState(false)
-  const [queueCreatedAt, setQueueCreatedAt] = useState<string | null>(null)
-  const [nowMs, setNowMs] = useState(Date.now())
-  const [pageError, setPageError] = useState('')
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [autoMatching, setAutoMatching] = useState(false);
 
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const matchingRef = useRef(false)
-  const cancellingRef = useRef(false)
-  const clockRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const realtimeRef = useRef<RealtimeChannel | null>(null)
-  const matchedOnceRef = useRef(false)
-  const originalTitleRef = useRef('COD マッチングサイト')
-  const accessTokenRef = useRef<string | null>(null)
-  const notifiedMatchIdsRef = useRef<Set<string>>(new Set())
-  const redirectingMatchIdRef = useRef<string | null>(null)
+  const [errorText, setErrorText] = useState<string | null>(null);
+  const [infoText, setInfoText] = useState<string | null>(null);
 
-  useEffect(() => {
-    originalTitleRef.current = document.title || 'COD マッチングサイト'
-    return () => {
-      document.title = originalTitleRef.current
-    }
-  }, [])
+  const [myUserId, setMyUserId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<ProfileRow | null>(null);
 
-  useEffect(() => {
-    if (status === 'マッチ成立！') {
-      document.title = '〖マッチ成立！〗COD マッチングサイト'
+  const [queueType, setQueueType] = useState<"ranked" | "casual" | "fullparty_only" | "mixed">("ranked");
+  const [sourceTeamId, setSourceTeamId] = useState("");
+  const [inviteeUserId, setInviteeUserId] = useState("");
 
-      if (!matchedOnceRef.current) {
-        matchedOnceRef.current = true
+  const [myParty, setMyParty] = useState<PartyRow | null>(null);
+  const [myPartyMembers, setMyPartyMembers] = useState<PartyMemberRow[]>([]);
+  const [myPartyInvites, setMyPartyInvites] = useState<PartyInviteRow[]>([]);
+  const [myPendingInvites, setMyPendingInvites] = useState<PendingInviteListRow[]>([]);
+  const [myWaitingEntry, setMyWaitingEntry] = useState<QueueEntryRow | null>(null);
 
-        try {
-          const audioContext = new window.AudioContext()
-          const oscillator = audioContext.createOscillator()
-          const gainNode = audioContext.createGain()
+  const [myMatchedEntryIds, setMyMatchedEntryIds] = useState<string[]>([]);
+  const [myActiveMatch, setMyActiveMatch] = useState<MatchRow | null>(null);
 
-          oscillator.type = 'sine'
-          oscillator.frequency.setValueAtTime(880, audioContext.currentTime)
-          oscillator.connect(gainNode)
-          gainNode.connect(audioContext.destination)
-          gainNode.gain.setValueAtTime(0.05, audioContext.currentTime)
+  const [waitingSeconds, setWaitingSeconds] = useState(0);
 
-          oscillator.start()
-          oscillator.stop(audioContext.currentTime + 0.18)
-        } catch (error) {
-          console.error('notification sound error:', error)
-        }
+  const autoMatchBusyRef = useRef(false);
+  const routePushedRef = useRef(false);
 
-        showToast('マッチ成立！ 対戦相手が決まりました。', 'success')
-      }
-    } else if (isWaiting) {
-      document.title = 'マッチング中... | COD マッチングサイト'
-    } else {
-      document.title = originalTitleRef.current
-    }
-  }, [status, isWaiting, showToast])
+  const clearMessages = () => {
+    setErrorText(null);
+    setInfoText(null);
+  };
 
-  const stopRealtimeAndTimers = () => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current)
-      pollingRef.current = null
-    }
+  const isWaiting = !!myWaitingEntry;
+  const isMatched = !!myActiveMatch;
+  const isPartyLeader = !!myParty && myParty.leader_user_id === myUserId;
+  const myPartySize = myPartyMembers.length;
+  const myPartyLabel = inferPartyLabel(myPartySize);
 
-    if (clockRef.current) {
-      clearInterval(clockRef.current)
-      clockRef.current = null
-    }
+  const canCreateParty = useMemo(() => {
+    if (!profile) return false;
+    if (profile.is_banned) return false;
+    if (busy) return false;
+    if (myParty) return false;
+    if (isMatched) return false;
+    return true;
+  }, [profile, busy, myParty, isMatched]);
 
-    if (heartbeatRef.current) {
-      clearInterval(heartbeatRef.current)
-      heartbeatRef.current = null
-    }
+  const canQueueExistingParty = useMemo(() => {
+    if (!myParty) return false;
+    if (!isPartyLeader) return false;
+    if (busy) return false;
+    if (isWaiting) return false;
+    if (isMatched) return false;
+    if (myPartySize < 1 || myPartySize > 4) return false;
+    if (!["open", "cancelled"].includes(myParty.status)) return false;
+    return true;
+  }, [myParty, isPartyLeader, busy, isWaiting, isMatched, myPartySize]);
 
-    if (realtimeRef.current) {
-      void supabase.removeChannel(realtimeRef.current)
-      realtimeRef.current = null
-    }
-  }
-
-  const pingHeartbeat = async (targetTeamId: string) => {
-    if (cancellingRef.current) return
-
-    const { error } = await supabase
-      .from('match_queue')
-      .update({
-        last_seen_at: new Date().toISOString(),
-        status: 'waiting',
-      })
-      .eq('team_id', targetTeamId)
-
-    if (error) {
-      console.error('heartbeat update error:', error)
-    }
-  }
-
-  const deleteQueueByTeamId = async (targetTeamId: string) => {
-    return await supabase
-      .from('match_queue')
-      .delete()
-      .eq('team_id', targetTeamId)
-      .select('team_id')
-  }
-
-  const leaveQueueByEdgeFunctionKeepalive = async (targetTeamId: string) => {
-    const accessToken = accessTokenRef.current
-    if (!accessToken) return
-
-    const functionUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/leave-queue`
+  const loadMyState = useCallback(async () => {
+    setLoading(true);
+    setErrorText(null);
 
     try {
-      await fetch(functionUrl, {
-        method: 'POST',
-        keepalive: true,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ teamId: targetTeamId }),
-      })
-    } catch (error) {
-      console.error('leaveQueueByEdgeFunctionKeepalive error:', error)
-    }
-  }
-
-  const notifyDiscordMatchCreated = async (matchId: string) => {
-    if (!matchId) return
-    if (notifiedMatchIdsRef.current.has(matchId)) return
-
-    const accessToken = accessTokenRef.current
-    if (!accessToken) {
-      console.warn('notifyDiscordMatchCreated skipped: no access token')
-      return
-    }
-
-    const functionUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/notify-match-created`
-
-    try {
-      notifiedMatchIdsRef.current.add(matchId)
-
-      const res = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          matchId,
-        }),
-      })
-
-      if (!res.ok) {
-        const text = await res.text()
-        console.error('notify-match-created failed:', text)
-        notifiedMatchIdsRef.current.delete(matchId)
-        return
-      }
-
-      const result = await res.json().catch(() => null)
-      console.log('notify-match-created success:', result)
-    } catch (error) {
-      console.error('notifyDiscordMatchCreated error:', error)
-      notifiedMatchIdsRef.current.delete(matchId)
-    }
-  }
-
-  const redirectToMatchDetail = (matchId: string) => {
-    if (!matchId) return
-    if (redirectingMatchIdRef.current === matchId) return
-
-    redirectingMatchIdRef.current = matchId
-    router.push(`/match/${matchId}/banpick`)
-  }
-
-  useEffect(() => {
-    const init = async () => {
-      cancellingRef.current = false
-      matchedOnceRef.current = false
-
-      setStatus('チーム取得中...')
-      setPageError('')
-
       const {
-        data: { session },
-      } = await supabase.auth.getSession()
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-      if (!session?.user) {
-        router.push('/login')
-        return
+      if (userError) throw userError;
+
+      const uid = user?.id ?? null;
+      setMyUserId(uid);
+
+      if (!uid) {
+        setProfile(null);
+        setMyParty(null);
+        setMyPartyMembers([]);
+        setMyPartyInvites([]);
+        setMyPendingInvites([]);
+        setMyWaitingEntry(null);
+        setMyMatchedEntryIds([]);
+        setMyActiveMatch(null);
+        setLoading(false);
+        return;
       }
 
-      accessTokenRef.current = session.access_token
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("id,display_name,current_rating,is_banned,is_onboarded")
+        .eq("id", uid)
+        .maybeSingle<ProfileRow>();
 
-      const { data: user, error: userError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('auth_user_id', session.user.id)
-        .single()
+      if (profileError) throw profileError;
+      setProfile(profileData ?? null);
 
-      if (userError || !user) {
-        console.error('userError:', userError)
-        setPageError('ユーザー情報の取得に失敗しました')
-        router.push('/mypage')
-        return
+      const { data: partyMemberData, error: partyMemberError } = await supabase
+        .from("party_members")
+        .select("id,party_id,user_id")
+        .eq("user_id", uid)
+        .returns<PartyMemberRow[]>();
+
+      if (partyMemberError) throw partyMemberError;
+
+      const partyIds = [...new Set((partyMemberData ?? []).map((x) => x.party_id))];
+
+      let partiesData: PartyRow[] = [];
+      if (partyIds.length > 0) {
+        const { data, error } = await supabase
+          .from("parties")
+          .select("id,leader_user_id,source_team_id,party_type,status,created_at,updated_at")
+          .in("id", partyIds)
+          .returns<PartyRow[]>();
+
+        if (error) throw error;
+        partiesData = data ?? [];
       }
 
-      const { data: membership, error: membershipError } = await supabase
-        .from('team_members')
-        .select('team_id')
-        .eq('user_id', user.id)
-        .single()
+      const activeParty =
+        partiesData.find((p) => p.status === "queued") ||
+        partiesData.find((p) => p.status === "matched") ||
+        partiesData.find((p) => p.status === "open") ||
+        partiesData.find((p) => p.status === "cancelled") ||
+        null;
 
-      if (membershipError || !membership) {
-        console.error('membershipError:', membershipError)
-        setPageError('チームに所属していません')
-        router.push('/mypage')
-        return
-      }
+      setMyParty(activeParty);
 
-      setTeamId(membership.team_id)
+      if (activeParty) {
+        const { data: membersData, error: membersError } = await supabase
+          .from("party_members")
+          .select("id,party_id,user_id,profiles!party_members_user_id_fkey(id,display_name)")
+          .eq("party_id", activeParty.id)
+          .returns<PartyMemberRow[]>();
 
-      const { data: myTeam, error: myTeamError } = await supabase
-        .from('teams')
-        .select('id, name, rating')
-        .eq('id', membership.team_id)
-        .single()
+        if (membersError) throw membersError;
+        setMyPartyMembers(membersData ?? []);
 
-      if (myTeamError || !myTeam) {
-        console.error('myTeamError:', myTeamError)
-        setPageError('自チーム情報の取得に失敗しました')
-        router.push('/mypage')
-        return
-      }
+        const { data: invitesData, error: invitesError } = await supabase
+          .from("party_invites")
+          .select("id,party_id,inviter_user_id,invitee_user_id,status,created_at,responded_at")
+          .eq("party_id", activeParty.id)
+          .order("created_at", { ascending: false })
+          .returns<PartyInviteRow[]>();
 
-      setMyTeamName(myTeam.name)
-      setMyTeamRating(myTeam.rating)
+        if (invitesError) throw invitesError;
+        setMyPartyInvites(invitesData ?? []);
 
-      const { data: existingQueues, error: queueError } = await supabase
-        .from('match_queue')
-        .select('*')
-        .eq('team_id', membership.team_id)
-        .order('created_at', { ascending: true })
-
-      if (queueError) {
-        console.error('queueError:', queueError)
-        setPageError('待機情報の取得に失敗しました')
-      }
-
-      const existingQueue =
-        existingQueues && existingQueues.length > 0 ? existingQueues[0] : null
-
-      if (existingQueues && existingQueues.length > 1) {
-        const duplicateIds = existingQueues.slice(1).map((q) => q.id)
-        const { error: cleanupError } = await supabase
-          .from('match_queue')
-          .delete()
-          .in('id', duplicateIds)
-
-        if (cleanupError) {
-          console.error('cleanupError:', cleanupError)
-        }
-      }
-
-      if (!existingQueue) {
-        const { data: upsertedQueue, error: insertQueueError } = await supabase
-          .from('match_queue')
-          .upsert(
-            {
-              team_id: membership.team_id,
-              status: 'waiting',
-              last_seen_at: new Date().toISOString(),
-            },
-            { onConflict: 'team_id' }
+        const { data: waitingEntryData, error: waitingEntryError } = await supabase
+          .from("queue_entries")
+          .select(
+            "id,party_id,queue_type,status,party_size,avg_rating,min_rating,max_rating,party_size_bonus,wait_expand_level,created_at,matched_at,cancelled_at,expired_at"
           )
-          .select()
-          .single()
+          .eq("party_id", activeParty.id)
+          .eq("status", "waiting")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle<QueueEntryRow>();
 
-        if (insertQueueError || !upsertedQueue) {
-          console.error('insertQueueError:', insertQueueError)
-          setPageError('待機開始に失敗しました')
-          showToast('待機開始に失敗しました', 'error')
-          router.push('/mypage')
-          return
+        if (waitingEntryError) throw waitingEntryError;
+        setMyWaitingEntry(waitingEntryData ?? null);
+
+        const { data: matchedEntriesData, error: matchedEntriesError } = await supabase
+          .from("queue_entries")
+          .select(
+            "id,party_id,queue_type,status,party_size,avg_rating,min_rating,max_rating,party_size_bonus,wait_expand_level,created_at,matched_at,cancelled_at,expired_at"
+          )
+          .eq("party_id", activeParty.id)
+          .eq("status", "matched")
+          .returns<QueueEntryRow[]>();
+
+        if (matchedEntriesError) throw matchedEntriesError;
+
+        const matchedIds = (matchedEntriesData ?? []).map((x) => x.id);
+        setMyMatchedEntryIds(matchedIds);
+
+        if (matchedIds.length > 0) {
+          const { data: mtmData, error: mtmError } = await supabase
+            .from("match_team_members")
+            .select("source_queue_entry_id,match_team_id")
+            .in("source_queue_entry_id", matchedIds);
+
+          if (mtmError) throw mtmError;
+
+          const matchTeamIds = [...new Set((mtmData ?? []).map((x: any) => x.match_team_id).filter(Boolean))];
+
+          if (matchTeamIds.length > 0) {
+            const { data: matchTeamsData, error: matchTeamsError } = await supabase
+              .from("match_teams")
+              .select("id,match_id")
+              .in("id", matchTeamIds);
+
+            if (matchTeamsError) throw matchTeamsError;
+
+            const matchIds = [...new Set((matchTeamsData ?? []).map((x: any) => x.match_id).filter(Boolean))];
+
+            if (matchIds.length > 0) {
+              const { data: matchesData, error: matchesError } = await supabase
+                .from("matches")
+                .select("id,status,matched_at")
+                .in("id", matchIds)
+                .in("status", ["banpick", "ready", "in_progress", "report_pending", "completed"])
+                .order("matched_at", { ascending: false })
+                .limit(1)
+                .returns<MatchRow[]>();
+
+              if (matchesError) throw matchesError;
+              setMyActiveMatch((matchesData ?? [])[0] ?? null);
+            } else {
+              setMyActiveMatch(null);
+            }
+          } else {
+            setMyActiveMatch(null);
+          }
+        } else {
+          setMyActiveMatch(null);
         }
-
-        setQueueCreatedAt(upsertedQueue.created_at)
       } else {
-        await pingHeartbeat(membership.team_id)
-        setQueueCreatedAt(existingQueue.created_at)
+        setMyPartyMembers([]);
+        setMyPartyInvites([]);
+        setMyWaitingEntry(null);
+        setMyMatchedEntryIds([]);
+        setMyActiveMatch(null);
       }
 
-      setIsWaiting(true)
-      setStatus('マッチング中...')
-    }
+      const { data: pendingInvitesData, error: pendingInvitesError } = await supabase.rpc(
+        "rpc_list_my_pending_party_invites"
+      );
 
-    void init()
-
-    return () => {
-      stopRealtimeAndTimers()
+      if (pendingInvitesError) throw pendingInvitesError;
+      setMyPendingInvites((pendingInvitesData as PendingInviteListRow[] | null) ?? []);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "状態の読み込みに失敗しました。";
+      setErrorText(message);
+    } finally {
+      setLoading(false);
     }
-  }, [router, showToast])
+  }, [supabase]);
 
   useEffect(() => {
-    if (!isWaiting || !queueCreatedAt) {
-      if (clockRef.current) {
-        clearInterval(clockRef.current)
-        clockRef.current = null
-      }
-      return
-    }
-
-    setNowMs(Date.now())
-
-    clockRef.current = setInterval(() => {
-      setNowMs(Date.now())
-    }, 1000)
-
-    return () => {
-      if (clockRef.current) {
-        clearInterval(clockRef.current)
-        clockRef.current = null
-      }
-    }
-  }, [isWaiting, queueCreatedAt])
+    void loadMyState();
+  }, [loadMyState]);
 
   useEffect(() => {
-    if (!isWaiting || !teamId || cancellingRef.current) {
-      if (heartbeatRef.current) {
-        clearInterval(heartbeatRef.current)
-        heartbeatRef.current = null
-      }
-      return
+    if (!myWaitingEntry?.created_at) {
+      setWaitingSeconds(0);
+      return;
     }
 
-    void pingHeartbeat(teamId)
+    const tick = () => {
+      const created = new Date(myWaitingEntry.created_at).getTime();
+      const now = Date.now();
+      setWaitingSeconds(Math.max(0, Math.floor((now - created) / 1000)));
+    };
 
-    heartbeatRef.current = setInterval(() => {
-      void pingHeartbeat(teamId)
-    }, 1000)
-
-    return () => {
-      if (heartbeatRef.current) {
-        clearInterval(heartbeatRef.current)
-        heartbeatRef.current = null
-      }
-    }
-  }, [isWaiting, teamId])
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [myWaitingEntry?.created_at]);
 
   useEffect(() => {
-    const handlePageHide = () => {
-      if (!teamId || !isWaiting || cancellingRef.current) return
-      void leaveQueueByEdgeFunctionKeepalive(teamId)
-    }
-
-    window.addEventListener('pagehide', handlePageHide)
-    return () => {
-      window.removeEventListener('pagehide', handlePageHide)
-    }
-  }, [teamId, isWaiting])
-
-  const getRecentOpponentTeamIds = async (
-    myTeamIdValue: string
-  ): Promise<string[]> => {
-    const { data: matches, error } = await supabase
-      .from('matches')
-      .select('*')
-      .or(`team1_id.eq.${myTeamIdValue},team2_id.eq.${myTeamIdValue}`)
-      .order('created_at', { ascending: false })
-      .limit(2)
-
-    if (error) {
-      console.error('getRecentOpponentTeamIds error:', error)
-      return []
-    }
-
-    if (!matches || matches.length === 0) return []
-
-    const opponentIds: string[] = []
-
-    for (const match of matches as MatchRow[]) {
-      if (match.team1_id === myTeamIdValue) {
-        opponentIds.push(match.team2_id)
-      } else {
-        opponentIds.push(match.team1_id)
-      }
-    }
-
-    return opponentIds
-  }
-
-  const getWaitedSeconds = () => {
-    if (!queueCreatedAt) return 0
-    return Math.floor((nowMs - new Date(queueCreatedAt).getTime()) / 1000)
-  }
-
-  const getAllowedRatingDiff = () => {
-    const waitedSec = getWaitedSeconds()
-
-    if (waitedSec < 30) return 100
-    if (waitedSec < 60) return 200
-    if (waitedSec < 90) return 300
-    return Infinity
-  }
-
-  const completeMatchedState = async (
-    match: MatchRow,
-    myTeamIdValue: string,
-    myTeamNameArg: string
-  ) => {
-    if (cancellingRef.current) return
-
-    const opponentTeamId =
-      match.team1_id === myTeamIdValue ? match.team2_id : match.team1_id
-
-    const { data: opponentTeam, error: opponentTeamError } = await supabase
-      .from('teams')
-      .select('id, name')
-      .eq('id', opponentTeamId)
-      .single()
-
-    if (cancellingRef.current) return
-
-    if (opponentTeamError || !opponentTeam) {
-      console.error('opponentTeamError:', opponentTeamError)
-      setStatus('相手チーム情報の取得失敗')
-      setPageError('相手チーム情報の取得に失敗しました')
-      return
-    }
-
-    stopRealtimeAndTimers()
-    setIsWaiting(false)
-    setMyTeamName(myTeamNameArg)
-    setMatchedTeamName(opponentTeam.name)
-    setMatchedTeamId(opponentTeam.id)
-    setCreatedMatchId(match.id)
-    setStatus('マッチ成立！')
-    setPageError('')
-
-    void notifyDiscordMatchCreated(match.id)
-    redirectToMatchDetail(match.id)
-  }
-
-  const checkExistingMatchedGame = async (
-    myTeamIdValue: string,
-    myTeamNameArg: string,
-    queueStartedAt: string
-  ): Promise<boolean> => {
-    if (cancellingRef.current) return false
-
-    const { data: recentMatches, error } = await supabase
-      .from('matches')
-      .select('*')
-      .or(`team1_id.eq.${myTeamIdValue},team2_id.eq.${myTeamIdValue}`)
-      .gte('created_at', queueStartedAt)
-      .order('created_at', { ascending: false })
-      .limit(1)
-
-    if (cancellingRef.current) return false
-
-    if (error) {
-      console.error('checkExistingMatchedGame error:', error)
-      return false
-    }
-
-    if (!recentMatches || recentMatches.length === 0) return false
-
-    const latestMatch = recentMatches[0] as MatchRow
-    await completeMatchedState(latestMatch, myTeamIdValue, myTeamNameArg)
-    return !cancellingRef.current
-  }
-
-  const tryMatch = async (
-    myTeamIdValue: string,
-    myTeamNameArg: string,
-    _myRating: number
-  ) => {
-    if (!isWaiting || cancellingRef.current) return
-
-    const recentOpponentIds = await getRecentOpponentTeamIds(myTeamIdValue)
-    if (cancellingRef.current) return
-
-    const allowedDiff = getAllowedRatingDiff()
-    const rpcAllowedDiff = allowedDiff === Infinity ? null : allowedDiff
-
-    const { data: rpcResult, error: rpcError } = await supabase.rpc(
-      'try_create_match_atomic',
-      {
-        p_my_team_id: myTeamIdValue,
-        p_allowed_diff: rpcAllowedDiff,
-        p_excluded_team_ids: recentOpponentIds,
-      }
-    )
-
-    if (cancellingRef.current) return
-
-    if (rpcError) {
-      console.error('try_create_match_atomic error:', rpcError)
-      setStatus('マッチング失敗')
-      setPageError('マッチング処理に失敗しました')
-      return
-    }
-
-    const rows = (rpcResult || []) as AtomicMatchResult[]
-
-    if (rows.length === 0) {
-      if (cancellingRef.current) return
-
-      if (allowedDiff === Infinity) {
-        setStatus('相手待ち...')
-      } else {
-        setStatus(`近いレートの相手を探しています...（許容差 ±${allowedDiff}）`)
-      }
-      return
-    }
-
-    const created = rows[0]
-    const createdMatch: MatchRow = {
-      id: created.match_id,
-      team1_id: myTeamIdValue,
-      team2_id: created.opponent_team_id,
-      created_at: new Date().toISOString(),
-    }
-
-    await completeMatchedState(createdMatch, myTeamIdValue, myTeamNameArg)
-  }
-
-  useEffect(() => {
-    if (!isWaiting || !teamId || !myTeamName || !queueCreatedAt || cancellingRef.current) {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
-      return
-    }
-
-    const runMatchCycle = async () => {
-      if (matchingRef.current || cancellingRef.current) return
-
-      matchingRef.current = true
-
-      try {
-        const foundExisting = await checkExistingMatchedGame(
-          teamId,
-          myTeamName,
-          queueCreatedAt
-        )
-
-        if (foundExisting || cancellingRef.current) return
-
-        await tryMatch(teamId, myTeamName, myTeamRating)
-      } finally {
-        matchingRef.current = false
-      }
-    }
-
-    void runMatchCycle()
-
-    pollingRef.current = setInterval(() => {
-      void runMatchCycle()
-    }, 1500)
-
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
-    }
-  }, [isWaiting, teamId, myTeamName, myTeamRating, queueCreatedAt])
-
-  useEffect(() => {
-    if (!isWaiting || !teamId || !myTeamName || !queueCreatedAt || cancellingRef.current) {
-      if (realtimeRef.current) {
-        void supabase.removeChannel(realtimeRef.current)
-        realtimeRef.current = null
-      }
-      return
-    }
+    if (!myUserId) return;
 
     const channel = supabase
-      .channel(`match-realtime-${teamId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'matches',
-        },
-        async (payload) => {
-          if (cancellingRef.current) return
-
-          const newMatch = payload.new as MatchRow
-
-          if (newMatch.team1_id === teamId || newMatch.team2_id === teamId) {
-            await completeMatchedState(newMatch, teamId, myTeamName)
-          }
-        }
-      )
-      .subscribe((realtimeStatus) => {
-        console.log('realtime status:', realtimeStatus)
-      })
-
-    realtimeRef.current = channel
+      .channel(`match-page-auto-${myUserId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "parties" }, () => void loadMyState())
+      .on("postgres_changes", { event: "*", schema: "public", table: "party_members" }, () => void loadMyState())
+      .on("postgres_changes", { event: "*", schema: "public", table: "party_invites" }, () => void loadMyState())
+      .on("postgres_changes", { event: "*", schema: "public", table: "queue_entries" }, () => void loadMyState())
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_team_members" }, () => void loadMyState())
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => void loadMyState())
+      .subscribe();
 
     return () => {
-      if (realtimeRef.current) {
-        void supabase.removeChannel(realtimeRef.current)
-        realtimeRef.current = null
-      }
-    }
-  }, [isWaiting, teamId, myTeamName, queueCreatedAt])
+      void supabase.removeChannel(channel);
+    };
+  }, [myUserId, loadMyState, supabase]);
 
-  const handleCancelWaiting = async () => {
-    if (!teamId || cancelLoading) return
+  const attemptAutoMatch = useCallback(async () => {
+    if (!myWaitingEntry?.id) return;
+    if (!isPartyLeader) return;
+    if (myActiveMatch?.id) return;
+    if (autoMatchBusyRef.current) return;
+    if (routePushedRef.current) return;
 
-    cancellingRef.current = true
-    setCancelLoading(true)
+    autoMatchBusyRef.current = true;
+    setAutoMatching(true);
 
-    stopRealtimeAndTimers()
-
-    const { data, error } = await deleteQueueByTeamId(teamId)
-
-    if (error) {
-      console.error('cancel waiting error:', error)
-      cancellingRef.current = false
-      showToast('待機解除に失敗しました', 'error')
-      setCancelLoading(false)
-      return
-    }
-
-    if (!data || data.length === 0) {
-      console.warn('cancel waiting: queue row was not found')
-    }
-
-    setIsWaiting(false)
-    setStatus('待機を解除しました')
-    setPageError('')
-    showToast('マッチング待機を終了しました。', 'info')
-    setCancelLoading(false)
-  }
-
-  const handleBackToMyPage = async () => {
-    if (isWaiting && teamId) {
-      cancellingRef.current = true
-      stopRealtimeAndTimers()
-
-      const { error } = await deleteQueueByTeamId(teamId)
+    try {
+      const { data, error } = await supabase.rpc("rpc_create_match_from_queue", {
+        p_anchor_queue_entry_id: myWaitingEntry.id,
+        p_queue_type: myWaitingEntry.queue_type,
+      });
 
       if (error) {
-        console.error('back cancel waiting error:', error)
-        cancellingRef.current = false
-        showToast('待機解除に失敗しました', 'error')
-        return
+        if (!isExpectedAutoMatchMiss(error.message)) {
+          setErrorText(error.message);
+        }
+        return;
       }
 
-      setIsWaiting(false)
-      setStatus('待機を解除しました')
-      showToast('待機解除してマイページに戻ります', 'info')
+      const row = (data as RpcCreateMatchResult[] | null)?.[0];
+      if (row?.match_id) {
+        routePushedRef.current = true;
+        setInfoText("マッチが成立しました。");
+        await loadMyState();
+        router.push(`/match/${row.match_id}/banpick`);
+      }
+    } finally {
+      autoMatchBusyRef.current = false;
+      setAutoMatching(false);
+    }
+  }, [myWaitingEntry, isPartyLeader, myActiveMatch?.id, supabase, loadMyState, router]);
+
+  useEffect(() => {
+    if (!isWaiting || !isPartyLeader || !!myActiveMatch) return;
+
+    const timer = window.setInterval(() => {
+      void attemptAutoMatch();
+    }, 3000);
+
+    return () => window.clearInterval(timer);
+  }, [isWaiting, isPartyLeader, myActiveMatch, attemptAutoMatch]);
+
+  useEffect(() => {
+    if (!myActiveMatch?.id) {
+      routePushedRef.current = false;
+    }
+  }, [myActiveMatch?.id]);
+
+  const handleCreateParty = async () => {
+    clearMessages();
+    setBusy(true);
+
+    try {
+      const { error } = await supabase.rpc("rpc_create_party", {
+        p_source_team_id: sourceTeamId.trim() || null,
+      });
+
+      if (error) throw error;
+
+      setInfoText("パーティを作成しました。");
+      await loadMyState();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "パーティ作成に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleInviteToParty = async () => {
+    if (!myParty?.id) {
+      setErrorText("パーティがありません。先にパーティを作成してください。");
+      return;
     }
 
-    router.push('/mypage')
+    const invitee = inviteeUserId.trim();
+    if (!invitee) {
+      setErrorText("招待する user_id を入力してください。");
+      return;
+    }
+
+    clearMessages();
+    setBusy(true);
+
+    try {
+      const { error } = await supabase.rpc("rpc_invite_to_party", {
+        p_party_id: myParty.id,
+        p_invitee_user_id: invitee,
+      });
+
+      if (error) throw error;
+
+      setInviteeUserId("");
+      setInfoText("招待を送信しました。");
+      await loadMyState();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "招待送信に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleAcceptInvite = async (inviteId: string) => {
+    clearMessages();
+    setBusy(true);
+
+    try {
+      const { error } = await supabase.rpc("rpc_accept_party_invite", {
+        p_invite_id: inviteId,
+      });
+
+      if (error) throw error;
+
+      setInfoText("招待を承認しました。");
+      await loadMyState();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "招待承認に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRejectInvite = async (inviteId: string) => {
+    clearMessages();
+    setBusy(true);
+
+    try {
+      const { error } = await supabase.rpc("rpc_reject_party_invite", {
+        p_invite_id: inviteId,
+      });
+
+      if (error) throw error;
+
+      setInfoText("招待を拒否しました。");
+      await loadMyState();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "招待拒否に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleQueueExistingParty = async () => {
+    if (!myParty?.id) {
+      setErrorText("パーティがありません。");
+      return;
+    }
+
+    clearMessages();
+    setBusy(true);
+
+    try {
+      const { error } = await supabase.rpc("rpc_queue_existing_party", {
+        p_party_id: myParty.id,
+        p_queue_type: queueType,
+      });
+
+      if (error) throw error;
+
+      setInfoText("パーティを待機に入れました。自動マッチングを開始します。");
+      await loadMyState();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "待機開始に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCancelQueue = async () => {
+    clearMessages();
+    setBusy(true);
+
+    try {
+      const { error } = await supabase.rpc("rpc_cancel_queue", {
+        p_queue_entry_id: myWaitingEntry?.id ?? null,
+      });
+
+      if (error) throw error;
+
+      setInfoText("待機解除済み マッチング待機を終了しました。");
+      await loadMyState();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "待機解除に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDisbandParty = async () => {
+    if (!myParty?.id) {
+      setErrorText("パーティがありません。");
+      return;
+    }
+
+    clearMessages();
+    setBusy(true);
+
+    try {
+      const { error } = await supabase.rpc("rpc_disband_party", {
+        p_party_id: myParty.id,
+      });
+
+      if (error) throw error;
+
+      setInfoText("パーティを解散しました。");
+      await loadMyState();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "パーティ解散に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleLeaveParty = async () => {
+    if (!myParty?.id) {
+      setErrorText("パーティがありません。");
+      return;
+    }
+
+    clearMessages();
+    setBusy(true);
+
+    try {
+      const { error } = await supabase.rpc("rpc_leave_party", {
+        p_party_id: myParty.id,
+      });
+
+      if (error) throw error;
+
+      setInfoText("パーティから脱退しました。");
+      await loadMyState();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "パーティ脱退に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleTryCreateMatch = async () => {
+    if (!myWaitingEntry?.id) {
+      setErrorText("待機中エントリーがありません。");
+      return;
+    }
+
+    clearMessages();
+    setBusy(true);
+
+    try {
+      const { data, error } = await supabase.rpc("rpc_create_match_from_queue", {
+        p_anchor_queue_entry_id: myWaitingEntry.id,
+        p_queue_type: myWaitingEntry.queue_type,
+      });
+
+      if (error) throw error;
+
+      const row = (data as RpcCreateMatchResult[] | null)?.[0];
+      if (row?.match_id) {
+        routePushedRef.current = true;
+        setInfoText("マッチが成立しました。");
+        await loadMyState();
+        router.push(`/match/${row.match_id}/banpick`);
+        return;
+      }
+
+      await loadMyState();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "マッチ生成に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleGoToMyMatch = () => {
+    if (!myActiveMatch?.id) return;
+
+    if (myActiveMatch.status === "banpick") {
+      router.push(`/match/${myActiveMatch.id}/banpick`);
+      return;
+    }
+
+    if (["ready", "in_progress", "report_pending", "completed"].includes(myActiveMatch.status)) {
+      router.push(`/match/${myActiveMatch.id}/report`);
+      return;
+    }
+
+    router.push(`/match/${myActiveMatch.id}/banpick`);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-neutral-950 px-6 py-8 text-white">
+        <div className="mx-auto max-w-6xl">読み込み中です...</div>
+      </div>
+    );
   }
 
   return (
-    <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>ランダムマッチ</h1>
-          <p className="muted">近いレートの相手を自動で探します</p>
+    <div className="min-h-screen bg-neutral-950 text-white">
+      <div className="mx-auto max-w-6xl px-4 py-8">
+        <div className="mb-6 border-b border-white/10 pb-4">
+          <h1 className="text-3xl font-bold">ASCENT マッチング</h1>
+          <p className="mt-2 text-sm text-white/60">招待制パーティ + 自動マッチ生成</p>
         </div>
 
-        <div className="row">
-          <button onClick={handleBackToMyPage}>マイページへ戻る</button>
+        {errorText && (
+          <div className="mb-4 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {errorText}
+          </div>
+        )}
+
+        {infoText && (
+          <div className="mb-4 rounded border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+            {infoText}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="space-y-4 lg:col-span-2">
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">自分の情報</h2>
+
+              {profile ? (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="rounded bg-black/20 p-3">
+                    <div className="text-xs text-white/50">プレイヤー</div>
+                    <div className="mt-1 text-sm font-medium">{profile.display_name}</div>
+                  </div>
+
+                  <div className="rounded bg-black/20 p-3">
+                    <div className="text-xs text-white/50">現在レート</div>
+                    <div className="mt-1 text-sm font-medium">{profile.current_rating}</div>
+                  </div>
+
+                  <div className="rounded bg-black/20 p-3">
+                    <div className="text-xs text-white/50">状態</div>
+                    <div className="mt-1 text-sm font-medium">
+                      {profile.is_banned ? "BAN中" : profile.is_onboarded ? "利用可能" : "初期設定未完了"}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-white/60">
+                  プロフィールが見つかりません。ログイン状態を確認してください。
+                </div>
+              )}
+            </section>
+
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">パーティ作成 / 招待</h2>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-2 block text-sm font-medium">source_team_id（任意）</label>
+                  <input
+                    value={sourceTeamId}
+                    onChange={(e) => setSourceTeamId(e.target.value)}
+                    placeholder="固定チーム由来でパーティを作る場合のみ入力"
+                    className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                    disabled={busy || !!myParty}
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={handleCreateParty}
+                    disabled={!canCreateParty}
+                    className="rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+                  >
+                    パーティ作成
+                  </button>
+                </div>
+
+                <div className="rounded border border-white/10 bg-black/20 p-4">
+                  <div className="mb-2 text-sm font-semibold">現在のパーティ</div>
+
+                  {!myParty ? (
+                    <div className="text-sm text-white/60">まだパーティはありません。</div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                        <div className="rounded bg-white/5 px-3 py-2 text-sm">状態: {myParty.status}</div>
+                        <div className="rounded bg-white/5 px-3 py-2 text-sm">
+                          種別: {myPartyLabel === "invalid" ? myParty.party_type : myPartyLabel}
+                        </div>
+                        <div className="rounded bg-white/5 px-3 py-2 text-sm">人数: {myPartySize} 人</div>
+                        <div className="rounded bg-white/5 px-3 py-2 text-sm">
+                          {isPartyLeader ? "あなたはLeaderです" : "参加メンバーです"}
+                        </div>
+                      </div>
+
+                      <div className="rounded bg-white/5 p-3">
+                        <div className="mb-2 text-xs text-white/50">メンバー</div>
+                        <div className="space-y-1 text-sm text-white/80">
+                          {myPartyMembers.map((m) => (
+                            <div key={m.id}>
+                              {m.profiles?.display_name ?? m.user_id}
+                              {m.user_id === myParty.leader_user_id ? " (Leader)" : ""}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {isPartyLeader && myPartySize < 4 && !isWaiting && (
+                        <div className="rounded border border-white/10 bg-neutral-900 p-3">
+                          <div className="mb-2 text-sm font-medium">メンバー招待</div>
+                          <div className="flex flex-col gap-2 md:flex-row">
+                            <input
+                              value={inviteeUserId}
+                              onChange={(e) => setInviteeUserId(e.target.value)}
+                              placeholder="招待する user_id"
+                              className="flex-1 rounded border border-white/15 bg-black px-3 py-2 text-sm outline-none"
+                              disabled={busy}
+                            />
+                            <button
+                              onClick={handleInviteToParty}
+                              disabled={busy}
+                              className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                            >
+                              招待送信
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="rounded bg-white/5 p-3">
+                        <div className="mb-2 text-xs text-white/50">招待履歴</div>
+                        {myPartyInvites.length === 0 ? (
+                          <div className="text-sm text-white/50">招待はありません。</div>
+                        ) : (
+                          <div className="space-y-2 text-sm text-white/80">
+                            {myPartyInvites.map((inv) => (
+                              <div key={inv.id} className="rounded bg-black/30 px-3 py-2">
+                                <div>invitee: {inv.invitee_user_id}</div>
+                                <div className="mt-1 text-xs text-white/50">
+                                  status: {inv.status} / {new Date(inv.created_at).toLocaleString()}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {isPartyLeader ? (
+                          <button
+                            onClick={handleDisbandParty}
+                            disabled={busy || isWaiting}
+                            className="rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                          >
+                            パーティ解散
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleLeaveParty}
+                            disabled={busy || isWaiting}
+                            className="rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                          >
+                            パーティ脱退
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">待機 / 自動マッチング</h2>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-2 block text-sm font-medium">キュー種別</label>
+                  <select
+                    value={queueType}
+                    onChange={(e) => setQueueType(e.target.value as typeof queueType)}
+                    className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                    disabled={busy || isWaiting}
+                  >
+                    <option value="ranked">ranked</option>
+                    <option value="casual">casual</option>
+                    <option value="mixed">mixed</option>
+                    <option value="fullparty_only">fullparty_only</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={handleQueueExistingParty}
+                    disabled={!canQueueExistingParty}
+                    className="rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+                  >
+                    既存パーティで待機開始
+                  </button>
+
+                  {isWaiting && (
+                    <>
+                      <button
+                        onClick={handleCancelQueue}
+                        disabled={busy}
+                        className="rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        待機解除
+                      </button>
+
+                      <button
+                        onClick={handleTryCreateMatch}
+                        disabled={busy}
+                        className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        手動でマッチ生成を試す
+                      </button>
+                    </>
+                  )}
+
+                  {isMatched && (
+                    <button
+                      onClick={handleGoToMyMatch}
+                      disabled={busy}
+                      className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      成立した試合へ移動
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                  <div className="rounded bg-black/20 p-3">
+                    <div className="text-xs text-white/50">待機状態</div>
+                    <div className="mt-1 text-sm font-medium">{myWaitingEntry ? "waiting" : "待機なし"}</div>
+                  </div>
+
+                  <div className="rounded bg-black/20 p-3">
+                    <div className="text-xs text-white/50">待機時間</div>
+                    <div className="mt-1 text-sm font-medium">{isWaiting ? `${waitingSeconds} 秒` : "-"}</div>
+                  </div>
+
+                  <div className="rounded bg-black/20 p-3">
+                    <div className="text-xs text-white/50">許容差レベル</div>
+                    <div className="mt-1 text-sm font-medium">{myWaitingEntry?.wait_expand_level ?? "-"}</div>
+                  </div>
+
+                  <div className="rounded bg-black/20 p-3">
+                    <div className="text-xs text-white/50">自動マッチング</div>
+                    <div className="mt-1 text-sm font-medium">
+                      {isWaiting && isPartyLeader ? (autoMatching ? "探索中..." : "有効") : "無効"}
+                    </div>
+                  </div>
+                </div>
+
+                {myWaitingEntry && (
+                  <div className="rounded border border-white/10 bg-black/20 p-4 text-sm text-white/80">
+                    <div>queue_entry_id: {myWaitingEntry.id}</div>
+                    <div className="mt-1">queue_type: {myWaitingEntry.queue_type}</div>
+                    <div className="mt-1">avg_rating: {myWaitingEntry.avg_rating}</div>
+                    <div className="mt-1">party_size: {myWaitingEntry.party_size}</div>
+                    <div className="mt-1">party_size_bonus: +{myWaitingEntry.party_size_bonus}</div>
+                    <div className="mt-1">created_at: {new Date(myWaitingEntry.created_at).toLocaleString()}</div>
+                  </div>
+                )}
+
+                {myActiveMatch && (
+                  <div className="rounded border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm">
+                    <div className="font-semibold">成立済み試合</div>
+                    <div className="mt-1">match_id: {myActiveMatch.id}</div>
+                    <div className="mt-1">status: {myActiveMatch.status}</div>
+                    <div className="mt-1">matched_at: {new Date(myActiveMatch.matched_at).toLocaleString()}</div>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+
+          <div className="space-y-4">
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">自分宛の招待</h2>
+
+              {myPendingInvites.length === 0 ? (
+                <div className="text-sm text-white/50">現在 pending 招待はありません。</div>
+              ) : (
+                <div className="space-y-3">
+                  {myPendingInvites.map((inv) => (
+                    <div key={inv.invite_id} className="rounded border border-white/10 bg-black/20 p-3">
+                      <div className="text-sm">
+                        招待者: <span className="font-semibold">{inv.inviter_display_name}</span>
+                      </div>
+                      <div className="mt-1 text-xs text-white/50">party_id: {inv.party_id}</div>
+                      <div className="mt-1 text-xs text-white/50">
+                        {new Date(inv.created_at).toLocaleString()}
+                      </div>
+
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          onClick={() => handleAcceptInvite(inv.invite_id)}
+                          disabled={busy}
+                          className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          承認
+                        </button>
+                        <button
+                          onClick={() => handleRejectInvite(inv.invite_id)}
+                          disabled={busy}
+                          className="rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          拒否
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">使い方</h2>
+              <div className="space-y-2 text-sm text-white/75">
+                <div>1. Leader がパーティを作成します。</div>
+                <div>2. 招待を送り、相手が承認します。</div>
+                <div>3. 完成したパーティを queue に入れます。</div>
+                <div>4. waiting 中は自動でマッチ生成を試します。</div>
+                <div>5. 成立したら banpick に自動遷移します。</div>
+              </div>
+            </section>
+
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">補足</h2>
+              <div className="space-y-2 text-sm text-white/75">
+                <div>・自動マッチ生成は leader 側だけが試行します。</div>
+                <div>・人数不足などの想定内失敗は静かに再試行します。</div>
+                <div>・手動ボタンも残してあるのでテストしやすいです。</div>
+                <div>・本番前には RPC 側の競合対策強化があるとより安全です。</div>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
-
-      {pageError && (
-        <div className="section">
-          <div className="card">
-            <p className="danger">
-              <strong>エラー:</strong> {pageError}
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="section grid grid-2">
-        <div className="card-strong">
-          <h2>現在の状態</h2>
-          <div className="stack">
-            <p>
-              <strong>ステータス:</strong> {status}
-            </p>
-            <p>
-              <strong>自チーム名:</strong> {myTeamName || '取得中'}
-            </p>
-            <p>
-              <strong>自チームレート:</strong> {myTeamRating}
-            </p>
-            <p>
-              <strong>チームID:</strong> {teamId || '取得中'}
-            </p>
-          </div>
-        </div>
-
-        <div className="card-strong">
-          <h2>マッチ条件</h2>
-          <div className="stack">
-            <p>
-              <strong>待機時間:</strong> {isWaiting ? `${getWaitedSeconds()}秒` : '-'}
-            </p>
-            <p>
-              <strong>現在の許容差:</strong>{' '}
-              {getAllowedRatingDiff() === Infinity
-                ? '制限なし'
-                : `±${getAllowedRatingDiff()}`}
-            </p>
-            <p className="muted">直近2試合の相手は自動で除外されます</p>
-            <p className="muted">
-              3秒以上 heartbeat が止まった待機は候補外になります
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {isWaiting && (
-        <div className="section">
-          <div className="card">
-            <h2>待機中</h2>
-            <p>Realtime と短い heartbeat を併用して相手を探しています。</p>
-            <div className="row" style={{ marginTop: '12px' }}>
-              <button onClick={handleCancelWaiting} disabled={cancelLoading}>
-                {cancelLoading ? '解除中...' : '待機解除'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {status === 'マッチ成立！' && (
-        <div className="section">
-          <div className="card-strong">
-            <h2>対戦相手が決まりました</h2>
-
-            <div className="grid grid-2">
-              <div className="card">
-                <p className="muted">自チーム</p>
-                <h3>{myTeamName}</h3>
-              </div>
-
-              <div className="card">
-                <p className="muted">相手チーム</p>
-                <h3>{matchedTeamName}</h3>
-              </div>
-
-              <div className="card">
-                <p className="muted">相手チームID</p>
-                <h3>{matchedTeamId}</h3>
-              </div>
-
-              <div className="card">
-                <p className="muted">マッチID</p>
-                <h3>{createdMatchId}</h3>
-              </div>
-            </div>
-
-            <div className="section row">
-              <button onClick={() => router.push(`/match/${createdMatchId}`)}>
-                試合詳細へ
-              </button>
-              <button onClick={handleBackToMyPage}>マイページへ戻る</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {status === '待機を解除しました' && (
-        <div className="section">
-          <div className="card">
-            <h2>待機解除済み</h2>
-            <p>マッチング待機を終了しました。</p>
-            <div className="section row">
-              <button onClick={handleBackToMyPage}>マイページへ戻る</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </main>
-  )
+    </div>
+  );
 }

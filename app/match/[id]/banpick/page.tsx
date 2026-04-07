@@ -1,816 +1,907 @@
-'use client'
+"use client";
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { RealtimeChannel } from '@supabase/supabase-js'
-import { useParams, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
-import { useToast } from '@/components/ToastProvider'
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { useParams } from "next/navigation";
+
+type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
 type MatchRow = {
-  id: string
-  team1_id: string
-  team2_id: string
-  winner_team_id: string | null
-  loser_team_id: string | null
-  status: string
-  approval_status?: string
-}
+  id: string;
+  status: string;
+  host_user_id: string | null;
+  host_match_team_id: string | null;
+  host_selected_at: string | null;
+  lobby_code: string | null;
+  lobby_code_set_by_user_id: string | null;
+  lobby_code_set_at: string | null;
+  winner_match_team_id: string | null;
+  loser_match_team_id: string | null;
+};
 
-type TeamRow = {
-  id: string
-  name: string
-  rating: number
-  wins: number
-  losses: number
-  matches_played: number
-}
+type MatchTeamRow = {
+  id: string;
+  match_id: string;
+  side: "alpha" | "bravo";
+  display_name: string | null;
+  captain_user_id: string | null;
+  party_composition: string | null;
+  base_avg_rating: number;
+  synergy_bonus: number;
+  effective_avg_rating: number;
+  is_full_party: boolean;
+};
+
+type MatchTeamMemberRow = {
+  id: string;
+  match_team_id: string;
+  user_id: string;
+  is_party_leader: boolean;
+  joined_as_party_size: number | null;
+  rating_before: number;
+  profiles?: {
+    id: string;
+    display_name: string;
+  } | null;
+};
 
 type BanpickSessionRow = {
-  id: string
-  match_id: string
-  team_a_id: string
-  team_b_id: string
-  phase: 'phase1_hp' | 'phase2_snd' | 'phase3_ovl' | 'phase4_done'
-  step_no: number
-  status: 'in_progress' | 'completed'
-  hp_ban_a: string | null
-  hp_ban_b: string | null
-  hp_map: string | null
-  hp_side: string | null
-  snd_ban_b: string | null
-  snd_ban_a: string | null
-  snd_map: string | null
-  snd_side: string | null
-  ovl_ban_a: string | null
-  ovl_map: string | null
-  ovl_side: string | null
-  last_action_at: string
-  deadline_at: string
-  timeout_loser_team_id: string | null
-  timeout_winner_team_id: string | null
-  created_at: string
-  updated_at: string
-}
+  id: string;
+  match_id: string;
+  status: "pending" | "in_progress" | "completed" | "timeout" | "cancelled";
+  phase:
+    | "mode1_ban"
+    | "mode1_pick"
+    | "mode2_ban"
+    | "mode2_pick"
+    | "mode3_ban"
+    | "mode3_pick"
+    | "completed";
+  current_turn_match_team_id: string | null;
+  current_action_type: "ban" | "pick" | "side_pick" | null;
+  turn_number: number;
+  selected_maps: Json;
+  banned_maps: Json;
+  side_choices: Json;
+};
 
 type BanpickActionRow = {
-  id: string
-  session_id: string
-  match_id: string
-  phase: string
-  action_type: 'ban' | 'pick_map' | 'pick_side'
-  acting_team_id: string
-  game_mode: 'HARDPOINT' | 'SEARCH_AND_DESTROY' | 'OVERLOAD'
-  target: string
-  step_no: number
-  created_at: string
+  id: string;
+  banpick_session_id: string;
+  match_id: string;
+  actor_user_id: string;
+  actor_match_team_id: string;
+  turn_number: number;
+  phase: string;
+  action_type: "ban" | "pick" | "side_pick" | "auto_timeout";
+  target: string;
+  created_at: string;
+  profiles?: {
+    id: string;
+    display_name: string;
+  } | null;
+};
+
+type MatchMessageRow = {
+  id: string;
+  match_id: string;
+  sender_user_id: string | null;
+  message_type: "text" | "lobby_code" | "system";
+  body: string;
+  created_at: string;
+  profiles?: {
+    id: string;
+    display_name: string;
+  } | null;
+};
+
+type RpcCreateBanpickSessionResult = {
+  banpick_session_id: string;
+  match_id: string;
+  phase: string;
+  current_turn_match_team_id: string | null;
+  current_action_type: string | null;
+};
+
+type RpcSubmitBanpickActionResult = {
+  banpick_session_id: string;
+  match_id: string;
+  phase: string;
+  status: string;
+  next_turn_match_team_id: string | null;
+  turn_number: number;
+};
+
+type RpcSelectMatchHostResult = {
+  match_id: string;
+  host_user_id: string;
+  host_match_team_id: string;
+  host_display_name: string;
+};
+
+type RpcSendLobbyCodeResult = {
+  match_id: string;
+  lobby_code: string;
+  set_by_user_id: string;
+  set_at: string;
+};
+
+type RpcSendMatchMessageResult = {
+  message_id: string;
+  match_id: string;
+  sender_user_id: string;
+  body: string;
+  created_at: string;
+};
+
+const MAP_OPTIONS = [
+  "Hacienda",
+  "Exposure",
+  "Vault",
+  "Protocol",
+  "Skyline",
+  "Rewind",
+  "Derelict",
+  "Red Card",
+];
+
+const SIDE_OPTIONS = ["JSOC", "ギルド"];
+
+function getSupabaseClient(): SupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !anon) {
+    throw new Error("Supabase env is missing");
+  }
+
+  return createClient(url, anon, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
 }
 
-const HP_POOL = ['エクスポージャー', 'コロッサス', 'スカー', 'デン', 'ブラックハート']
-const SND_POOL = ['エクスポージャー', 'コロッサス', 'スカー', 'デン', 'レイド']
-const OVL_POOL = ['エクスポージャー', 'スカー', 'デン']
-const SIDE_OPTIONS = ['JSOC', 'ギルド'] as const
+function asStringArray(v: Json): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
 
-export default function MatchBanpickPage() {
-  const params = useParams()
-  const router = useRouter()
-  const { showToast } = useToast()
-
-  const realtimeRef = useRef<RealtimeChannel | null>(null)
-  const timeoutIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const clockIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const timeoutResolvingRef = useRef(false)
-  const banpickPollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const fetchingRef = useRef(false)
-  const creatingSessionRef = useRef(false)
-
-  const matchId =
-    typeof params.id === 'string'
-      ? params.id
-      : Array.isArray(params.id)
-        ? params.id[0]
-        : ''
-
-  const [loading, setLoading] = useState(true)
-  const [match, setMatch] = useState<MatchRow | null>(null)
-  const [team1, setTeam1] = useState<TeamRow | null>(null)
-  const [team2, setTeam2] = useState<TeamRow | null>(null)
-
-  const [myUserId, setMyUserId] = useState<string | null>(null)
-  const [myTeamId, setMyTeamId] = useState<string | null>(null)
-  const [myRole, setMyRole] = useState<string | null>(null)
-
-  const [banpickSession, setBanpickSession] = useState<BanpickSessionRow | null>(null)
-  const [banpickActions, setBanpickActions] = useState<BanpickActionRow[]>([])
-  const [banpickLoading, setBanpickLoading] = useState(false)
-  const [nowMs, setNowMs] = useState(Date.now())
-
-  const getTeamName = (id: string | null | undefined) => {
-    if (!id) return '不明'
-    if (team1?.id === id) return team1.name
-    if (team2?.id === id) return team2.name
-    return '不明'
+function phaseLabel(phase: BanpickSessionRow["phase"] | string) {
+  switch (phase) {
+    case "mode1_ban":
+      return "モード1 BAN";
+    case "mode1_pick":
+      return "モード1 PICK";
+    case "mode2_ban":
+      return "モード2 BAN";
+    case "mode2_pick":
+      return "モード2 PICK";
+    case "mode3_ban":
+      return "モード3 BAN";
+    case "mode3_pick":
+      return "モード3 PICK";
+    case "completed":
+      return "完了";
+    default:
+      return phase;
   }
+}
 
-  const getModeLabel = (mode: string) => {
-    if (mode === 'hardpoint' || mode === 'HARDPOINT') return 'Hardpoint'
-    if (mode === 'snd' || mode === 'SEARCH_AND_DESTROY') return 'S&D'
-    if (mode === 'overload' || mode === 'OVERLOAD') return 'Overload'
-    return mode
+function actionTypeLabel(actionType: string | null) {
+  switch (actionType) {
+    case "ban":
+      return "BAN";
+    case "pick":
+      return "PICK";
+    case "side_pick":
+      return "サイド選択";
+    default:
+      return "-";
   }
+}
 
-  const formatRemainingTime = (seconds: number) => {
-    const min = Math.floor(seconds / 60)
-    const sec = seconds % 60
-    return `${min}:${String(sec).padStart(2, '0')}`
+function messageTypeLabel(messageType: MatchMessageRow["message_type"]) {
+  switch (messageType) {
+    case "system":
+      return "SYSTEM";
+    case "lobby_code":
+      return "LOBBY";
+    default:
+      return "CHAT";
   }
+}
 
-  const ensureBanpickSession = async (targetMatch: MatchRow) => {
-    if (creatingSessionRef.current) return
+export default function BanpickPage() {
+  const params = useParams<{ id: string }>();
+  const matchId = params?.id;
 
-    creatingSessionRef.current = true
+  const [supabase] = useState(() => getSupabaseClient());
+
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
+  const [infoText, setInfoText] = useState<string | null>(null);
+
+  const [myUserId, setMyUserId] = useState<string | null>(null);
+
+  const [match, setMatch] = useState<MatchRow | null>(null);
+  const [teams, setTeams] = useState<MatchTeamRow[]>([]);
+  const [members, setMembers] = useState<MatchTeamMemberRow[]>([]);
+  const [session, setSession] = useState<BanpickSessionRow | null>(null);
+  const [actions, setActions] = useState<BanpickActionRow[]>([]);
+  const [messages, setMessages] = useState<MatchMessageRow[]>([]);
+
+  const [banpickTarget, setBanpickTarget] = useState("");
+  const [chatInput, setChatInput] = useState("");
+  const [lobbyCodeInput, setLobbyCodeInput] = useState("");
+
+  const chatBottomRef = useRef<HTMLDivElement | null>(null);
+
+  const myMember = useMemo(
+    () => members.find((m) => m.user_id === myUserId) ?? null,
+    [members, myUserId]
+  );
+
+  const myMatchTeamId = myMember?.match_team_id ?? null;
+
+  const alphaTeam = useMemo(() => teams.find((t) => t.side === "alpha") ?? null, [teams]);
+  const bravoTeam = useMemo(() => teams.find((t) => t.side === "bravo") ?? null, [teams]);
+
+  const currentTurnTeam = useMemo(() => {
+    if (!session?.current_turn_match_team_id) return null;
+    return teams.find((t) => t.id === session.current_turn_match_team_id) ?? null;
+  }, [session, teams]);
+
+  const isMyTurn = !!session?.current_turn_match_team_id && session.current_turn_match_team_id === myMatchTeamId;
+  const isBanpickCompleted = session?.status === "completed" || match?.status === "ready" || match?.status === "report_pending" || match?.status === "completed";
+  const isHost = !!match?.host_user_id && match.host_user_id === myUserId;
+
+  const selectedMaps = useMemo(() => asStringArray(session?.selected_maps ?? []), [session]);
+  const bannedMaps = useMemo(() => asStringArray(session?.banned_maps ?? []), [session]);
+  const sideChoices = useMemo(() => asStringArray(session?.side_choices ?? []), [session]);
+
+  const actionOptions = useMemo(() => {
+    if (session?.current_action_type === "side_pick") {
+      return SIDE_OPTIONS;
+    }
+    return MAP_OPTIONS;
+  }, [session?.current_action_type]);
+
+  const hostDisplayName = useMemo(() => {
+    if (!match?.host_user_id) return null;
+    return members.find((m) => m.user_id === match.host_user_id)?.profiles?.display_name ?? null;
+  }, [match?.host_user_id, members]);
+
+  const groupedMembers = useMemo(() => {
+    return {
+      alpha: members.filter((m) => m.match_team_id === alphaTeam?.id),
+      bravo: members.filter((m) => m.match_team_id === bravoTeam?.id),
+    };
+  }, [members, alphaTeam?.id, bravoTeam?.id]);
+
+  const loadAll = useCallback(async () => {
+    if (!matchId) return;
+    setLoading(true);
+    setErrorText(null);
+
     try {
-      const now = new Date()
-      const deadline = new Date(now.getTime() + 5 * 60 * 1000)
-
-      const { error } = await supabase.from('banpick_sessions').insert({
-        match_id: targetMatch.id,
-        team_a_id: targetMatch.team1_id,
-        team_b_id: targetMatch.team2_id,
-        phase: 'phase1_hp',
-        step_no: 1,
-        status: 'in_progress',
-        last_action_at: now.toISOString(),
-        deadline_at: deadline.toISOString(),
-      })
-
-      if (error) {
-        // すでに別処理で作られていた場合もあるので、duplicate系は握りつぶす
-        const msg = String(error.message || '')
-        if (
-          !msg.includes('duplicate') &&
-          !msg.includes('unique') &&
-          !msg.includes('23505')
-        ) {
-          console.error('[ensureBanpickSession] insert error:', error)
-          showToast('バンピック開始準備に失敗しました', 'error')
-        }
-      }
-    } finally {
-      creatingSessionRef.current = false
-    }
-  }
-
-  const fetchBanpick = async (targetMatchId: string, targetMatch?: MatchRow | null) => {
-    const { data: sessionData, error: sessionError } = await supabase
-      .from('banpick_sessions')
-      .select('*')
-      .eq('match_id', targetMatchId)
-      .maybeSingle()
-
-    if (sessionError) {
-      console.error('[fetchBanpick] session error:', sessionError)
-      setBanpickSession(null)
-      setBanpickActions([])
-      return
-    }
-
-    if (!sessionData && targetMatch) {
-      await ensureBanpickSession(targetMatch)
-
-      const { data: retrySessionData, error: retrySessionError } = await supabase
-        .from('banpick_sessions')
-        .select('*')
-        .eq('match_id', targetMatchId)
-        .maybeSingle()
-
-      if (retrySessionError) {
-        console.error('[fetchBanpick] retry session error:', retrySessionError)
-        setBanpickSession(null)
-        setBanpickActions([])
-        return
-      }
-
-      setBanpickSession((retrySessionData || null) as BanpickSessionRow | null)
-
-      if (!retrySessionData) {
-        setBanpickActions([])
-        return
-      }
-
-      const { data: retryActionData, error: retryActionError } = await supabase
-        .from('banpick_actions')
-        .select('*')
-        .eq('match_id', targetMatchId)
-        .order('created_at', { ascending: true })
-
-      if (retryActionError) {
-        console.error('[fetchBanpick] retry action error:', retryActionError)
-        setBanpickActions([])
-        return
-      }
-
-      setBanpickActions((retryActionData || []) as BanpickActionRow[])
-      return
-    }
-
-    setBanpickSession((sessionData || null) as BanpickSessionRow | null)
-
-    if (!sessionData) {
-      setBanpickActions([])
-      return
-    }
-
-    const { data: actionData, error: actionError } = await supabase
-      .from('banpick_actions')
-      .select('*')
-      .eq('match_id', targetMatchId)
-      .order('created_at', { ascending: true })
-
-    if (actionError) {
-      console.error('[fetchBanpick] action error:', actionError)
-      setBanpickActions([])
-      return
-    }
-
-    setBanpickActions((actionData || []) as BanpickActionRow[])
-  }
-
-  const fetchData = async () => {
-    if (!matchId || fetchingRef.current) return
-
-    fetchingRef.current = true
-    try {
-      const { data: matchData, error: matchError } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('id', matchId)
-        .maybeSingle()
-
-      if (matchError || !matchData) {
-        console.error('[fetchData] match error:', matchError)
-        setMatch(null)
-        setLoading(false)
-        return
-      }
-
-      const currentMatch = matchData as MatchRow
-      setMatch(currentMatch)
-
-      const [{ data: t1 }, { data: t2 }] = await Promise.all([
-        supabase.from('teams').select('*').eq('id', currentMatch.team1_id).single(),
-        supabase.from('teams').select('*').eq('id', currentMatch.team2_id).single(),
-      ])
-
-      setTeam1((t1 || null) as TeamRow | null)
-      setTeam2((t2 || null) as TeamRow | null)
-
       const {
-        data: { session },
-      } = await supabase.auth.getSession()
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-      if (session?.user) {
-        const { data: user } = await supabase
-          .from('users')
-          .select('id')
-          .eq('auth_user_id', session.user.id)
-          .single()
+      if (userError) throw userError;
+      setMyUserId(user?.id ?? null);
 
-        if (user) {
-          setMyUserId(user.id)
+      const [{ data: matchData, error: matchError }, { data: teamsData, error: teamsError }, { data: membersData, error: membersError }, { data: sessionData, error: sessionError }, { data: actionsData, error: actionsError }, { data: messagesData, error: messagesError }] =
+        await Promise.all([
+          supabase
+            .from("matches")
+            .select("id,status,host_user_id,host_match_team_id,host_selected_at,lobby_code,lobby_code_set_by_user_id,lobby_code_set_at,winner_match_team_id,loser_match_team_id")
+            .eq("id", matchId)
+            .maybeSingle<MatchRow>(),
+          supabase
+            .from("match_teams")
+            .select("id,match_id,side,display_name,captain_user_id,party_composition,base_avg_rating,synergy_bonus,effective_avg_rating,is_full_party")
+            .eq("match_id", matchId)
+            .returns<MatchTeamRow[]>(),
+          supabase
+            .from("match_team_members")
+            .select("id,match_team_id,user_id,is_party_leader,joined_as_party_size,rating_before,profiles!match_team_members_user_id_fkey(id,display_name)")
+            .in(
+              "match_team_id",
+              (
+                (await supabase
+                  .from("match_teams")
+                  .select("id")
+                  .eq("match_id", matchId)) as { data: { id: string }[] | null }
+              ).data?.map((t) => t.id) ?? ["00000000-0000-0000-0000-000000000000"]
+            )
+            .returns<MatchTeamMemberRow[]>(),
+          supabase
+            .from("banpick_sessions")
+            .select("id,match_id,status,phase,current_turn_match_team_id,current_action_type,turn_number,selected_maps,banned_maps,side_choices")
+            .eq("match_id", matchId)
+            .maybeSingle<BanpickSessionRow>(),
+          supabase
+            .from("banpick_actions")
+            .select("id,banpick_session_id,match_id,actor_user_id,actor_match_team_id,turn_number,phase,action_type,target,created_at,profiles!banpick_actions_actor_user_id_fkey(id,display_name)")
+            .eq("match_id", matchId)
+            .order("created_at", { ascending: true })
+            .returns<BanpickActionRow[]>(),
+          supabase
+            .from("match_messages")
+            .select("id,match_id,sender_user_id,message_type,body,created_at,profiles!match_messages_sender_user_id_fkey(id,display_name)")
+            .eq("match_id", matchId)
+            .order("created_at", { ascending: true })
+            .returns<MatchMessageRow[]>(),
+        ]);
 
-          const { data: member } = await supabase
-            .from('team_members')
-            .select('team_id, role')
-            .eq('user_id', user.id)
-            .maybeSingle()
+      if (matchError) throw matchError;
+      if (teamsError) throw teamsError;
+      if (membersError) throw membersError;
+      if (sessionError) throw sessionError;
+      if (actionsError) throw actionsError;
+      if (messagesError) throw messagesError;
 
-          if (member) {
-            setMyTeamId(member.team_id)
-            setMyRole(member.role)
-          } else {
-            setMyTeamId(null)
-            setMyRole(null)
-          }
-        }
-      } else {
-        setMyUserId(null)
-        setMyTeamId(null)
-        setMyRole(null)
-      }
-
-      await fetchBanpick(matchId, currentMatch)
+      setMatch(matchData ?? null);
+      setTeams(teamsData ?? []);
+      setMembers(membersData ?? []);
+      setSession(sessionData ?? null);
+      setActions(actionsData ?? []);
+      setMessages(messagesData ?? []);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "読み込みに失敗しました。";
+      setErrorText(message);
     } finally {
-      fetchingRef.current = false
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  }, [matchId, supabase]);
 
   useEffect(() => {
-    void fetchData()
-  }, [matchId])
+    void loadAll();
+  }, [loadAll]);
 
   useEffect(() => {
-    clockIntervalRef.current = setInterval(() => {
-      setNowMs(Date.now())
-    }, 1000)
-
-    return () => {
-      if (clockIntervalRef.current) {
-        clearInterval(clockIntervalRef.current)
-        clockIntervalRef.current = null
-      }
-    }
-  }, [])
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   useEffect(() => {
-    if (!matchId) return
+    if (!matchId) return;
 
     const channel = supabase
-      .channel(`match-banpick-${matchId}`)
+      .channel(`banpick-room-${matchId}`)
       .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` },
-        async () => {
-          await fetchData()
-        }
+        "postgres_changes",
+        { event: "*", schema: "public", table: "matches", filter: `id=eq.${matchId}` },
+        () => void loadAll()
       )
       .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'banpick_sessions' },
-        async (payload) => {
-          const row = (payload.new || payload.old) as { match_id?: string; status?: string } | null
-          if (row?.match_id !== matchId) return
-
-          await fetchBanpick(matchId, match)
-
-          if (row?.status === 'completed') {
-            await fetchData()
-          }
-        }
+        "postgres_changes",
+        { event: "*", schema: "public", table: "banpick_sessions", filter: `match_id=eq.${matchId}` },
+        () => void loadAll()
       )
       .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'banpick_actions' },
-        async (payload) => {
-          const row = (payload.new || payload.old) as { match_id?: string } | null
-          if (row?.match_id !== matchId) return
-          await fetchBanpick(matchId, match)
-        }
+        "postgres_changes",
+        { event: "*", schema: "public", table: "banpick_actions", filter: `match_id=eq.${matchId}` },
+        () => void loadAll()
       )
-      .subscribe()
-
-    realtimeRef.current = channel
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${matchId}` },
+        () => void loadAll()
+      )
+      .subscribe();
 
     return () => {
-      if (realtimeRef.current) {
-        supabase.removeChannel(realtimeRef.current)
-        realtimeRef.current = null
-      }
-    }
-  }, [matchId, match])
+      void supabase.removeChannel(channel);
+    };
+  }, [matchId, loadAll, supabase]);
 
-  useEffect(() => {
-    if (banpickPollingRef.current) {
-      clearInterval(banpickPollingRef.current)
-      banpickPollingRef.current = null
-    }
+  const clearMessages = () => {
+    setErrorText(null);
+    setInfoText(null);
+  };
 
-    if (!matchId || banpickSession?.status !== 'in_progress') return
-
-    banpickPollingRef.current = setInterval(() => {
-      void fetchBanpick(matchId, match)
-    }, 15000)
-
-    return () => {
-      if (banpickPollingRef.current) {
-        clearInterval(banpickPollingRef.current)
-        banpickPollingRef.current = null
-      }
-    }
-  }, [matchId, banpickSession?.status, match])
-
-  const resolveBanpickTimeout = async () => {
-    if (!matchId || timeoutResolvingRef.current) return
-
-    timeoutResolvingRef.current = true
+  const handleCreateBanpickSession = async () => {
+    if (!matchId) return;
+    clearMessages();
+    setBusy(true);
 
     try {
-      const { data, error } = await supabase.rpc('resolve_banpick_timeout', {
+      const { error } = await supabase.rpc("rpc_create_banpick_session", {
         p_match_id: matchId,
-      })
+      });
 
-      if (error) {
-        console.error('[timeout] resolve error:', error)
-        return
-      }
+      if (error) throw error;
 
-      const result = data as { timed_out?: boolean } | null
-
-      if (result?.timed_out) {
-        showToast('5分間操作がなかったためタイムアウト決着になりました', 'info')
-        await fetchData()
-      }
+      setInfoText("バンピックを開始しました。");
+      await loadAll();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "バンピック開始に失敗しました。";
+      setErrorText(message);
     } finally {
-      timeoutResolvingRef.current = false
+      setBusy(false);
     }
-  }
+  };
 
-  useEffect(() => {
-    if (timeoutIntervalRef.current) {
-      clearInterval(timeoutIntervalRef.current)
-      timeoutIntervalRef.current = null
-    }
+  const handleSubmitBanpickAction = async () => {
+    if (!matchId || !session) return;
+    clearMessages();
 
-    if (!matchId || !banpickSession || banpickSession.status !== 'in_progress') return
-
-    void resolveBanpickTimeout()
-
-    timeoutIntervalRef.current = setInterval(() => {
-      void resolveBanpickTimeout()
-    }, 10000)
-
-    return () => {
-      if (timeoutIntervalRef.current) {
-        clearInterval(timeoutIntervalRef.current)
-        timeoutIntervalRef.current = null
-      }
-    }
-  }, [matchId, banpickSession?.status, banpickSession?.deadline_at])
-
-  const remainingSeconds = useMemo(() => {
-    if (!banpickSession?.deadline_at || banpickSession.status !== 'in_progress') return 0
-    const diff = new Date(banpickSession.deadline_at).getTime() - nowMs
-    return Math.max(0, Math.floor(diff / 1000))
-  }, [banpickSession?.deadline_at, banpickSession?.status, nowMs])
-
-  const timerClassName = useMemo(() => {
-    if (!banpickSession || banpickSession.status !== 'in_progress') return 'muted'
-    if (remainingSeconds <= 10) return 'danger'
-    if (remainingSeconds <= 60) return 'warning'
-    return 'success'
-  }, [banpickSession, remainingSeconds])
-
-  const getCurrentBanpickStep = () => {
-    if (!banpickSession) return null
-
-    if (banpickSession.phase === 'phase1_hp') {
-      if (banpickSession.step_no === 1) {
-        return {
-          title: 'フェーズ1 HARDPOINT',
-          actingTeamId: banpickSession.team_a_id,
-          actingAction: 'ban' as const,
-          gameMode: 'HARDPOINT' as const,
-          description: `${getTeamName(banpickSession.team_a_id)} が Hardpoint のマップを1つBANしてください。`,
-        }
-      }
-      if (banpickSession.step_no === 2) {
-        return {
-          title: 'フェーズ1 HARDPOINT',
-          actingTeamId: banpickSession.team_b_id,
-          actingAction: 'ban' as const,
-          gameMode: 'HARDPOINT' as const,
-          description: `${getTeamName(banpickSession.team_b_id)} が Hardpoint のマップを1つBANしてください。`,
-        }
-      }
-      if (banpickSession.step_no === 3) {
-        return {
-          title: 'フェーズ1 HARDPOINT',
-          actingTeamId: banpickSession.team_a_id,
-          actingAction: 'pick_map' as const,
-          gameMode: 'HARDPOINT' as const,
-          description: `${getTeamName(banpickSession.team_a_id)} が Game 1 の Hardpoint マップを選択してください。`,
-        }
-      }
-      return {
-        title: 'フェーズ1 HARDPOINT',
-        actingTeamId: banpickSession.team_b_id,
-        actingAction: 'pick_side' as const,
-        gameMode: 'HARDPOINT' as const,
-        description: `${getTeamName(banpickSession.team_b_id)} が Game 1 のマップサイドを選択してください。`,
-      }
+    const target = banpickTarget.trim();
+    if (!target) {
+      setErrorText("対象を入力または選択してください。");
+      return;
     }
 
-    if (banpickSession.phase === 'phase2_snd') {
-      if (banpickSession.step_no === 1) {
-        return {
-          title: 'フェーズ2 SEARCH & DESTROY',
-          actingTeamId: banpickSession.team_b_id,
-          actingAction: 'ban' as const,
-          gameMode: 'SEARCH_AND_DESTROY' as const,
-          description: `${getTeamName(banpickSession.team_b_id)} が S&D のマップを1つBANしてください。`,
-        }
-      }
-      if (banpickSession.step_no === 2) {
-        return {
-          title: 'フェーズ2 SEARCH & DESTROY',
-          actingTeamId: banpickSession.team_a_id,
-          actingAction: 'ban' as const,
-          gameMode: 'SEARCH_AND_DESTROY' as const,
-          description: `${getTeamName(banpickSession.team_a_id)} が S&D のマップを1つBANしてください。`,
-        }
-      }
-      if (banpickSession.step_no === 3) {
-        return {
-          title: 'フェーズ2 SEARCH & DESTROY',
-          actingTeamId: banpickSession.team_b_id,
-          actingAction: 'pick_map' as const,
-          gameMode: 'SEARCH_AND_DESTROY' as const,
-          description: `${getTeamName(banpickSession.team_b_id)} が Game 2 の S&D マップを選択してください。`,
-        }
-      }
-      return {
-        title: 'フェーズ2 SEARCH & DESTROY',
-        actingTeamId: banpickSession.team_a_id,
-        actingAction: 'pick_side' as const,
-        gameMode: 'SEARCH_AND_DESTROY' as const,
-        description: `${getTeamName(banpickSession.team_a_id)} が Game 2 のマップサイドを選択してください。`,
-      }
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc("rpc_submit_banpick_action", {
+        p_match_id: matchId,
+        p_action_type: session.current_action_type,
+        p_target: target,
+      });
+
+      if (error) throw error;
+
+      setBanpickTarget("");
+      setInfoText("バンピックを更新しました。");
+      await loadAll();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "バンピック送信に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSelectHost = async () => {
+    if (!matchId) return;
+    clearMessages();
+    setBusy(true);
+
+    try {
+      const { error } = await supabase.rpc("rpc_select_match_host", {
+        p_match_id: matchId,
+      });
+
+      if (error) throw error;
+
+      setInfoText("ホストを決定しました。");
+      await loadAll();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "ホスト決定に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSendLobbyCode = async () => {
+    if (!matchId) return;
+    clearMessages();
+
+    const code = lobbyCodeInput.trim();
+    if (!code) {
+      setErrorText("ロビーコードを入力してください。");
+      return;
     }
 
-    if (banpickSession.phase === 'phase3_ovl') {
-      if (banpickSession.step_no === 1) {
-        return {
-          title: 'フェーズ3 OVERLOAD',
-          actingTeamId: banpickSession.team_a_id,
-          actingAction: 'ban' as const,
-          gameMode: 'OVERLOAD' as const,
-          description: `${getTeamName(banpickSession.team_a_id)} が Overload のマップを1つBANしてください。`,
-        }
-      }
-      if (banpickSession.step_no === 2) {
-        return {
-          title: 'フェーズ3 OVERLOAD',
-          actingTeamId: banpickSession.team_b_id,
-          actingAction: 'pick_map' as const,
-          gameMode: 'OVERLOAD' as const,
-          description: `${getTeamName(banpickSession.team_b_id)} が Game 3 の Overload マップを選択してください。`,
-        }
-      }
-      return {
-        title: 'フェーズ3 OVERLOAD',
-        actingTeamId: banpickSession.team_a_id,
-        actingAction: 'pick_side' as const,
-        gameMode: 'OVERLOAD' as const,
-        description: `${getTeamName(banpickSession.team_a_id)} が Game 3 のマップサイドを選択してください。`,
-      }
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc("rpc_send_lobby_code", {
+        p_match_id: matchId,
+        p_lobby_code: code,
+      });
+
+      if (error) throw error;
+
+      setLobbyCodeInput("");
+      setInfoText("ロビーコードを送信しました。");
+      await loadAll();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "ロビーコード送信に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSendChat = async () => {
+    if (!matchId) return;
+    clearMessages();
+
+    const body = chatInput.trim();
+    if (!body) {
+      setErrorText("メッセージを入力してください。");
+      return;
     }
 
-    return {
-      title: 'フェーズ4 完了',
-      actingTeamId: null,
-      actingAction: null,
-      gameMode: null,
-      description: 'バンピックは完了しています。',
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc("rpc_send_match_message", {
+        p_match_id: matchId,
+        p_body: body,
+      });
+
+      if (error) throw error;
+
+      setChatInput("");
+      await loadAll();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "メッセージ送信に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
     }
-  }
+  };
 
-  const currentBanpickStep = getCurrentBanpickStep()
-
-  const availableBanpickTargets = useMemo(() => {
-    if (!banpickSession || !currentBanpickStep) return []
-
-    if (currentBanpickStep.actingAction === 'pick_side') {
-      return [...SIDE_OPTIONS]
-    }
-
-    let pool: string[] = []
-
-    if (currentBanpickStep.gameMode === 'HARDPOINT') pool = [...HP_POOL]
-    if (currentBanpickStep.gameMode === 'SEARCH_AND_DESTROY') pool = [...SND_POOL]
-    if (currentBanpickStep.gameMode === 'OVERLOAD') pool = [...OVL_POOL]
-
-    const banned = new Set<string>()
-    const picked = new Set<string>()
-
-    if (currentBanpickStep.gameMode === 'HARDPOINT') {
-      if (banpickSession.hp_ban_a) banned.add(banpickSession.hp_ban_a)
-      if (banpickSession.hp_ban_b) banned.add(banpickSession.hp_ban_b)
-      if (banpickSession.hp_map) picked.add(banpickSession.hp_map)
-    }
-
-    if (currentBanpickStep.gameMode === 'SEARCH_AND_DESTROY') {
-      if (banpickSession.snd_ban_b) banned.add(banpickSession.snd_ban_b)
-      if (banpickSession.snd_ban_a) banned.add(banpickSession.snd_ban_a)
-      if (banpickSession.snd_map) picked.add(banpickSession.snd_map)
-    }
-
-    if (currentBanpickStep.gameMode === 'OVERLOAD') {
-      if (banpickSession.ovl_ban_a) banned.add(banpickSession.ovl_ban_a)
-      if (banpickSession.ovl_map) picked.add(banpickSession.ovl_map)
-    }
-
-    return pool.filter((item) => !banned.has(item) && !picked.has(item))
-  }, [banpickSession, currentBanpickStep])
-
-  const canOperateBanpick =
-    !!banpickSession &&
-    banpickSession.status === 'in_progress' &&
-    !!myUserId &&
-    !!myTeamId &&
-    myRole === 'owner' &&
-    currentBanpickStep?.actingTeamId === myTeamId
-
-  const handleBanpickAction = async (
-    actionType: 'ban' | 'pick_map' | 'pick_side',
-    target: string
-  ) => {
-    if (!myUserId) {
-      showToast('ユーザー情報が取得できていません', 'error')
-      return
-    }
-
-    setBanpickLoading(true)
-
-    const { error } = await supabase.rpc('submit_banpick_action', {
-      p_match_id: matchId,
-      p_actor_user_id: myUserId,
-      p_action_type: actionType,
-      p_target: target,
-    })
-
-    if (error) {
-      console.error('[banpick] submit error:', error)
-      showToast(error.message || 'バンピックの送信に失敗しました', 'error')
-      setBanpickLoading(false)
-      await fetchData()
-      return
-    }
-
-    showToast('バンピックを更新しました', 'success')
-    await fetchBanpick(matchId, match)
-    setBanpickLoading(false)
+  if (!matchId) {
+    return <div className="p-6 text-sm text-red-400">match id が見つかりません。</div>;
   }
 
   if (loading) {
-    return (
-      <main>
-        <h1>バンピック</h1>
-        <p>読み込み中...</p>
-      </main>
-    )
-  }
-
-  if (!match) {
-    return (
-      <main>
-        <h1>バンピック</h1>
-        <p>試合が見つかりません</p>
-        <button onClick={() => router.push('/history')}>履歴へ戻る</button>
-      </main>
-    )
+    return <div className="p-6 text-sm text-white">読み込み中です...</div>;
   }
 
   return (
-    <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>バンピック</h1>
-          <p className="muted">マップとサイドを決定します</p>
-        </div>
-
-        <div className="row">
-          <button onClick={() => router.push(`/match/${matchId}/report`)}>
-            結果報告へ
-          </button>
-        </div>
-      </div>
-
-      <div className="section">
-        <div className="card-strong">
-          <div className="row" style={{ justifyContent: 'space-between' }}>
-            <h2>バンピック</h2>
-            <p className={banpickSession?.status === 'completed' ? 'success' : 'warning'}>
-              {banpickSession?.status === 'completed' ? '完了' : '進行中'}
-            </p>
+    <div className="min-h-screen bg-neutral-950 text-white">
+      <div className="mx-auto max-w-7xl px-4 py-6">
+        <div className="mb-6 flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">ASCENT バンピック</h1>
+            <p className="mt-1 text-sm text-white/60">Match ID: {matchId}</p>
           </div>
 
-          {!banpickSession ? (
-            <p>バンピック開始準備中です...</p>
-          ) : (
-            <>
-              <div className="grid grid-2">
-                <div className="card">
-                  <p className="muted">現在フェーズ</p>
-                  <h3>{currentBanpickStep?.title || '-'}</h3>
-                  <p>{currentBanpickStep?.description || '-'}</p>
+          <div className="flex flex-wrap gap-2">
+            {!session && (
+              <button
+                onClick={handleCreateBanpickSession}
+                disabled={busy}
+                className="rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+              >
+                バンピック開始
+              </button>
+            )}
+
+            {isBanpickCompleted && !match?.host_user_id && (
+              <button
+                onClick={handleSelectHost}
+                disabled={busy}
+                className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                ホスト決定
+              </button>
+            )}
+
+            <button
+              onClick={() => void loadAll()}
+              disabled={busy}
+              className="rounded border border-white/20 px-4 py-2 text-sm text-white/90 disabled:opacity-50"
+            >
+              再読み込み
+            </button>
+          </div>
+        </div>
+
+        {errorText && (
+          <div className="mb-4 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {errorText}
+          </div>
+        )}
+
+        {infoText && (
+          <div className="mb-4 rounded border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+            {infoText}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <div className="space-y-4 xl:col-span-2">
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">試合情報</h2>
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="rounded bg-black/20 p-3">
+                  <div className="text-xs text-white/50">試合状態</div>
+                  <div className="mt-1 text-sm font-medium">{match?.status ?? "-"}</div>
                 </div>
 
-                <div className="card">
-                  <p className="muted">あなた</p>
-                  <h3>{getTeamName(myTeamId)}</h3>
-                  <p>権限: {myRole || 'なし'}</p>
-                </div>
-              </div>
-
-              {banpickSession.status === 'in_progress' && (
-                <div className="card" style={{ marginTop: 16 }}>
-                  <p className="muted">残り時間</p>
-                  <h3 className={timerClassName}>{formatRemainingTime(remainingSeconds)}</h3>
-                  <p className="danger">
-                    5分間操作がない場合、現在の手番チームが敗北になります。
-                  </p>
-                </div>
-              )}
-
-              {banpickSession.timeout_loser_team_id && (
-                <div className="card" style={{ marginTop: 16 }}>
-                  <p className="danger">
-                    <strong>タイムアウト決着</strong>
-                  </p>
-                  <p>
-                    {getTeamName(banpickSession.timeout_loser_team_id)} が5分間操作しなかったため敗北になりました。
-                  </p>
-                  <p>勝者: {getTeamName(banpickSession.timeout_winner_team_id)}</p>
-                </div>
-              )}
-
-              {banpickSession.status === 'in_progress' && (
-                <div className="card" style={{ marginTop: 16 }}>
-                  <h3>現在の操作</h3>
-
-                  {canOperateBanpick ? (
-                    <>
-                      <p>{currentBanpickStep?.description}</p>
-
-                      <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
-                        {availableBanpickTargets.map((target) => (
-                          <button
-                            key={target}
-                            onClick={() =>
-                              handleBanpickAction(
-                                currentBanpickStep?.actingAction as 'ban' | 'pick_map' | 'pick_side',
-                                target
-                              )
-                            }
-                            disabled={banpickLoading}
-                          >
-                            {banpickLoading ? '送信中...' : target}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <p className="muted">
-                      {myRole !== 'owner'
-                        ? 'バンピック操作は owner のみ可能です。'
-                        : '現在は相手チームのターンです。'}
-                    </p>
-                  )}
-                </div>
-              )}
-              
-              <div className="grid grid-3" style={{ marginTop: 16 }}>
-                <div className="card">
-                  <h3>Game 1 Hardpoint</h3>
-                  <p>Team A BAN: {banpickSession.hp_ban_a || '-'}</p>
-                  <p>Team B BAN: {banpickSession.hp_ban_b || '-'}</p>
-                  <p>Map: {banpickSession.hp_map || '-'}</p>
-                  <p>Side: {banpickSession.hp_side || '-'}</p>
+                <div className="rounded bg-black/20 p-3">
+                  <div className="text-xs text-white/50">現在フェーズ</div>
+                  <div className="mt-1 text-sm font-medium">{session ? phaseLabel(session.phase) : "-"}</div>
                 </div>
 
-                <div className="card">
-                  <h3>Game 2 S&amp;D</h3>
-                  <p>Team B BAN: {banpickSession.snd_ban_b || '-'}</p>
-                  <p>Team A BAN: {banpickSession.snd_ban_a || '-'}</p>
-                  <p>Map: {banpickSession.snd_map || '-'}</p>
-                  <p>Side: {banpickSession.snd_side || '-'}</p>
+                <div className="rounded bg-black/20 p-3">
+                  <div className="text-xs text-white/50">現在の操作</div>
+                  <div className="mt-1 text-sm font-medium">
+                    {session ? actionTypeLabel(session.current_action_type) : "-"}
+                  </div>
                 </div>
 
-                <div className="card">
-                  <h3>Game 3 Overload</h3>
-                  <p>Team A BAN: {banpickSession.ovl_ban_a || '-'}</p>
-                  <p>Map: {banpickSession.ovl_map || '-'}</p>
-                  <p>Side: {banpickSession.ovl_side || '-'}</p>
+                <div className="rounded bg-black/20 p-3">
+                  <div className="text-xs text-white/50">現在の手番</div>
+                  <div className="mt-1 text-sm font-medium">
+                    {currentTurnTeam
+                      ? `${currentTurnTeam.side.toUpperCase()} (${currentTurnTeam.display_name ?? currentTurnTeam.side})`
+                      : "-"}
+                  </div>
                 </div>
               </div>
+            </section>
 
-              <div className="card" style={{ marginTop: 16 }}>
-                <h3>バンピック履歴</h3>
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">チーム構成</h2>
 
-                {banpickActions.length === 0 ? (
-                  <p>まだ履歴がありません</p>
-                ) : (
-                  <div className="section">
-                    {banpickActions.map((action, index) => (
-                      <div key={action.id ?? index} className="card">
-                        <p>
-                          <strong>{index + 1}.</strong> {getTeamName(action.acting_team_id)}
-                        </p>
-                        <p>モード: {getModeLabel(action.game_mode)}</p>
-                        <p>操作: {action.action_type}</p>
-                        <p>内容: {action.target}</p>
-                        <p className="muted">
-                          {new Date(action.created_at).toLocaleString('ja-JP')}
-                        </p>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="rounded border border-white/10 bg-black/20 p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="font-semibold">ALPHA</div>
+                    <div className="text-xs text-white/60">{alphaTeam?.party_composition ?? "-"}</div>
+                  </div>
+
+                  <div className="mb-3 text-xs text-white/60">
+                    平均: {alphaTeam?.base_avg_rating ?? "-"} / 補正: +{alphaTeam?.synergy_bonus ?? 0} / 実効:{" "}
+                    {alphaTeam?.effective_avg_rating ?? "-"}
+                  </div>
+
+                  <div className="space-y-2">
+                    {groupedMembers.alpha.map((m) => (
+                      <div key={m.id} className="rounded bg-white/5 px-3 py-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span>{m.profiles?.display_name ?? m.user_id}</span>
+                          <div className="flex gap-2 text-[11px] text-white/50">
+                            {m.is_party_leader && <span>Leader</span>}
+                            {match?.host_user_id === m.user_id && <span>Host</span>}
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
+                </div>
+
+                <div className="rounded border border-white/10 bg-black/20 p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="font-semibold">BRAVO</div>
+                    <div className="text-xs text-white/60">{bravoTeam?.party_composition ?? "-"}</div>
+                  </div>
+
+                  <div className="mb-3 text-xs text-white/60">
+                    平均: {bravoTeam?.base_avg_rating ?? "-"} / 補正: +{bravoTeam?.synergy_bonus ?? 0} / 実効:{" "}
+                    {bravoTeam?.effective_avg_rating ?? "-"}
+                  </div>
+
+                  <div className="space-y-2">
+                    {groupedMembers.bravo.map((m) => (
+                      <div key={m.id} className="rounded bg-white/5 px-3 py-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span>{m.profiles?.display_name ?? m.user_id}</span>
+                          <div className="flex gap-2 text-[11px] text-white/50">
+                            {m.is_party_leader && <span>Leader</span>}
+                            {match?.host_user_id === m.user_id && <span>Host</span>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">バンピック操作</h2>
+
+              {!session ? (
+                <div className="text-sm text-white/60">まだバンピックは開始されていません。</div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded bg-black/20 p-3 text-sm">
+                    <div>フェーズ: {phaseLabel(session.phase)}</div>
+                    <div className="mt-1">操作: {actionTypeLabel(session.current_action_type)}</div>
+                    <div className="mt-1">
+                      手番:{" "}
+                      {currentTurnTeam
+                        ? `${currentTurnTeam.side.toUpperCase()} (${currentTurnTeam.display_name ?? currentTurnTeam.side})`
+                        : "-"}
+                    </div>
+                    <div className="mt-1">
+                      あなたの状態: {isMyTurn ? "あなたのチームの手番です" : "相手チームの手番です"}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <div className="rounded bg-black/20 p-3">
+                      <div className="mb-2 text-sm font-semibold">BAN済み</div>
+                      <div className="space-y-1 text-sm text-white/80">
+                        {bannedMaps.length === 0 ? <div className="text-white/40">なし</div> : bannedMaps.map((x, i) => <div key={`${x}-${i}`}>{x}</div>)}
+                      </div>
+                    </div>
+
+                    <div className="rounded bg-black/20 p-3">
+                      <div className="mb-2 text-sm font-semibold">PICK済み</div>
+                      <div className="space-y-1 text-sm text-white/80">
+                        {selectedMaps.length === 0 ? <div className="text-white/40">なし</div> : selectedMaps.map((x, i) => <div key={`${x}-${i}`}>{x}</div>)}
+                      </div>
+                    </div>
+
+                    <div className="rounded bg-black/20 p-3">
+                      <div className="mb-2 text-sm font-semibold">サイド選択</div>
+                      <div className="space-y-1 text-sm text-white/80">
+                        {sideChoices.length === 0 ? <div className="text-white/40">なし</div> : sideChoices.map((x, i) => <div key={`${x}-${i}`}>{x}</div>)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded border border-white/10 bg-black/20 p-4">
+                    <div className="mb-3 text-sm font-semibold">
+                      {session.status === "completed" ? "バンピック完了" : "現在の操作を送信"}
+                    </div>
+
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {actionOptions.map((option) => {
+                        const active = banpickTarget === option;
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => setBanpickTarget(option)}
+                            className={`rounded px-3 py-2 text-sm ${
+                              active ? "bg-white text-black" : "border border-white/20 bg-transparent text-white"
+                            }`}
+                          >
+                            {option}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mb-3">
+                      <input
+                        value={banpickTarget}
+                        onChange={(e) => setBanpickTarget(e.target.value)}
+                        placeholder="対象を直接入力してもOK"
+                        className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                        disabled={busy || !isMyTurn || session.status !== "in_progress"}
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleSubmitBanpickAction}
+                      disabled={busy || !isMyTurn || session.status !== "in_progress"}
+                      className="rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+                    >
+                      {session.current_action_type ? `${actionTypeLabel(session.current_action_type)} を送信` : "送信"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">バンピック履歴</h2>
+
+              <div className="space-y-2">
+                {actions.length === 0 ? (
+                  <div className="text-sm text-white/50">まだ履歴はありません。</div>
+                ) : (
+                  actions.map((action) => (
+                    <div key={action.id} className="rounded bg-black/20 px-3 py-2 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          Turn {action.turn_number} / {phaseLabel(action.phase)}
+                        </div>
+                        <div className="text-white/50">{new Date(action.created_at).toLocaleString()}</div>
+                      </div>
+                      <div className="mt-1">
+                        {action.profiles?.display_name ?? action.actor_user_id} が{" "}
+                        <span className="font-semibold">{actionTypeLabel(action.action_type)}</span> : {action.target}
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
-            </>
-          )}
+            </section>
+          </div>
+
+          <div className="space-y-4">
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">ホスト / ロビー</h2>
+
+              <div className="space-y-3">
+                <div className="rounded bg-black/20 p-3">
+                  <div className="text-xs text-white/50">現在のホスト</div>
+                  <div className="mt-1 text-sm font-medium">{hostDisplayName ?? "未決定"}</div>
+                </div>
+
+                <div className="rounded bg-black/20 p-3">
+                  <div className="text-xs text-white/50">現在のロビーコード</div>
+                  <div className="mt-1 break-all text-sm font-medium">{match?.lobby_code ?? "未設定"}</div>
+                  {match?.lobby_code_set_at && (
+                    <div className="mt-1 text-[11px] text-white/40">
+                      更新: {new Date(match.lobby_code_set_at).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded border border-white/10 bg-black/20 p-3">
+                  <div className="mb-2 text-sm font-semibold">ロビーコード送信</div>
+                  <input
+                    value={lobbyCodeInput}
+                    onChange={(e) => setLobbyCodeInput(e.target.value)}
+                    placeholder={isHost ? "例: ABCD-1234" : "ホストのみ送信可能"}
+                    className="mb-2 w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                    disabled={busy || !isHost}
+                  />
+                  <button
+                    onClick={handleSendLobbyCode}
+                    disabled={busy || !isHost}
+                    className="w-full rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    ロビーコード送信
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">試合チャット</h2>
+
+              <div className="mb-3 h-[420px] overflow-y-auto rounded border border-white/10 bg-black/20 p-3">
+                <div className="space-y-2">
+                  {messages.length === 0 ? (
+                    <div className="text-sm text-white/50">まだメッセージはありません。</div>
+                  ) : (
+                    messages.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`rounded px-3 py-2 text-sm ${
+                          msg.message_type === "system"
+                            ? "bg-white/5 text-white/70"
+                            : msg.message_type === "lobby_code"
+                            ? "bg-emerald-500/15 text-emerald-200"
+                            : "bg-white/10 text-white"
+                        }`}
+                      >
+                        <div className="mb-1 flex items-center justify-between gap-3 text-[11px] opacity-70">
+                          <span>
+                            [{messageTypeLabel(msg.message_type)}]{" "}
+                            {msg.profiles?.display_name ?? (msg.sender_user_id ? msg.sender_user_id : "system")}
+                          </span>
+                          <span>{new Date(msg.created_at).toLocaleString()}</span>
+                        </div>
+                        <div className="break-words whitespace-pre-wrap">{msg.body}</div>
+                      </div>
+                    ))
+                  )}
+                  <div ref={chatBottomRef} />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <textarea
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="メッセージを入力"
+                  rows={4}
+                  maxLength={300}
+                  className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                  disabled={busy}
+                />
+                <button
+                  onClick={handleSendChat}
+                  disabled={busy}
+                  className="w-full rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+                >
+                  メッセージ送信
+                </button>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
-    </main>
-  )
+    </div>
+  );
 }

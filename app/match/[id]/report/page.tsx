@@ -1,746 +1,754 @@
-'use client'
+"use client";
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { RealtimeChannel } from '@supabase/supabase-js'
-import { useParams, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
-import { useToast } from '@/components/ToastProvider'
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { useParams } from "next/navigation";
 
 type MatchRow = {
-  id: string
-  team1_id: string
-  team2_id: string
-  winner_team_id: string | null
-  loser_team_id: string | null
-  status: string
-  approval_status?: string | null
-  team1_rating_before?: number | null
-  team2_rating_before?: number | null
-  team1_rating_after?: number | null
-  team2_rating_after?: number | null
-}
+  id: string;
+  status: string;
+  approval_status: string;
+  winner_match_team_id: string | null;
+  loser_match_team_id: string | null;
+  completed_at: string | null;
+};
 
-type TeamRow = {
-  id: string
-  name: string
-}
+type MatchTeamRow = {
+  id: string;
+  match_id: string;
+  side: "alpha" | "bravo";
+  display_name: string | null;
+  party_composition: string | null;
+  effective_avg_rating: number;
+};
+
+type MatchTeamMemberRow = {
+  id: string;
+  match_team_id: string;
+  user_id: string;
+  profiles?: {
+    id: string;
+    display_name: string;
+  } | null;
+};
 
 type MatchReportRow = {
-  id: string
-  match_id: string
-  reporter_team_id: string
-  reported_winner_team_id: string
-  hp_winner_team_id: string
-  snd_winner_team_id: string
-  ov_winner_team_id: string | null
-  approval_status: string
-  created_at: string
-}
+  id: string;
+  match_id: string;
+  submitted_by_user_id: string;
+  submitted_by_match_team_id: string;
+  status: "pending" | "approved" | "rejected" | "superseded";
+  winner_match_team_id: string | null;
+  score_summary: string | null;
+  notes: string | null;
+  submitted_at: string;
+  decided_at: string | null;
+};
 
-type MatchGameRow = {
-  id: string
-  match_id: string
-  order_no: number
-  mode: string
-  winner_team_id: string | null
-}
+type MatchReportGameRow = {
+  id: string;
+  report_id: string;
+  game_number: number;
+  mode: string;
+  map_name: string | null;
+  winner_match_team_id: string | null;
+  was_played: boolean;
+};
 
-export default function MatchReportPage() {
-  const params = useParams()
-  const router = useRouter()
-  const { showToast } = useToast()
+type MatchMessageRow = {
+  id: string;
+  match_id: string;
+  sender_user_id: string | null;
+  message_type: "text" | "lobby_code" | "system";
+  body: string;
+  created_at: string;
+};
 
-  const realtimeRef = useRef<RealtimeChannel | null>(null)
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const fetchingRef = useRef(false)
-  const mountedRef = useRef(false)
+type ReportFormGame = {
+  game_number: number;
+  mode: string;
+  map_name: string;
+  winner_match_team_id: string;
+  was_played: boolean;
+};
 
-  const matchId =
-    typeof params.id === 'string'
-      ? params.id
-      : Array.isArray(params.id)
-        ? params.id[0]
-        : ''
+function getSupabaseClient(): SupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const [loading, setLoading] = useState(true)
-  const [match, setMatch] = useState<MatchRow | null>(null)
-  const [team1, setTeam1] = useState<TeamRow | null>(null)
-  const [team2, setTeam2] = useState<TeamRow | null>(null)
-  const [games, setGames] = useState<MatchGameRow[]>([])
-  const [latestReport, setLatestReport] = useState<MatchReportRow | null>(null)
-
-  const [hpWinner, setHpWinner] = useState('')
-  const [sndWinner, setSndWinner] = useState('')
-  const [ovWinner, setOvWinner] = useState('')
-
-  const [myTeamId, setMyTeamId] = useState<string | null>(null)
-
-  const [saving, setSaving] = useState(false)
-  const [approving, setApproving] = useState(false)
-  const [rejecting, setRejecting] = useState(false)
-
-  const getTeamName = (id: string | null | undefined) => {
-    if (!id) return '未実施'
-    if (team1?.id === id) return team1.name
-    if (team2?.id === id) return team2.name
-    return '不明'
+  if (!url || !anon) {
+    throw new Error("Supabase env is missing");
   }
 
-  const getModeLabel = (mode: string) => {
-    const v = mode?.toLowerCase?.() || ''
-    if (v === 'hardpoint') return 'Hardpoint'
-    if (v === 'snd' || v === 'search_and_destroy') return 'S&D'
-    if (v === 'overload') return 'Overload'
-    return mode
-  }
+  return createClient(url, anon, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
+}
 
-  const isOverloadRequired =
-    !!hpWinner && !!sndWinner && hpWinner !== sndWinner
+const MODE_OPTIONS = ["hp", "snd", "control", "overload"];
+const MAP_OPTIONS = [
+  "Hacienda",
+  "Exposure",
+  "Vault",
+  "Protocol",
+  "Skyline",
+  "Rewind",
+  "Derelict",
+  "Red Card",
+];
 
-  useEffect(() => {
-    if (!isOverloadRequired && ovWinner) {
-      setOvWinner('')
-    }
-  }, [isOverloadRequired, ovWinner])
+function teamLabel(team: MatchTeamRow | null) {
+  if (!team) return "-";
+  return `${team.side.toUpperCase()}${team.display_name ? ` (${team.display_name})` : ""}`;
+}
 
-  const fetchData = useCallback(async () => {
-    if (!matchId || fetchingRef.current) return
+export default function ReportPage() {
+  const params = useParams<{ id: string }>();
+  const matchId = params?.id;
 
-    fetchingRef.current = true
+  const [supabase] = useState(() => getSupabaseClient());
+
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
+  const [infoText, setInfoText] = useState<string | null>(null);
+
+  const [myUserId, setMyUserId] = useState<string | null>(null);
+
+  const [match, setMatch] = useState<MatchRow | null>(null);
+  const [teams, setTeams] = useState<MatchTeamRow[]>([]);
+  const [members, setMembers] = useState<MatchTeamMemberRow[]>([]);
+  const [report, setReport] = useState<MatchReportRow | null>(null);
+  const [reportGames, setReportGames] = useState<MatchReportGameRow[]>([]);
+  const [messages, setMessages] = useState<MatchMessageRow[]>([]);
+
+  const [winnerMatchTeamId, setWinnerMatchTeamId] = useState("");
+  const [scoreSummary, setScoreSummary] = useState("2-0");
+  const [notes, setNotes] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
+
+  const [games, setGames] = useState<ReportFormGame[]>([
+    { game_number: 1, mode: "hp", map_name: "", winner_match_team_id: "", was_played: true },
+    { game_number: 2, mode: "snd", map_name: "", winner_match_team_id: "", was_played: true },
+    { game_number: 3, mode: "control", map_name: "", winner_match_team_id: "", was_played: true },
+  ]);
+
+  const alphaTeam = useMemo(() => teams.find((t) => t.side === "alpha") ?? null, [teams]);
+  const bravoTeam = useMemo(() => teams.find((t) => t.side === "bravo") ?? null, [teams]);
+
+  const myMember = useMemo(
+    () => members.find((m) => m.user_id === myUserId) ?? null,
+    [members, myUserId]
+  );
+
+  const myMatchTeamId = myMember?.match_team_id ?? null;
+
+  const isMyOwnReport = !!report && report.submitted_by_match_team_id === myMatchTeamId;
+  const canApproveOrReject =
+    !!report &&
+    report.status === "pending" &&
+    !!myMatchTeamId &&
+    report.submitted_by_match_team_id !== myMatchTeamId;
+
+  const completedWinnerTeam = useMemo(() => {
+    if (!match?.winner_match_team_id) return null;
+    return teams.find((t) => t.id === match.winner_match_team_id) ?? null;
+  }, [match?.winner_match_team_id, teams]);
+
+  const groupedMembers = useMemo(() => {
+    return {
+      alpha: members.filter((m) => m.match_team_id === alphaTeam?.id),
+      bravo: members.filter((m) => m.match_team_id === bravoTeam?.id),
+    };
+  }, [members, alphaTeam?.id, bravoTeam?.id]);
+
+  const clearMessages = () => {
+    setErrorText(null);
+    setInfoText(null);
+  };
+
+  const loadAll = useCallback(async () => {
+    if (!matchId) return;
+    setLoading(true);
+    setErrorText(null);
 
     try {
-      const { data: matchData, error: matchError } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('id', matchId)
-        .maybeSingle()
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-      if (matchError || !matchData) {
-        console.error('[fetchData] match error:', matchError)
-        if (mountedRef.current) {
-          setMatch(null)
-          setLoading(false)
-        }
-        return
-      }
+      if (userError) throw userError;
+      setMyUserId(user?.id ?? null);
 
-      const [{ data: t1, error: t1Error }, { data: t2, error: t2Error }] =
+      const [{ data: matchData, error: matchError }, { data: teamsData, error: teamsError }, { data: membersData, error: membersError }, { data: reportData, error: reportError }, { data: messagesData, error: messagesError }] =
         await Promise.all([
           supabase
-            .from('teams')
-            .select('id, name')
-            .eq('id', matchData.team1_id)
-            .maybeSingle(),
+            .from("matches")
+            .select("id,status,approval_status,winner_match_team_id,loser_match_team_id,completed_at")
+            .eq("id", matchId)
+            .maybeSingle<MatchRow>(),
           supabase
-            .from('teams')
-            .select('id, name')
-            .eq('id', matchData.team2_id)
-            .maybeSingle(),
-        ])
+            .from("match_teams")
+            .select("id,match_id,side,display_name,party_composition,effective_avg_rating")
+            .eq("match_id", matchId)
+            .returns<MatchTeamRow[]>(),
+          supabase
+            .from("match_team_members")
+            .select("id,match_team_id,user_id,profiles!match_team_members_user_id_fkey(id,display_name)")
+            .in(
+              "match_team_id",
+              (
+                (await supabase.from("match_teams").select("id").eq("match_id", matchId)) as {
+                  data: { id: string }[] | null;
+                }
+              ).data?.map((t) => t.id) ?? ["00000000-0000-0000-0000-000000000000"]
+            )
+            .returns<MatchTeamMemberRow[]>(),
+          supabase
+            .from("match_reports")
+            .select("id,match_id,submitted_by_user_id,submitted_by_match_team_id,status,winner_match_team_id,score_summary,notes,submitted_at,decided_at")
+            .eq("match_id", matchId)
+            .order("submitted_at", { ascending: false })
+            .limit(1)
+            .maybeSingle<MatchReportRow>(),
+          supabase
+            .from("match_messages")
+            .select("id,match_id,sender_user_id,message_type,body,created_at")
+            .eq("match_id", matchId)
+            .order("created_at", { ascending: false })
+            .limit(10)
+            .returns<MatchMessageRow[]>(),
+        ]);
 
-      if (t1Error) console.error('[fetchData] team1 error:', t1Error)
-      if (t2Error) console.error('[fetchData] team2 error:', t2Error)
+      if (matchError) throw matchError;
+      if (teamsError) throw teamsError;
+      if (membersError) throw membersError;
+      if (reportError) throw reportError;
+      if (messagesError) throw messagesError;
 
-      const { data: gameData, error: gameError } = await supabase
-        .from('match_games')
-        .select('*')
-        .eq('match_id', matchId)
-        .order('order_no', { ascending: true })
+      setMatch(matchData ?? null);
+      setTeams(teamsData ?? []);
+      setMembers(membersData ?? []);
+      setReport(reportData ?? null);
+      setMessages(messagesData ?? []);
 
-      if (gameError) {
-        console.error('[fetchData] games error:', gameError)
+      if (reportData?.id) {
+        const { data: reportGamesData, error: reportGamesError } = await supabase
+          .from("match_report_games")
+          .select("id,report_id,game_number,mode,map_name,winner_match_team_id,was_played")
+          .eq("report_id", reportData.id)
+          .order("game_number", { ascending: true })
+          .returns<MatchReportGameRow[]>();
+
+        if (reportGamesError) throw reportGamesError;
+        setReportGames(reportGamesData ?? []);
+      } else {
+        setReportGames([]);
       }
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      let matchedTeamId: string | null = null
-
-      if (session?.user) {
-        const { data: user, error: userError } = await supabase
-          .from('users')
-          .select('id')
-          .eq('auth_user_id', session.user.id)
-          .maybeSingle()
-
-        if (userError) {
-          console.error('[fetchData] user error:', userError)
-        }
-
-        if (user?.id) {
-          const { data: members, error: memberError } = await supabase
-            .from('team_members')
-            .select('team_id')
-            .eq('user_id', user.id)
-
-          if (memberError) {
-            console.error('[fetchData] memberError:', memberError)
-          }
-
-          matchedTeamId =
-            members?.find(
-              (m) =>
-                m.team_id === matchData.team1_id || m.team_id === matchData.team2_id,
-            )?.team_id || null
-        }
-      }
-
-      const { data: report, error: reportError } = await supabase
-        .from('match_reports')
-        .select('*')
-        .eq('match_id', matchId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      if (reportError) {
-        console.error('[fetchData] report error:', reportError)
-      }
-
-      console.log('[report-page debug]', {
-        matchId,
-        matchStatus: matchData?.status,
-        myTeamId: matchedTeamId,
-        latestReportId: report?.id ?? null,
-        latestReportReporterTeamId: report?.reporter_team_id ?? null,
-        latestReportApprovalStatus: report?.approval_status ?? null,
-      })
-
-      if (!mountedRef.current) return
-
-      setMatch(matchData as MatchRow)
-      setTeam1((t1 || null) as TeamRow | null)
-      setTeam2((t2 || null) as TeamRow | null)
-      setGames((gameData || []) as MatchGameRow[])
-      setMyTeamId(matchedTeamId)
-      setLatestReport((report || null) as MatchReportRow | null)
-      setLoading(false)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "読み込みに失敗しました。";
+      setErrorText(message);
     } finally {
-      fetchingRef.current = false
+      setLoading(false);
     }
-  }, [matchId])
+  }, [matchId, supabase]);
 
   useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
+    void loadAll();
+  }, [loadAll]);
 
   useEffect(() => {
-    void fetchData()
-  }, [fetchData])
-
-  useEffect(() => {
-    if (!matchId) return
-
-    if (realtimeRef.current) {
-      supabase.removeChannel(realtimeRef.current)
-      realtimeRef.current = null
-    }
+    if (!matchId) return;
 
     const channel = supabase
-      .channel(`match-report-${matchId}`)
+      .channel(`report-room-${matchId}`)
       .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` },
-        async () => {
-          console.log('realtime: matches changed')
-          await fetchData()
-        },
+        "postgres_changes",
+        { event: "*", schema: "public", table: "matches", filter: `id=eq.${matchId}` },
+        () => void loadAll()
       )
       .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'match_reports',
-          filter: `match_id=eq.${matchId}`,
-        },
-        async () => {
-          console.log('realtime: match_reports changed')
-          await fetchData()
-        },
+        "postgres_changes",
+        { event: "*", schema: "public", table: "match_reports", filter: `match_id=eq.${matchId}` },
+        () => void loadAll()
       )
       .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'match_games',
-          filter: `match_id=eq.${matchId}`,
-        },
-        async () => {
-          console.log('realtime: match_games changed')
-          await fetchData()
-        },
+        "postgres_changes",
+        { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${matchId}` },
+        () => void loadAll()
       )
-      .subscribe((status) => {
-        console.log('realtime status:', status)
-      })
-
-    realtimeRef.current = channel
+      .subscribe();
 
     return () => {
-      if (realtimeRef.current) {
-        supabase.removeChannel(realtimeRef.current)
-        realtimeRef.current = null
-      }
-    }
-  }, [matchId, fetchData])
+      void supabase.removeChannel(channel);
+    };
+  }, [matchId, loadAll, supabase]);
 
-  useEffect(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current)
-      pollingRef.current = null
-    }
+  const handleGameChange = <K extends keyof ReportFormGame>(
+    index: number,
+    key: K,
+    value: ReportFormGame[K]
+  ) => {
+    setGames((prev) =>
+      prev.map((g, i) => (i === index ? { ...g, [key]: value } : g))
+    );
+  };
 
-    if (!matchId) return
-    if (match?.status === 'completed') return
+  const handleSubmitReport = async () => {
+    if (!matchId) return;
+    clearMessages();
 
-    pollingRef.current = setInterval(() => {
-      void fetchData()
-    }, 3000)
-
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
-    }
-  }, [matchId, match?.status, fetchData])
-
-  useEffect(() => {
-    const onFocus = () => {
-      void fetchData()
+    if (!winnerMatchTeamId) {
+      setErrorText("勝者チームを選択してください。");
+      return;
     }
 
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        void fetchData()
-      }
+    if (!scoreSummary.trim()) {
+      setErrorText("スコアを入力してください。");
+      return;
     }
 
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onVisibilityChange)
+    setBusy(true);
+    try {
+      const payload = games.map((g) => ({
+        game_number: g.game_number,
+        mode: g.mode,
+        map_name: g.map_name || null,
+        winner_match_team_id: g.was_played ? g.winner_match_team_id || "" : "",
+        was_played: g.was_played,
+      }));
 
-    return () => {
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
+      const { error } = await supabase.rpc("rpc_submit_match_report", {
+        p_match_id: matchId,
+        p_winner_match_team_id: winnerMatchTeamId,
+        p_score_summary: scoreSummary,
+        p_notes: notes || null,
+        p_games_json: payload,
+      });
+
+      if (error) throw error;
+
+      setInfoText("試合結果を申請しました。");
+      await loadAll();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "結果申請に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
     }
-  }, [fetchData])
+  };
 
-  const getApprovalSummary = () => {
-    if (!match || !team1 || !team2) {
-      return {
-        title: '確認中',
-        body: '試合情報を読み込み中です。',
-      }
+  const handleApproveReport = async () => {
+    if (!report?.id) return;
+    clearMessages();
+    setBusy(true);
+
+    try {
+      const { error } = await supabase.rpc("rpc_approve_match_report", {
+        p_report_id: report.id,
+      });
+
+      if (error) throw error;
+
+      setInfoText("試合結果を承認しました。レートを更新しました。");
+      await loadAll();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "承認に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
     }
+  };
 
-    if (match.status === 'completed') {
-      return {
-        title: '試合確定済み',
-        body: 'この試合は承認済みで、結果とレートが確定しています。',
-      }
+  const handleRejectReport = async () => {
+    if (!report?.id) return;
+    clearMessages();
+    setBusy(true);
+
+    try {
+      const { error } = await supabase.rpc("rpc_reject_match_report", {
+        p_report_id: report.id,
+        p_reason: rejectReason || null,
+      });
+
+      if (error) throw error;
+
+      setInfoText("試合結果を却下しました。");
+      setRejectReason("");
+      await loadAll();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "却下に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
     }
+  };
 
-    if (!latestReport) {
-      return {
-        title: '未報告',
-        body: 'まだどちらのチームからも結果報告がありません。',
-      }
-    }
-
-    const reporterName = getTeamName(latestReport.reporter_team_id)
-
-    if (latestReport.approval_status === 'rejected') {
-      return {
-        title: '報告却下',
-        body: `${reporterName} の報告は却下されました。再報告してください。`,
-      }
-    }
-
-    if (latestReport.approval_status === 'pending') {
-      if (myTeamId && latestReport.reporter_team_id === myTeamId) {
-        const opponentId = myTeamId === team1.id ? team2.id : team1.id
-        return {
-          title: '相手チームの承認待ち',
-          body: `あなたのチームが報告済みです。${getTeamName(opponentId)} の承認を待っています。`,
-        }
-      }
-
-      return {
-        title: 'あなたの承認待ち',
-        body: `${reporterName} が結果を報告しています。内容を確認して承認または却下してください。`,
-      }
-    }
-
-    if (latestReport.approval_status === 'approved') {
-      return {
-        title: '承認済み',
-        body: '報告は承認済みです。',
-      }
-    }
-
-    return {
-      title: '確認中',
-      body: '現在の状態を確認中です。',
-    }
-  }
-
-  const handleReport = async () => {
-    if (!team1 || !team2 || !myTeamId) {
-      showToast('必要な情報が足りません', 'error')
-      return
-    }
-
-    if (!hpWinner || !sndWinner) {
-      showToast('Hardpoint と S&D の勝者を選択してください', 'error')
-      return
-    }
-
-    if (match?.status === 'completed') {
-      showToast('この試合はすでに完了しています', 'error')
-      return
-    }
-
-    const overloadRequired = hpWinner !== sndWinner
-
-    if (overloadRequired && !ovWinner) {
-      showToast('1-1 の場合は Overload の勝者を選択してください', 'error')
-      return
-    }
-
-    setSaving(true)
-
-    const { error } = await supabase.rpc('submit_match_report_atomic', {
-      p_match_id: matchId,
-      p_reporter_team_id: myTeamId,
-      p_hp_winner_team_id: hpWinner,
-      p_snd_winner_team_id: sndWinner,
-      p_ov_winner_team_id: overloadRequired ? ovWinner : null,
-    })
-
-    if (error) {
-      console.error('submit_match_report_atomic error:', error)
-      showToast('報告に失敗しました', 'error')
-      setSaving(false)
-      return
-    }
-
-    showToast('結果を報告しました。相手チームの承認待ちです。', 'success')
-    setSaving(false)
-    setHpWinner('')
-    setSndWinner('')
-    setOvWinner('')
-    await fetchData()
-  }
-
-  const handleApprove = async () => {
-    if (!latestReport || !myTeamId) {
-      showToast('必要な情報が足りません', 'error')
-      return
-    }
-
-    if (latestReport.reporter_team_id === myTeamId) {
-      showToast('報告した側は自分で承認できません', 'error')
-      return
-    }
-
-    setApproving(true)
-
-    const { error } = await supabase.rpc('approve_match_report_atomic', {
-      p_match_id: matchId,
-      p_report_id: latestReport.id,
-      p_approver_team_id: myTeamId,
-    })
-
-    if (error) {
-      console.error('approve_match_report_atomic error:', error)
-      showToast('承認に失敗しました', 'error')
-      setApproving(false)
-      return
-    }
-
-    showToast('承認しました', 'success')
-    setApproving(false)
-    await fetchData()
-  }
-
-  const handleReject = async () => {
-    if (!latestReport || !myTeamId) {
-      showToast('必要な情報が足りません', 'error')
-      return
-    }
-
-    if (latestReport.reporter_team_id === myTeamId) {
-      showToast('報告した側は自分で却下できません', 'error')
-      return
-    }
-
-    const ok = window.confirm('この結果報告を却下しますか？')
-    if (!ok) return
-
-    setRejecting(true)
-
-    const { error } = await supabase.rpc('reject_match_report_atomic', {
-      p_match_id: matchId,
-      p_report_id: latestReport.id,
-      p_rejector_team_id: myTeamId,
-    })
-
-    if (error) {
-      console.error('reject_match_report_atomic error:', error)
-      showToast('報告の却下に失敗しました', 'error')
-      setRejecting(false)
-      return
-    }
-
-    showToast('結果報告を却下しました。再報告を待ってください。', 'info')
-    setRejecting(false)
-    await fetchData()
+  if (!matchId) {
+    return <div className="p-6 text-sm text-red-400">match id が見つかりません。</div>;
   }
 
   if (loading) {
-    return (
-      <main style={{ maxWidth: 720, margin: '32px auto', padding: '0 16px' }}>
-        <h1>結果報告</h1>
-        <p>読み込み中...</p>
-      </main>
-    )
+    return <div className="p-6 text-sm text-white">読み込み中です...</div>;
   }
-
-  if (!match) {
-    return (
-      <main style={{ maxWidth: 720, margin: '32px auto', padding: '0 16px' }}>
-        <h1>結果報告</h1>
-        <p>試合が見つかりません</p>
-        <button onClick={() => router.push('/history')}>履歴へ戻る</button>
-      </main>
-    )
-  }
-
-  const approvalSummary = getApprovalSummary()
 
   return (
-    <main style={{ maxWidth: 720, margin: '32px auto', padding: '0 16px' }}>
-      <h1>結果報告</h1>
-      <p>試合結果の報告、承認、却下を行います</p>
-
-      <div style={{ marginTop: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <button onClick={() => router.push('/mypage')}>
-          マイページに戻る
-        </button>
-
-        <button onClick={() => router.push(`/match/${matchId}/banpick`)}>
-          バンピックへ
-        </button>
-      </div>
-
-      <section style={{ marginTop: 24 }}>
-        <h2>承認ステータス</h2>
-        <div
-          style={{
-            border: '1px solid #ccc',
-            borderRadius: 8,
-            padding: 12,
-            marginTop: 8,
-          }}
-        >
-          <div style={{ fontWeight: 700 }}>{approvalSummary.title}</div>
-          <div style={{ marginTop: 6 }}>{approvalSummary.body}</div>
+    <div className="min-h-screen bg-neutral-950 text-white">
+      <div className="mx-auto max-w-7xl px-4 py-6">
+        <div className="mb-6 border-b border-white/10 pb-4">
+          <h1 className="text-2xl font-bold">ASCENT 試合結果報告</h1>
+          <p className="mt-1 text-sm text-white/60">Match ID: {matchId}</p>
         </div>
-      </section>
 
-      {match.status === 'completed' && (
-        <section style={{ marginTop: 24 }}>
-          <h2>試合結果</h2>
-
-          <div style={{ marginTop: 12 }}>
-            <div>勝者</div>
-            <h3>{getTeamName(match.winner_team_id)}</h3>
+        {errorText && (
+          <div className="mb-4 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {errorText}
           </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div>敗者</div>
-            <h3>{getTeamName(match.loser_team_id)}</h3>
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div>{team1?.name} レート</div>
-            <h3>
-              {match.team1_rating_before ?? '-'} → {match.team1_rating_after ?? '-'}
-            </h3>
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div>{team2?.name} レート</div>
-            <h3>
-              {match.team2_rating_before ?? '-'} → {match.team2_rating_after ?? '-'}
-            </h3>
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <h3>各ゲーム結果</h3>
-            {games.length === 0 ? (
-              <p>ゲーム結果がありません</p>
-            ) : (
-              games.map((game) => (
-                <div
-                  key={game.id}
-                  style={{
-                    border: '1px solid #ddd',
-                    borderRadius: 8,
-                    padding: 12,
-                    marginTop: 8,
-                  }}
-                >
-                  <div>Game {game.order_no}</div>
-                  <div>モード: {getModeLabel(game.mode)}</div>
-                  <div>勝者: {getTeamName(game.winner_team_id)}</div>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <button onClick={() => router.push('/mypage')}>
-              マイページに戻る
-            </button>
-
-            <button onClick={() => router.push('/history')}>
-              履歴へ
-            </button>
-          </div>
-        </section>
-      )}
-
-      {latestReport && match.status !== 'completed' && (
-        <section style={{ marginTop: 24 }}>
-          <h2>最新の報告内容</h2>
-
-          <div style={{ marginTop: 12 }}>
-            <div>報告チーム</div>
-            <h3>{getTeamName(latestReport.reporter_team_id)}</h3>
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div>報告勝者</div>
-            <h3>{getTeamName(latestReport.reported_winner_team_id)}</h3>
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div>Hardpoint</div>
-            <h3>{getTeamName(latestReport.hp_winner_team_id)}</h3>
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div>S&amp;D</div>
-            <h3>{getTeamName(latestReport.snd_winner_team_id)}</h3>
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div>Overload</div>
-            <h3>
-              {latestReport.ov_winner_team_id
-                ? getTeamName(latestReport.ov_winner_team_id)
-                : '未実施'}
-            </h3>
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div>承認状態</div>
-            <h3>{latestReport.approval_status}</h3>
-          </div>
-
-          {myTeamId &&
-            latestReport.reporter_team_id !== myTeamId &&
-            latestReport.approval_status === 'pending' && (
-              <div style={{ display: 'flex', gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
-                <button onClick={handleApprove} disabled={approving || rejecting}>
-                  {approving ? '承認中...' : 'この結果を承認する'}
-                </button>
-                <button onClick={handleReject} disabled={approving || rejecting}>
-                  {rejecting ? '却下中...' : 'この結果を却下する'}
-                </button>
-              </div>
-            )}
-        </section>
-      )}
-
-      {(!latestReport || latestReport.approval_status === 'rejected') &&
-        match.status !== 'completed' && (
-          <section style={{ marginTop: 24 }}>
-            <h2>結果報告</h2>
-
-            <div style={{ marginTop: 12 }}>
-              <label>
-                Hardpoint 勝者
-                <select
-                  value={hpWinner}
-                  onChange={(e) => setHpWinner(e.target.value)}
-                  style={{ display: 'block', width: '100%', marginTop: 8 }}
-                >
-                  <option value="">選択してください</option>
-                  <option value={team1?.id}>{team1?.name}</option>
-                  <option value={team2?.id}>{team2?.name}</option>
-                </select>
-              </label>
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <label>
-                S&amp;D 勝者
-                <select
-                  value={sndWinner}
-                  onChange={(e) => setSndWinner(e.target.value)}
-                  style={{ display: 'block', width: '100%', marginTop: 8 }}
-                >
-                  <option value="">選択してください</option>
-                  <option value={team1?.id}>{team1?.name}</option>
-                  <option value={team2?.id}>{team2?.name}</option>
-                </select>
-              </label>
-            </div>
-
-            {hpWinner && sndWinner && hpWinner === sndWinner ? (
-              <div
-                style={{
-                  marginTop: 12,
-                  padding: 12,
-                  border: '1px solid #ddd',
-                  borderRadius: 8,
-                  background: '#f7f7f7',
-                }}
-              >
-                Hardpoint と S&amp;D で同じチームが勝っているため、Overload の入力は不要です。
-              </div>
-            ) : (
-              <div style={{ marginTop: 12 }}>
-                <label>
-                  Overload 勝者
-                  <select
-                    value={ovWinner}
-                    onChange={(e) => setOvWinner(e.target.value)}
-                    style={{ display: 'block', width: '100%', marginTop: 8 }}
-                  >
-                    <option value="">選択してください</option>
-                    <option value={team1?.id}>{team1?.name}</option>
-                    <option value={team2?.id}>{team2?.name}</option>
-                  </select>
-                </label>
-              </div>
-            )}
-
-            <div style={{ marginTop: 16 }}>
-              <button onClick={handleReport} disabled={saving}>
-                {saving ? '送信中...' : '試合結果を報告'}
-              </button>
-            </div>
-          </section>
         )}
-    </main>
-  )
+
+        {infoText && (
+          <div className="mb-4 rounded border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+            {infoText}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <div className="space-y-4 xl:col-span-2">
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">試合情報</h2>
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="rounded bg-black/20 p-3">
+                  <div className="text-xs text-white/50">試合状態</div>
+                  <div className="mt-1 text-sm font-medium">{match?.status ?? "-"}</div>
+                </div>
+
+                <div className="rounded bg-black/20 p-3">
+                  <div className="text-xs text-white/50">承認状態</div>
+                  <div className="mt-1 text-sm font-medium">{match?.approval_status ?? "-"}</div>
+                </div>
+
+                <div className="rounded bg-black/20 p-3">
+                  <div className="text-xs text-white/50">あなたのチーム</div>
+                  <div className="mt-1 text-sm font-medium">
+                    {myMatchTeamId === alphaTeam?.id
+                      ? teamLabel(alphaTeam)
+                      : myMatchTeamId === bravoTeam?.id
+                      ? teamLabel(bravoTeam)
+                      : "-"}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">チーム一覧</h2>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="rounded border border-white/10 bg-black/20 p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="font-semibold">ALPHA</div>
+                    <div className="text-xs text-white/60">{alphaTeam?.party_composition ?? "-"}</div>
+                  </div>
+                  <div className="mb-3 text-xs text-white/60">実効レート: {alphaTeam?.effective_avg_rating ?? "-"}</div>
+
+                  <div className="space-y-2">
+                    {groupedMembers.alpha.map((m) => (
+                      <div key={m.id} className="rounded bg-white/5 px-3 py-2 text-sm">
+                        {m.profiles?.display_name ?? m.user_id}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded border border-white/10 bg-black/20 p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="font-semibold">BRAVO</div>
+                    <div className="text-xs text-white/60">{bravoTeam?.party_composition ?? "-"}</div>
+                  </div>
+                  <div className="mb-3 text-xs text-white/60">実効レート: {bravoTeam?.effective_avg_rating ?? "-"}</div>
+
+                  <div className="space-y-2">
+                    {groupedMembers.bravo.map((m) => (
+                      <div key={m.id} className="rounded bg-white/5 px-3 py-2 text-sm">
+                        {m.profiles?.display_name ?? m.user_id}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {!report && match?.status !== "completed" && (
+              <section className="rounded border border-white/10 bg-white/5 p-4">
+                <h2 className="mb-3 text-lg font-semibold">結果申請</h2>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">勝者チーム</label>
+                    <select
+                      value={winnerMatchTeamId}
+                      onChange={(e) => setWinnerMatchTeamId(e.target.value)}
+                      className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                    >
+                      <option value="">選択してください</option>
+                      {alphaTeam && <option value={alphaTeam.id}>{teamLabel(alphaTeam)}</option>}
+                      {bravoTeam && <option value={bravoTeam.id}>{teamLabel(bravoTeam)}</option>}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">スコア</label>
+                    <input
+                      value={scoreSummary}
+                      onChange={(e) => setScoreSummary(e.target.value)}
+                      placeholder="例: 2-0"
+                      className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">備考</label>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={3}
+                      placeholder="任意"
+                      className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-2 text-sm font-medium">ゲーム別結果</div>
+                    <div className="space-y-3">
+                      {games.map((game, index) => (
+                        <div key={game.game_number} className="rounded border border-white/10 bg-black/20 p-3">
+                          <div className="mb-3 text-sm font-semibold">Game {game.game_number}</div>
+
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                            <div>
+                              <label className="mb-1 block text-xs text-white/60">モード</label>
+                              <select
+                                value={game.mode}
+                                onChange={(e) => handleGameChange(index, "mode", e.target.value)}
+                                className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                              >
+                                {MODE_OPTIONS.map((mode) => (
+                                  <option key={mode} value={mode}>
+                                    {mode}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="mb-1 block text-xs text-white/60">マップ</label>
+                              <select
+                                value={game.map_name}
+                                onChange={(e) => handleGameChange(index, "map_name", e.target.value)}
+                                className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                              >
+                                <option value="">未選択</option>
+                                {MAP_OPTIONS.map((map) => (
+                                  <option key={map} value={map}>
+                                    {map}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="mb-1 block text-xs text-white/60">勝者</label>
+                              <select
+                                value={game.winner_match_team_id}
+                                onChange={(e) =>
+                                  handleGameChange(index, "winner_match_team_id", e.target.value)
+                                }
+                                disabled={!game.was_played}
+                                className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none disabled:opacity-50"
+                              >
+                                <option value="">選択してください</option>
+                                {alphaTeam && <option value={alphaTeam.id}>{teamLabel(alphaTeam)}</option>}
+                                {bravoTeam && <option value={bravoTeam.id}>{teamLabel(bravoTeam)}</option>}
+                              </select>
+                            </div>
+
+                            <div className="flex items-end">
+                              <label className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={game.was_played}
+                                  onChange={(e) => handleGameChange(index, "was_played", e.target.checked)}
+                                />
+                                実際にプレイした
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleSubmitReport}
+                    disabled={busy}
+                    className="rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+                  >
+                    結果申請
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {report && (
+              <section className="rounded border border-white/10 bg-white/5 p-4">
+                <h2 className="mb-3 text-lg font-semibold">提出済みレポート</h2>
+
+                <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="rounded bg-black/20 p-3">
+                    <div className="text-xs text-white/50">状態</div>
+                    <div className="mt-1 text-sm font-medium">{report.status}</div>
+                  </div>
+
+                  <div className="rounded bg-black/20 p-3">
+                    <div className="text-xs text-white/50">勝者</div>
+                    <div className="mt-1 text-sm font-medium">
+                      {teamLabel(teams.find((t) => t.id === report.winner_match_team_id) ?? null)}
+                    </div>
+                  </div>
+
+                  <div className="rounded bg-black/20 p-3">
+                    <div className="text-xs text-white/50">スコア</div>
+                    <div className="mt-1 text-sm font-medium">{report.score_summary ?? "-"}</div>
+                  </div>
+                </div>
+
+                <div className="mb-4 rounded bg-black/20 p-3">
+                  <div className="text-xs text-white/50">備考</div>
+                  <div className="mt-1 whitespace-pre-wrap text-sm">{report.notes || "-"}</div>
+                </div>
+
+                <div className="space-y-2">
+                  {reportGames.length === 0 ? (
+                    <div className="text-sm text-white/50">ゲーム別情報はありません。</div>
+                  ) : (
+                    reportGames.map((game) => {
+                      const winnerTeam = teams.find((t) => t.id === game.winner_match_team_id) ?? null;
+                      return (
+                        <div key={game.id} className="rounded bg-black/20 px-3 py-3 text-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="font-medium">Game {game.game_number}</div>
+                            <div className="text-xs text-white/50">
+                              {game.was_played ? "played" : "not played"}
+                            </div>
+                          </div>
+
+                          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+                            <div>モード: {game.mode}</div>
+                            <div>マップ: {game.map_name ?? "-"}</div>
+                            <div>勝者: {teamLabel(winnerTeam)}</div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {canApproveOrReject && (
+                  <div className="mt-4 rounded border border-white/10 bg-black/20 p-4">
+                    <div className="mb-3 text-sm font-semibold">相手チームの申請を確認</div>
+
+                    <div className="mb-3">
+                      <label className="mb-2 block text-sm font-medium">却下理由（任意）</label>
+                      <textarea
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        rows={3}
+                        placeholder="例: スコアが違います"
+                        className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={handleApproveReport}
+                        disabled={busy}
+                        className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        承認する
+                      </button>
+
+                      <button
+                        onClick={handleRejectReport}
+                        disabled={busy}
+                        className="rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        却下する
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {isMyOwnReport && report.status === "pending" && (
+                  <div className="mt-4 rounded border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
+                    相手チームの承認待ちです。
+                  </div>
+                )}
+              </section>
+            )}
+
+            {match?.status === "completed" && (
+              <section className="rounded border border-emerald-500/20 bg-emerald-500/10 p-4">
+                <h2 className="mb-2 text-lg font-semibold">試合確定済み</h2>
+                <div className="text-sm">
+                  勝者: <span className="font-semibold">{teamLabel(completedWinnerTeam)}</span>
+                </div>
+                {match.completed_at && (
+                  <div className="mt-1 text-xs text-white/60">
+                    確定日時: {new Date(match.completed_at).toLocaleString()}
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">最近のシステムメッセージ</h2>
+
+              <div className="space-y-2">
+                {messages.length === 0 ? (
+                  <div className="text-sm text-white/50">メッセージはありません。</div>
+                ) : (
+                  messages.map((msg) => (
+                    <div key={msg.id} className="rounded bg-black/20 px-3 py-2 text-sm">
+                      <div className="mb-1 text-[11px] text-white/50">
+                        {new Date(msg.created_at).toLocaleString()} / {msg.message_type}
+                      </div>
+                      <div className="whitespace-pre-wrap break-words">{msg.body}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+
+            <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">使い方</h2>
+              <div className="space-y-2 text-sm text-white/80">
+                <div>1. 勝者チームを選択します。</div>
+                <div>2. スコアを入力します。</div>
+                <div>3. 各ゲームの結果を入れます。</div>
+                <div>4. 相手チームが承認するとレートが更新されます。</div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
