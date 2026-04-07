@@ -216,6 +216,20 @@ export default function MatchPage() {
       if (profileError) throw profileError;
       setProfile(profileData ?? null);
 
+      // 初期設定が未完了なら、対戦関連のロードはスキップする。
+      // RPC や RLS が onboarded を前提とすることがあり、無理にロードすると失敗するため。
+      if (!profileData || !profileData.is_onboarded) {
+        setMyParty(null);
+        setMyPartyMembers([]);
+        setMyPartyInvites([]);
+        setMyPendingInvites([]);
+        setMyWaitingEntry(null);
+        setMyMatchedEntryIds([]);
+        setMyActiveMatch(null);
+        setLoading(false);
+        return;
+      }
+
       const { data: partyMemberData, error: partyMemberError } = await supabase
         .from("party_members")
         .select("id,party_id,user_id")
@@ -363,7 +377,14 @@ export default function MatchPage() {
       if (pendingInvitesError) throw pendingInvitesError;
       setMyPendingInvites((pendingInvitesData as PendingInviteListRow[] | null) ?? []);
     } catch (e) {
-      const message = e instanceof Error ? e.message : "状態の読み込みに失敗しました。";
+      console.error("loadMyState error:", e);
+      let message = "状態の読み込みに失敗しました。";
+      if (e instanceof Error) {
+        message = e.message;
+      } else if (e && typeof e === "object" && "message" in e) {
+        const m = (e as { message?: unknown }).message;
+        if (typeof m === "string" && m.length > 0) message = m;
+      }
       setErrorText(message);
     } finally {
       setLoading(false);
@@ -764,6 +785,19 @@ export default function MatchPage() {
               ) : (
                 <div className="text-sm text-white/60">
                   プロフィールが見つかりません。ログイン状態を確認してください。
+                </div>
+              )}
+
+              {profile && !profile.is_onboarded && (
+                <div className="mt-3 rounded border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                  初期設定が未完了のため対戦に参加できません。
+                  <button
+                    type="button"
+                    onClick={() => router.push("/onboarding")}
+                    className="ml-2 underline"
+                  >
+                    初期設定を完了する
+                  </button>
                 </div>
               )}
             </section>
