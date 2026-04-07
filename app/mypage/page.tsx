@@ -576,9 +576,16 @@ export default function MyPage() {
             </>
           ) : (
             <>
-              <p>まだチームに所属していません</p>
+              <p>まだチームに所属していません（ソロでも対戦に参加できます）</p>
 
               <div className="section row">
+                <button onClick={() => router.push('/match')}>対戦開始</button>
+                <button onClick={() => router.push('/ranking')}>
+                  ランキングを見る
+                </button>
+                <button onClick={() => router.push('/history')}>
+                  マッチ履歴
+                </button>
                 <button onClick={() => router.push('/team/create')}>
                   チームを作成
                 </button>
