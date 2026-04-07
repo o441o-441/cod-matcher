@@ -5,10 +5,6 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 
-type UserRow = {
-  id: string
-}
-
 type TeamRow = {
   id: string
   name: string

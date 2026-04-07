@@ -162,10 +162,16 @@ export default function TeamDetailPage() {
       return
     }
 
-    const normalizedMembers = (memberData || []).map((m: any) => ({
-      ...m,
-      users: Array.isArray(m.users) ? m.users[0] : m.users || null,
-    })) as TeamMemberRow[]
+    type RawMember = Omit<TeamMemberRow, 'users'> & {
+      users: TeamMemberRow['users'] | TeamMemberRow['users'][]
+    }
+    const normalizedMembers: TeamMemberRow[] = (memberData || []).map((m) => {
+      const raw = m as unknown as RawMember
+      return {
+        ...raw,
+        users: Array.isArray(raw.users) ? raw.users[0] ?? null : raw.users ?? null,
+      }
+    })
 
     setMembers(normalizedMembers)
 
@@ -209,7 +215,8 @@ export default function TeamDetailPage() {
 
   useEffect(() => {
     if (!teamId) return
-    void fetchTeam()
+    void Promise.resolve().then(fetchTeam)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId])
 
   const handleSearchUser = async () => {

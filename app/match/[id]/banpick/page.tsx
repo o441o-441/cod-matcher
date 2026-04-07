@@ -95,45 +95,6 @@ type MatchMessageRow = {
   } | null;
 };
 
-type RpcCreateBanpickSessionResult = {
-  banpick_session_id: string;
-  match_id: string;
-  phase: string;
-  current_turn_match_team_id: string | null;
-  current_action_type: string | null;
-};
-
-type RpcSubmitBanpickActionResult = {
-  banpick_session_id: string;
-  match_id: string;
-  phase: string;
-  status: string;
-  next_turn_match_team_id: string | null;
-  turn_number: number;
-};
-
-type RpcSelectMatchHostResult = {
-  match_id: string;
-  host_user_id: string;
-  host_match_team_id: string;
-  host_display_name: string;
-};
-
-type RpcSendLobbyCodeResult = {
-  match_id: string;
-  lobby_code: string;
-  set_by_user_id: string;
-  set_at: string;
-};
-
-type RpcSendMatchMessageResult = {
-  message_id: string;
-  match_id: string;
-  sender_user_id: string;
-  body: string;
-  created_at: string;
-};
-
 const MAP_OPTIONS = [
   "Hacienda",
   "Exposure",

@@ -140,7 +140,7 @@ export default function MatchPage() {
   const [myPendingInvites, setMyPendingInvites] = useState<PendingInviteListRow[]>([]);
   const [myWaitingEntry, setMyWaitingEntry] = useState<QueueEntryRow | null>(null);
 
-  const [myMatchedEntryIds, setMyMatchedEntryIds] = useState<string[]>([]);
+  const [, setMyMatchedEntryIds] = useState<string[]>([]);
   const [myActiveMatch, setMyActiveMatch] = useState<MatchRow | null>(null);
 
   const [waitingSeconds, setWaitingSeconds] = useState(0);
@@ -303,7 +303,13 @@ export default function MatchPage() {
 
           if (mtmError) throw mtmError;
 
-          const matchTeamIds = [...new Set((mtmData ?? []).map((x: any) => x.match_team_id).filter(Boolean))];
+          const matchTeamIds = [
+            ...new Set(
+              ((mtmData ?? []) as Array<{ match_team_id: string | null }>)
+                .map((x) => x.match_team_id)
+                .filter((id): id is string => Boolean(id))
+            ),
+          ];
 
           if (matchTeamIds.length > 0) {
             const { data: matchTeamsData, error: matchTeamsError } = await supabase
@@ -313,7 +319,13 @@ export default function MatchPage() {
 
             if (matchTeamsError) throw matchTeamsError;
 
-            const matchIds = [...new Set((matchTeamsData ?? []).map((x: any) => x.match_id).filter(Boolean))];
+            const matchIds = [
+              ...new Set(
+                ((matchTeamsData ?? []) as Array<{ match_id: string | null }>)
+                  .map((x) => x.match_id)
+                  .filter((id): id is string => Boolean(id))
+              ),
+            ];
 
             if (matchIds.length > 0) {
               const { data: matchesData, error: matchesError } = await supabase

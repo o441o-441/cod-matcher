@@ -4,7 +4,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 // workspace the global `Deno` symbol may not be present during static type
 // checking. Declare it here to avoid TS errors when this file is excluded from
 // the main TS build (we also updated tsconfig.json to exclude this folder).
-declare const Deno: any
+declare const Deno: {
+  serve: (handler: (req: Request) => Response | Promise<Response>) => void
+  env: { get: (key: string) => string | undefined }
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,7 +15,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-Deno.serve(async (req: any) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }

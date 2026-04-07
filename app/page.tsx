@@ -27,7 +27,7 @@ export default function Home() {
   }
 
   useEffect(() => {
-    fetchStats()
+    void Promise.resolve().then(fetchStats)
 
     const channel = supabase
       .channel('home-waiting-count')

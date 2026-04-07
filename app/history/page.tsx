@@ -69,7 +69,7 @@ export default function HistoryPage() {
   }
 
   useEffect(() => {
-    fetchHistory()
+    void Promise.resolve().then(fetchHistory)
 
     const channel = supabase
       .channel('history-realtime')

@@ -11,10 +11,6 @@ type TeamRow = {
   owner_user_id: string
 }
 
-type UserRow = {
-  id: string
-}
-
 export default function TeamEditPage() {
   const router = useRouter()
   const { showToast } = useToast()
@@ -23,7 +19,6 @@ export default function TeamEditPage() {
   const [saving, setSaving] = useState(false)
 
   const [team, setTeam] = useState<TeamRow | null>(null)
-  const [user, setUser] = useState<UserRow | null>(null)
   const [teamName, setTeamName] = useState('')
 
   useEffect(() => {
@@ -48,8 +43,6 @@ export default function TeamEditPage() {
         router.push('/mypage')
         return
       }
-
-      setUser(userData)
 
       // チーム取得
       const { data: member } = await supabase

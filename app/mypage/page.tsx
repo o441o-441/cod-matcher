@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { RealtimeChannel } from '@supabase/supabase-js'
+import type { RealtimeChannel, User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
@@ -66,28 +66,42 @@ export default function MyPage() {
     setWaitingCount(count || 0)
   }
 
-  const extractDiscordInfo = (authUser: any) => {
-    const meta = authUser?.user_metadata ?? {}
-    const identities = authUser?.identities ?? []
-    const discordIdentity = identities.find((i: any) => i?.provider === 'discord')
-    const identityData = discordIdentity?.identity_data ?? {}
-    const appMeta = authUser?.app_metadata ?? {}
+  const pickString = (
+    obj: Record<string, unknown> | undefined,
+    key: string
+  ): string | null => {
+    const v = obj?.[key]
+    if (v == null) return null
+    if (typeof v === 'string') return v
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+    return null
+  }
+
+  const extractDiscordInfo = (authUser: User) => {
+    const meta = (authUser?.user_metadata ?? {}) as Record<string, unknown>
+    const identities = (authUser?.identities ?? []) as Array<{
+      provider?: string
+      identity_data?: Record<string, unknown>
+    }>
+    const discordIdentity = identities.find((i) => i?.provider === 'discord')
+    const identityData = (discordIdentity?.identity_data ?? {}) as Record<string, unknown>
+    const appMeta = (authUser?.app_metadata ?? {}) as Record<string, unknown>
 
     const discordUserId =
-      identityData?.provider_id?.toString?.() ||
-      identityData?.user_id?.toString?.() ||
-      meta?.provider_id?.toString?.() ||
-      meta?.sub?.toString?.() ||
-      appMeta?.provider_id?.toString?.() ||
+      pickString(identityData, 'provider_id') ||
+      pickString(identityData, 'user_id') ||
+      pickString(meta, 'provider_id') ||
+      pickString(meta, 'sub') ||
+      pickString(appMeta, 'provider_id') ||
       null
 
     const discordName =
-      meta?.full_name?.toString?.() ||
-      meta?.name?.toString?.() ||
-      identityData?.full_name?.toString?.() ||
-      identityData?.name?.toString?.() ||
-      identityData?.global_name?.toString?.() ||
-      identityData?.preferred_username?.toString?.() ||
+      pickString(meta, 'full_name') ||
+      pickString(meta, 'name') ||
+      pickString(identityData, 'full_name') ||
+      pickString(identityData, 'name') ||
+      pickString(identityData, 'global_name') ||
+      pickString(identityData, 'preferred_username') ||
       null
 
     return {
@@ -96,7 +110,7 @@ export default function MyPage() {
     }
   }
 
-  const createUserIfMissing = async (authUser: any) => {
+  const createUserIfMissing = async (authUser: User) => {
     const { discordUserId, discordName } = extractDiscordInfo(authUser)
 
     const { data, error } = await supabase
@@ -122,7 +136,7 @@ export default function MyPage() {
 
   const syncDiscordProfile = async (
     authUserId: string,
-    authUser: any,
+    authUser: User,
     existingUser: UserRow
   ) => {
     const { discordUserId, discordName } = extractDiscordInfo(authUser)
@@ -280,7 +294,7 @@ export default function MyPage() {
   }
 
   useEffect(() => {
-    void fetchPageData()
+    void Promise.resolve().then(fetchPageData)
 
     return () => {
       if (realtimeRef.current) {
@@ -288,6 +302,8 @@ export default function MyPage() {
         realtimeRef.current = null
       }
     }
+    // fetchPageData is stable within the component closure; intentionally not in deps to avoid refetch loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
   useEffect(() => {
@@ -327,6 +343,7 @@ export default function MyPage() {
         realtimeRef.current = null
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleLogout = async () => {

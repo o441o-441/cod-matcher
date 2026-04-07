@@ -39,7 +39,7 @@ export default function RankingPage() {
   }
 
   useEffect(() => {
-    void fetchRanking()
+    void Promise.resolve().then(fetchRanking)
 
     const channel = supabase
       .channel('ranking-realtime')
