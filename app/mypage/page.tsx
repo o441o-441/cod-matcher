@@ -38,6 +38,9 @@ export default function MyPage() {
   const [pageError, setPageError] = useState('')
   const [waitingCount, setWaitingCount] = useState(0)
   const [bio, setBio] = useState<string | null>(null)
+  const [rating, setRating] = useState<number | null>(null)
+  const [wins, setWins] = useState<number | null>(null)
+  const [losses, setLosses] = useState<number | null>(null)
 
   const realtimeRef = useRef<RealtimeChannel | null>(null)
 
@@ -207,10 +210,18 @@ export default function MyPage() {
 
     const { data: profileRow } = await supabase
       .from('profiles')
-      .select('bio')
+      .select('bio, current_rating, wins, losses')
       .eq('id', authUser.id)
-      .maybeSingle<{ bio: string | null }>()
+      .maybeSingle<{
+        bio: string | null
+        current_rating: number | null
+        wins: number | null
+        losses: number | null
+      }>()
     setBio(profileRow?.bio ?? null)
+    setRating(profileRow?.current_rating ?? null)
+    setWins(profileRow?.wins ?? null)
+    setLosses(profileRow?.losses ?? null)
 
     const { data: memberRow, error: memberError } = await supabase
       .from('team_members')
@@ -367,6 +378,19 @@ export default function MyPage() {
             <div className="card">
               <p className="muted">Discord User ID</p>
               <h3>{profile?.discord_user_id || '未設定'}</h3>
+            </div>
+          </div>
+
+          <div className="section grid grid-2">
+            <div className="card">
+              <p className="muted">レート</p>
+              <h3>{rating ?? '-'}</h3>
+            </div>
+            <div className="card">
+              <p className="muted">個人戦績</p>
+              <h3>
+                {wins ?? 0}勝 {losses ?? 0}敗
+              </h3>
             </div>
           </div>
 

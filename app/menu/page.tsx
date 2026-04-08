@@ -13,6 +13,8 @@ export default function MenuPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [waitingCount, setWaitingCount] = useState(0)
   const [rating, setRating] = useState<number | null>(null)
+  const [wins, setWins] = useState<number | null>(null)
+  const [losses, setLosses] = useState<number | null>(null)
   const [teamWins, setTeamWins] = useState<number | null>(null)
   const [teamLosses, setTeamLosses] = useState<number | null>(null)
   const realtimeRef = useRef<RealtimeChannel | null>(null)
@@ -64,11 +66,18 @@ export default function MenuPage() {
 
       const { data: profileRow } = await supabase
         .from('profiles')
-        .select('is_admin, current_rating')
+        .select('is_admin, current_rating, wins, losses')
         .eq('id', session.user.id)
-        .maybeSingle<{ is_admin: boolean | null; current_rating: number | null }>()
+        .maybeSingle<{
+          is_admin: boolean | null
+          current_rating: number | null
+          wins: number | null
+          losses: number | null
+        }>()
       setIsAdmin(!!profileRow?.is_admin)
       setRating(profileRow?.current_rating ?? null)
+      setWins(profileRow?.wins ?? null)
+      setLosses(profileRow?.losses ?? null)
 
       await fetchWaitingCount()
       setLoading(false)
@@ -144,10 +153,16 @@ export default function MenuPage() {
           >
             対戦開始
           </button>
-          <div className="row" style={{ gap: 16 }}>
+          <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
             <div className="card" style={{ minWidth: 120, textAlign: 'center' }}>
               <p className="muted" style={{ margin: 0 }}>レート</p>
               <h3 style={{ margin: '4px 0 0' }}>{rating ?? '-'}</h3>
+            </div>
+            <div className="card" style={{ minWidth: 140, textAlign: 'center' }}>
+              <p className="muted" style={{ margin: 0 }}>個人戦績</p>
+              <h3 style={{ margin: '4px 0 0' }}>
+                {wins ?? 0}勝 {losses ?? 0}敗
+              </h3>
             </div>
             {hasTeam && (
               <div className="card" style={{ minWidth: 140, textAlign: 'center' }}>
