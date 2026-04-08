@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
@@ -175,6 +175,7 @@ function messageTypeLabel(messageType: MatchMessageRow["message_type"]) {
 }
 
 export default function BanpickPage() {
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const matchId = params?.id;
 
@@ -518,6 +519,14 @@ export default function BanpickPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => router.push("/rules")}
+              className="rounded border border-white/20 bg-white/5 px-3 py-2 text-sm hover:bg-white/10"
+            >
+              ルール一覧
+            </button>
+
             {!session && (
               <button
                 onClick={handleCreateBanpickSession}

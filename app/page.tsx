@@ -117,6 +117,10 @@ export default function Home() {
             <p>・直近2試合の相手は再戦回避</p>
           </div>
         </div>
+
+        <div className="section row">
+          <button onClick={() => router.push('/rules')}>詳細ルールを見る</button>
+        </div>
       </div>
 
       <div className="section card-strong">

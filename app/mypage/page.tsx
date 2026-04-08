@@ -429,6 +429,9 @@ export default function MyPage() {
                 <button onClick={() => router.push('/history')}>
                   マッチ履歴
                 </button>
+                <button onClick={() => router.push('/rules')}>
+                  ルール一覧
+                </button>
               </div>
             </>
           ) : (
@@ -445,6 +448,9 @@ export default function MyPage() {
                 </button>
                 <button onClick={() => router.push('/history')}>
                   マッチ履歴
+                </button>
+                <button onClick={() => router.push('/rules')}>
+                  ルール一覧
                 </button>
                 <button onClick={() => router.push('/team/create')}>
                   チームを作成
