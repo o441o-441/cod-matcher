@@ -214,11 +214,42 @@ export default function MatchPage() {
         .maybeSingle<ProfileRow>();
 
       if (profileError) throw profileError;
-      setProfile(profileData ?? null);
+
+      // 旧 users テーブル（is_profile_complete）で onboarding 済みなのに、
+      // 新 profiles テーブルが未作成 / is_onboarded=false の場合は自己修復で同期する。
+      let resolvedProfile = profileData ?? null;
+      if (!resolvedProfile || !resolvedProfile.is_onboarded) {
+        const { data: legacyUser } = await supabase
+          .from("users")
+          .select("display_name,is_profile_complete")
+          .eq("auth_user_id", uid)
+          .maybeSingle<{ display_name: string | null; is_profile_complete: boolean | null }>();
+
+        if (legacyUser?.is_profile_complete && legacyUser.display_name) {
+          const { data: upserted, error: upsertError } = await supabase
+            .from("profiles")
+            .upsert(
+              {
+                id: uid,
+                display_name: legacyUser.display_name,
+                is_onboarded: true,
+              },
+              { onConflict: "id" }
+            )
+            .select("id,display_name,current_rating,is_banned,is_onboarded")
+            .maybeSingle<ProfileRow>();
+
+          if (!upsertError && upserted) {
+            resolvedProfile = upserted;
+          }
+        }
+      }
+
+      setProfile(resolvedProfile);
 
       // 初期設定が未完了なら、対戦関連のロードはスキップする。
       // RPC や RLS が onboarded を前提とすることがあり、無理にロードすると失敗するため。
-      if (!profileData || !profileData.is_onboarded) {
+      if (!resolvedProfile || !resolvedProfile.is_onboarded) {
         setMyParty(null);
         setMyPartyMembers([]);
         setMyPartyInvites([]);

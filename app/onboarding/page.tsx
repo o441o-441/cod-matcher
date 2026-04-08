@@ -40,6 +40,24 @@ export default function OnboardingPage() {
       return
     }
 
+    // /match 系（パーティーモデル）が参照する profiles テーブルにも反映する
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert(
+        {
+          id: user.id,
+          display_name: displayName,
+          is_onboarded: true,
+        },
+        { onConflict: 'id' }
+      )
+
+    if (profileError) {
+      alert('プロフィール同期に失敗: ' + profileError.message)
+      setLoading(false)
+      return
+    }
+
     router.push('/mypage')
   }
 
