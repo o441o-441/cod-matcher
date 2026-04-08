@@ -116,6 +116,15 @@ function isExpectedAutoMatchMiss(message: string) {
   );
 }
 
+function extractErrorMessage(e: unknown, fallback: string): string {
+  if (e instanceof Error && e.message) return e.message;
+  if (e && typeof e === "object" && "message" in e) {
+    const m = (e as { message?: unknown }).message;
+    if (typeof m === "string" && m.length > 0) return m;
+  }
+  return fallback;
+}
+
 export default function MatchPage() {
   const router = useRouter();
   const [supabase] = useState(() => getSupabaseClient());
@@ -585,8 +594,8 @@ export default function MatchPage() {
       setInfoText("パーティを作成しました。");
       await loadMyState();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "パーティ作成に失敗しました。";
-      setErrorText(message);
+      console.error("rpc_create_party error:", e);
+      setErrorText(extractErrorMessage(e, "パーティ作成に失敗しました。"));
     } finally {
       setBusy(false);
     }
@@ -652,13 +661,8 @@ export default function MatchPage() {
 
       await loadMyState();
     } catch (e) {
-      const message =
-        e instanceof Error
-          ? e.message
-          : e && typeof e === "object" && "message" in e && typeof (e as { message?: unknown }).message === "string"
-          ? ((e as { message: string }).message)
-          : "パーティ作成に失敗しました。";
-      setErrorText(message);
+      console.error("create party from team error:", e);
+      setErrorText(extractErrorMessage(e, "パーティ作成に失敗しました。"));
     } finally {
       setBusy(false);
     }
@@ -691,8 +695,8 @@ export default function MatchPage() {
       setInfoText("招待を送信しました。");
       await loadMyState();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "招待送信に失敗しました。";
-      setErrorText(message);
+      console.error("rpc_invite_to_party error:", e);
+      setErrorText(extractErrorMessage(e, "招待送信に失敗しました。"));
     } finally {
       setBusy(false);
     }
@@ -712,8 +716,8 @@ export default function MatchPage() {
       setInfoText("招待を承認しました。");
       await loadMyState();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "招待承認に失敗しました。";
-      setErrorText(message);
+      console.error("rpc_accept_party_invite error:", e);
+      setErrorText(extractErrorMessage(e, "招待承認に失敗しました。"));
     } finally {
       setBusy(false);
     }
@@ -733,8 +737,8 @@ export default function MatchPage() {
       setInfoText("招待を拒否しました。");
       await loadMyState();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "招待拒否に失敗しました。";
-      setErrorText(message);
+      console.error("rpc_reject_party_invite error:", e);
+      setErrorText(extractErrorMessage(e, "招待拒否に失敗しました。"));
     } finally {
       setBusy(false);
     }
@@ -760,8 +764,8 @@ export default function MatchPage() {
       setInfoText("パーティを待機に入れました。自動マッチングを開始します。");
       await loadMyState();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "待機開始に失敗しました。";
-      setErrorText(message);
+      console.error("queue start error:", e);
+      setErrorText(extractErrorMessage(e, "待機開始に失敗しました。"));
     } finally {
       setBusy(false);
     }
@@ -781,8 +785,8 @@ export default function MatchPage() {
       setInfoText("待機解除済み マッチング待機を終了しました。");
       await loadMyState();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "待機解除に失敗しました。";
-      setErrorText(message);
+      console.error("rpc_cancel_queue error:", e);
+      setErrorText(extractErrorMessage(e, "待機解除に失敗しました。"));
     } finally {
       setBusy(false);
     }
@@ -807,8 +811,8 @@ export default function MatchPage() {
       setInfoText("パーティを解散しました。");
       await loadMyState();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "パーティ解散に失敗しました。";
-      setErrorText(message);
+      console.error("rpc_disband_party error:", e);
+      setErrorText(extractErrorMessage(e, "パーティ解散に失敗しました。"));
     } finally {
       setBusy(false);
     }
@@ -833,8 +837,8 @@ export default function MatchPage() {
       setInfoText("パーティから脱退しました。");
       await loadMyState();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "パーティ脱退に失敗しました。";
-      setErrorText(message);
+      console.error("rpc_leave_party error:", e);
+      setErrorText(extractErrorMessage(e, "パーティ脱退に失敗しました。"));
     } finally {
       setBusy(false);
     }
@@ -868,8 +872,8 @@ export default function MatchPage() {
 
       await loadMyState();
     } catch (e) {
-      const message = e instanceof Error ? e.message : "マッチ生成に失敗しました。";
-      setErrorText(message);
+      console.error("rpc_create_match_from_queue error:", e);
+      setErrorText(extractErrorMessage(e, "マッチ生成に失敗しました。"));
     } finally {
       setBusy(false);
     }
