@@ -61,9 +61,9 @@ export default function Home() {
       <div className="card-strong">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <div>
-            <h1>COD マッチングサイト</h1>
+            <h1>ASCENT</h1>
             <p className="muted">
-              BO7 / 4v4 / CDLルール準拠のレート対戦プラットフォーム
+              Black Ops 7 / 4v4 / CDLルール準拠のレート対戦プラットフォーム
             </p>
           </div>
 
@@ -107,7 +107,7 @@ export default function Home() {
         <div className="grid grid-2">
           <div className="card">
             <p>・4v4 チーム戦</p>
-            <p>・BO7 / CDLルール準拠</p>
+            <p>・Black Ops 7 / CDLルール準拠</p>
             <p>・3モード中2勝でシリーズ勝利</p>
           </div>
 
