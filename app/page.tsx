@@ -28,6 +28,7 @@ export default function Home() {
   const [loadingStats, setLoadingStats] = useState(true)
   const [announcements, setAnnouncements] = useState<AnnouncementRow[]>([])
   const [popularPosts, setPopularPosts] = useState<PopularPostRow[]>([])
+  const [signedIn, setSignedIn] = useState(false)
   const realtimeRef = useRef<RealtimeChannel | null>(null)
 
   const fetchAnnouncements = async () => {
@@ -110,6 +111,12 @@ export default function Home() {
     void Promise.resolve().then(fetchStats)
     void fetchAnnouncements()
     void fetchPopularPosts()
+    void supabase.auth.getSession().then(({ data }) => {
+      setSignedIn(!!data.session?.user)
+    })
+    const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSignedIn(!!session?.user)
+    })
 
     const channel = supabase
       .channel('home-waiting-count')
@@ -131,6 +138,7 @@ export default function Home() {
     realtimeRef.current = channel
 
     return () => {
+      authSub.subscription.unsubscribe()
       if (realtimeRef.current) {
         supabase.removeChannel(realtimeRef.current)
         realtimeRef.current = null
@@ -149,8 +157,15 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="row">
-            <button onClick={() => router.push('/login')}>ログイン</button>
+          <div className="row" style={{ alignItems: 'center' }}>
+            {signedIn ? (
+              <>
+                <span className="muted">ログイン中</span>
+                <button onClick={() => router.push('/menu')}>メニュー</button>
+              </>
+            ) : (
+              <button onClick={() => router.push('/login')}>ログイン</button>
+            )}
             <button onClick={() => router.push('/ranking')}>ランキング</button>
             <button onClick={() => router.push('/blog')}>ブログ</button>
           </div>
