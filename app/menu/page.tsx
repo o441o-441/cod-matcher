@@ -12,6 +12,9 @@ export default function MenuPage() {
   const [hasTeam, setHasTeam] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [waitingCount, setWaitingCount] = useState(0)
+  const [rating, setRating] = useState<number | null>(null)
+  const [teamWins, setTeamWins] = useState<number | null>(null)
+  const [teamLosses, setTeamLosses] = useState<number | null>(null)
   const realtimeRef = useRef<RealtimeChannel | null>(null)
 
   const fetchWaitingCount = async () => {
@@ -49,12 +52,23 @@ export default function MenuPage() {
         .maybeSingle<{ team_id: string | null }>()
       setHasTeam(!!memberRow?.team_id)
 
+      if (memberRow?.team_id) {
+        const { data: teamRow } = await supabase
+          .from('teams')
+          .select('wins, losses')
+          .eq('id', memberRow.team_id)
+          .maybeSingle<{ wins: number | null; losses: number | null }>()
+        setTeamWins(teamRow?.wins ?? null)
+        setTeamLosses(teamRow?.losses ?? null)
+      }
+
       const { data: profileRow } = await supabase
         .from('profiles')
-        .select('is_admin')
+        .select('is_admin, current_rating')
         .eq('id', session.user.id)
-        .maybeSingle<{ is_admin: boolean | null }>()
+        .maybeSingle<{ is_admin: boolean | null; current_rating: number | null }>()
       setIsAdmin(!!profileRow?.is_admin)
+      setRating(profileRow?.current_rating ?? null)
 
       await fetchWaitingCount()
       setLoading(false)
@@ -105,20 +119,46 @@ export default function MenuPage() {
         </div>
       </div>
 
-      <div className="section card-strong" style={{ textAlign: 'center' }}>
-        <h2 style={{ marginTop: 0 }}>対戦を始める</h2>
-        <p className="muted">現在の待機チーム数: {waitingCount}</p>
-        <button
-          onClick={() => router.push('/match')}
+      <div className="section card-strong">
+        <h2 style={{ marginTop: 0, textAlign: 'center' }}>対戦を始める</h2>
+        <p className="muted" style={{ textAlign: 'center' }}>
+          現在の待機チーム数: {waitingCount}
+        </p>
+        <div
+          className="row"
           style={{
-            fontSize: '1.5rem',
-            padding: '20px 48px',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 32,
             marginTop: 16,
-            boxShadow: 'var(--glow-cyan)',
+            flexWrap: 'wrap',
           }}
         >
-          対戦開始
-        </button>
+          <button
+            onClick={() => router.push('/match')}
+            style={{
+              fontSize: '1.5rem',
+              padding: '20px 48px',
+              boxShadow: 'var(--glow-cyan)',
+            }}
+          >
+            対戦開始
+          </button>
+          <div className="row" style={{ gap: 16 }}>
+            <div className="card" style={{ minWidth: 120, textAlign: 'center' }}>
+              <p className="muted" style={{ margin: 0 }}>レート</p>
+              <h3 style={{ margin: '4px 0 0' }}>{rating ?? '-'}</h3>
+            </div>
+            {hasTeam && (
+              <div className="card" style={{ minWidth: 140, textAlign: 'center' }}>
+                <p className="muted" style={{ margin: 0 }}>チーム戦績</p>
+                <h3 style={{ margin: '4px 0 0' }}>
+                  {teamWins ?? 0}勝 {teamLosses ?? 0}敗
+                </h3>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="section card-strong">
