@@ -1,0 +1,126 @@
+'use client'
+
+import { useRouter } from 'next/navigation'
+
+export default function PrivacyPage() {
+  const router = useRouter()
+
+  return (
+    <main>
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <div>
+          <h1>プライバシーポリシー</h1>
+          <p className="muted">最終更新日: 2026年04月08日</p>
+        </div>
+        <div className="row">
+          <button onClick={() => router.push('/')}>トップページに戻る</button>
+        </div>
+      </div>
+
+      <div className="section card-strong">
+        <p>
+          ASCENT（以下「本サービス」といいます）は、利用者の個人情報の重要性を認識し、
+          個人情報の保護に関する法律および関連法令を遵守し、適切に取り扱うものとします。
+        </p>
+      </div>
+
+      <div className="section card-strong">
+        <h2>1. 取得する情報</h2>
+        <p>本サービスは以下の情報を取得します。</p>
+        <ul>
+          <li>Discord アカウント情報（ID、表示名、アバター URL）</li>
+          <li>利用者が登録した表示名、Activision ID、使用デバイス情報</li>
+          <li>パーティ・マッチ・チームの参加履歴、対戦結果、レーティング</li>
+          <li>Cookie、IP アドレス、ブラウザ情報、アクセスログ</li>
+          <li>利用者から問い合わせ等を通じて任意で提供された情報</li>
+        </ul>
+      </div>
+
+      <div className="section card-strong">
+        <h2>2. 利用目的</h2>
+        <p>取得した情報は次の目的に使用します。</p>
+        <ul>
+          <li>本サービスのアカウント管理および認証</li>
+          <li>対戦マッチング・パーティ機能・フレンド機能の提供</li>
+          <li>レーティングおよびランキングの算出・表示</li>
+          <li>不正利用の検知および防止</li>
+          <li>サービスの品質向上、新機能開発、利用統計の分析</li>
+          <li>利用者からの問い合わせへの対応</li>
+          <li>本サービス上での広告配信および効果測定</li>
+        </ul>
+      </div>
+
+      <div className="section card-strong">
+        <h2>3. 第三者への提供</h2>
+        <p>
+          法令に基づく場合を除き、利用者の同意なく個人情報を第三者に提供することはありません。
+          ただし、業務委託先（インフラ事業者、認証事業者等）に対して、利用目的の達成に必要な範囲で情報を委託する場合があります。
+        </p>
+      </div>
+
+      <div className="section card-strong">
+        <h2>4. Cookie および解析ツールの利用</h2>
+        <p>
+          本サービスはユーザー体験の改善およびアクセス解析のため Cookie を使用することがあります。
+          また、Google Analytics 等の解析ツールを利用してアクセス情報を収集する場合があります。
+          ブラウザの設定により Cookie の受け入れを拒否することができますが、その場合一部機能が利用できなくなる可能性があります。
+        </p>
+      </div>
+
+      <div className="section card-strong">
+        <h2>5. 広告配信について</h2>
+        <p>
+          本サービスでは、第三者配信の広告サービス（Google AdSense 等）を利用することがあります。
+          これらの広告配信事業者は、利用者の興味に応じた広告を表示するために Cookie を使用することがあります。
+          Cookie を無効にする設定および詳細については、各事業者のウェブサイトをご確認ください。
+        </p>
+      </div>
+
+      <div className="section card-strong">
+        <h2>6. 外部送信される利用者情報</h2>
+        <p>
+          本サービスは改正電気通信事業法（外部送信規律）に基づき、利用者の情報を外部送信する場合は本ポリシーで通知します。
+          現在、以下の事業者へ情報を送信する場合があります。
+        </p>
+        <ul>
+          <li>Discord（OAuth 認証情報の送受信）</li>
+          <li>Supabase（データベース・認証基盤）</li>
+          <li>Vercel（ホスティング、アクセスログ）</li>
+          <li>Google（広告配信、アクセス解析）</li>
+        </ul>
+      </div>
+
+      <div className="section card-strong">
+        <h2>7. 安全管理措置</h2>
+        <p>
+          本サービスは取得した個人情報の漏えい、滅失または毀損の防止のため、合理的な安全管理措置を講じます。
+        </p>
+      </div>
+
+      <div className="section card-strong">
+        <h2>8. 開示・訂正・削除等の請求</h2>
+        <p>
+          利用者は本サービスが保有する自己の個人情報について、開示・訂正・利用停止・削除を求めることができます。
+          請求方法については下記の問い合わせ先までご連絡ください。
+        </p>
+      </div>
+
+      <div className="section card-strong">
+        <h2>9. プライバシーポリシーの変更</h2>
+        <p>
+          本ポリシーの内容は、法令の変更やサービス内容の変更に応じて改定される場合があります。
+          重要な変更がある場合は本ページにて告知します。
+        </p>
+      </div>
+
+      <div className="section card-strong">
+        <h2>10. 運営者・問い合わせ先</h2>
+        <p>
+          運営者: ASCENT運営チーム
+          <br />
+          連絡先: ascent.o441o@gmail.com
+        </p>
+      </div>
+    </main>
+  )
+}

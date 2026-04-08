@@ -153,6 +153,11 @@ export default function Home() {
           <button onClick={() => router.push('/ranking')}>ランキングを見る</button>
         </div>
       </div>
+
+      <div className="section row" style={{ justifyContent: 'center', gap: 16 }}>
+        <a href="/terms">利用規約</a>
+        <a href="/privacy">プライバシーポリシー</a>
+      </div>
     </main>
   )
 }
