@@ -566,6 +566,9 @@ export default function MyPage() {
                   チーム詳細を見る
                 </button>
                 <button onClick={() => router.push('/match')}>対戦開始</button>
+                <button onClick={() => router.push('/friends')}>
+                  フレンド管理
+                </button>
                 <button onClick={() => router.push('/ranking')}>
                   ランキングを見る
                 </button>
@@ -580,6 +583,9 @@ export default function MyPage() {
 
               <div className="section row">
                 <button onClick={() => router.push('/match')}>対戦開始</button>
+                <button onClick={() => router.push('/friends')}>
+                  フレンド管理
+                </button>
                 <button onClick={() => router.push('/ranking')}>
                   ランキングを見る
                 </button>

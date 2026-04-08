@@ -132,7 +132,9 @@ export default function MatchPage() {
 
   const queueType = "ranked" as const;
   const [sourceTeamId, setSourceTeamId] = useState("");
-  const [inviteeUserId, setInviteeUserId] = useState("");
+
+  const [friends, setFriends] = useState<{ friend_user_id: string; friend_display_name: string | null }[]>([]);
+  const [selectedFriendId, setSelectedFriendId] = useState("");
 
   const [myParty, setMyParty] = useState<PartyRow | null>(null);
   const [myPartyMembers, setMyPartyMembers] = useState<PartyMemberRow[]>([]);
@@ -407,6 +409,15 @@ export default function MatchPage() {
 
       if (pendingInvitesError) throw pendingInvitesError;
       setMyPendingInvites((pendingInvitesData as PendingInviteListRow[] | null) ?? []);
+
+      const { data: friendsData, error: friendsError } = await supabase.rpc("rpc_list_my_friends");
+      if (friendsError) {
+        console.error("rpc_list_my_friends error:", friendsError);
+      } else {
+        setFriends(
+          (friendsData as { friend_user_id: string; friend_display_name: string | null }[] | null) ?? []
+        );
+      }
     } catch (e) {
       console.error("loadMyState error:", e);
       let message = "状態の読み込みに失敗しました。";
@@ -540,9 +551,9 @@ export default function MatchPage() {
       return;
     }
 
-    const invitee = inviteeUserId.trim();
+    const invitee = selectedFriendId.trim();
     if (!invitee) {
-      setErrorText("招待する user_id を入力してください。");
+      setErrorText("招待するフレンドを選択してください。");
       return;
     }
 
@@ -557,7 +568,7 @@ export default function MatchPage() {
 
       if (error) throw error;
 
-      setInviteeUserId("");
+      setSelectedFriendId("");
       setInfoText("招待を送信しました。");
       await loadMyState();
     } catch (e) {
@@ -899,23 +910,57 @@ export default function MatchPage() {
 
                       {isPartyLeader && myPartySize < 4 && !isWaiting && (
                         <div className="rounded border border-white/10 bg-neutral-900 p-3">
-                          <div className="mb-2 text-sm font-medium">メンバー招待</div>
-                          <div className="flex flex-col gap-2 md:flex-row">
-                            <input
-                              value={inviteeUserId}
-                              onChange={(e) => setInviteeUserId(e.target.value)}
-                              placeholder="招待する user_id"
-                              className="flex-1 rounded border border-white/15 bg-black px-3 py-2 text-sm outline-none"
-                              disabled={busy}
-                            />
+                          <div className="mb-2 flex items-center justify-between">
+                            <div className="text-sm font-medium">メンバー招待</div>
                             <button
-                              onClick={handleInviteToParty}
-                              disabled={busy}
-                              className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                              type="button"
+                              onClick={() => router.push("/friends")}
+                              className="text-xs text-white/60 underline"
                             >
-                              招待送信
+                              フレンド管理
                             </button>
                           </div>
+
+                          {friends.length === 0 ? (
+                            <div className="text-sm text-white/60">
+                              招待できるフレンドがいません。
+                              <button
+                                type="button"
+                                onClick={() => router.push("/friends")}
+                                className="ml-2 underline"
+                              >
+                                フレンドを追加する
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-2 md:flex-row">
+                              <select
+                                value={selectedFriendId}
+                                onChange={(e) => setSelectedFriendId(e.target.value)}
+                                className="flex-1 rounded border border-white/15 bg-black px-3 py-2 text-sm outline-none"
+                                disabled={busy}
+                              >
+                                <option value="">フレンドを選択...</option>
+                                {friends
+                                  .filter(
+                                    (f) =>
+                                      !myPartyMembers.some((m) => m.user_id === f.friend_user_id)
+                                  )
+                                  .map((f) => (
+                                    <option key={f.friend_user_id} value={f.friend_user_id}>
+                                      {f.friend_display_name ?? f.friend_user_id}
+                                    </option>
+                                  ))}
+                              </select>
+                              <button
+                                onClick={handleInviteToParty}
+                                disabled={busy || !selectedFriendId}
+                                className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                              >
+                                招待送信
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
 
