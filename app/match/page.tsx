@@ -131,7 +131,6 @@ export default function MatchPage() {
   const [profile, setProfile] = useState<ProfileRow | null>(null);
 
   const queueType = "ranked" as const;
-  const [sourceTeamId, setSourceTeamId] = useState("");
 
   type MyTeamMember = { auth_user_id: string; display_name: string | null };
   const [myTeam, setMyTeam] = useState<{ id: string; name: string; members: MyTeamMember[] } | null>(null);
@@ -578,7 +577,7 @@ export default function MatchPage() {
 
     try {
       const { error } = await supabase.rpc("rpc_create_party", {
-        p_source_team_id: sourceTeamId.trim() || null,
+        p_source_team_id: null,
       });
 
       if (error) throw error;
@@ -977,17 +976,6 @@ export default function MatchPage() {
               <h2 className="mb-3 text-lg font-semibold">パーティ作成 / 招待</h2>
 
               <div className="space-y-4">
-                <div>
-                  <label className="mb-2 block text-sm font-medium">source_team_id（任意）</label>
-                  <input
-                    value={sourceTeamId}
-                    onChange={(e) => setSourceTeamId(e.target.value)}
-                    placeholder="固定チーム由来でパーティを作る場合のみ入力"
-                    className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                    disabled={busy || !!myParty}
-                  />
-                </div>
-
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={handleCreateParty}
