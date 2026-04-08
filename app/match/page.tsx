@@ -130,7 +130,7 @@ export default function MatchPage() {
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
 
-  const [queueType, setQueueType] = useState<"ranked" | "casual" | "fullparty_only" | "mixed">("ranked");
+  const queueType = "ranked" as const;
   const [sourceTeamId, setSourceTeamId] = useState("");
   const [inviteeUserId, setInviteeUserId] = useState("");
 
@@ -966,21 +966,6 @@ export default function MatchPage() {
               <h2 className="mb-3 text-lg font-semibold">待機 / 自動マッチング</h2>
 
               <div className="space-y-4">
-                <div>
-                  <label className="mb-2 block text-sm font-medium">キュー種別</label>
-                  <select
-                    value={queueType}
-                    onChange={(e) => setQueueType(e.target.value as typeof queueType)}
-                    className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                    disabled={busy || isWaiting}
-                  >
-                    <option value="ranked">ranked</option>
-                    <option value="casual">casual</option>
-                    <option value="mixed">mixed</option>
-                    <option value="fullparty_only">fullparty_only</option>
-                  </select>
-                </div>
-
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={handleQueueExistingParty}
