@@ -1,8 +1,11 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 export default function LoginPage() {
+  const router = useRouter()
+
   const handleDiscordLogin = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'discord',
@@ -17,9 +20,14 @@ export default function LoginPage() {
   }
 
   return (
-    <main style={{ padding: '40px' }}>
-      <h1>ログイン</h1>
-      <button onClick={handleDiscordLogin}>Discordでログイン</button>
+    <main>
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <h1>ログイン</h1>
+        <button onClick={() => router.push('/')}>トップページに戻る</button>
+      </div>
+      <div className="section">
+        <button onClick={handleDiscordLogin}>Discordでログイン</button>
+      </div>
     </main>
   )
 }
