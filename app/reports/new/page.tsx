@@ -45,7 +45,7 @@ function ReportNewContent() {
 
       if (!reportedId) {
         showToast('通報対象のユーザーが指定されていません', 'error')
-        router.push('/mypage')
+        router.push('/menu')
         return
       }
 

@@ -182,7 +182,7 @@ export default function FriendsPage() {
           <p className="muted">フレンドの追加・管理ができます</p>
         </div>
         <div className="row">
-          <button onClick={() => router.push('/mypage')}>マイページに戻る</button>
+          <button onClick={() => router.push('/menu')}>メニューに戻る</button>
         </div>
       </div>
 

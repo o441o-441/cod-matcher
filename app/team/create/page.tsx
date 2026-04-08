@@ -41,7 +41,7 @@ export default function CreateTeamPage() {
 
       if (existingMembership?.team_id) {
         alert('すでにチームに所属しているため、新しくチームを作成できません')
-        router.push('/mypage')
+        router.push('/menu')
         return
       }
 
@@ -80,7 +80,7 @@ export default function CreateTeamPage() {
     console.log('create team result:', data)
 
     alert('チームを作成しました！')
-    router.push('/mypage')
+    router.push('/menu')
   }
 
   if (checking) {

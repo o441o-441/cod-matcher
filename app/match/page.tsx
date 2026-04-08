@@ -913,10 +913,10 @@ export default function MatchPage() {
           </div>
           <button
             type="button"
-            onClick={() => router.push("/mypage")}
+            onClick={() => router.push("/menu")}
             className="rounded border border-white/20 bg-white/5 px-3 py-2 text-sm hover:bg-white/10"
           >
-            マイページに戻る
+            メニューに戻る
           </button>
         </div>
 

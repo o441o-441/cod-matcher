@@ -100,7 +100,7 @@ export default function TeamJoinPage() {
     }
 
     showToast('チームに参加しました', 'success')
-    router.push('/mypage')
+    router.push('/menu')
   }
 
   if (loading) {
@@ -123,7 +123,7 @@ export default function TeamJoinPage() {
         </div>
 
         <div className="row">
-          <button onClick={() => router.push('/mypage')}>マイページへ戻る</button>
+          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
         </div>
       </div>
 

@@ -386,7 +386,7 @@ export default function TeamDetailPage() {
     showToast('チームから脱退しました', 'success')
     setLeaveLoading(false)
     setLeaveDialogOpen(false)
-    router.push('/mypage')
+    router.push('/menu')
   }
 
   const handleDisbandTeam = async () => {
@@ -417,7 +417,7 @@ export default function TeamDetailPage() {
     showToast('チームを解散しました', 'success')
     setDisbandLoading(false)
     setDisbandDialogOpen(false)
-    router.push('/mypage')
+    router.push('/menu')
   }
 
   const getOpponentId = (match: MatchRow) => {
@@ -469,8 +469,8 @@ export default function TeamDetailPage() {
           </div>
 
           <div className="row">
-            <button onClick={() => router.push('/mypage')}>
-              マイページへ戻る
+            <button onClick={() => router.push('/menu')}>
+              メニューへ戻る
             </button>
           </div>
         </div>

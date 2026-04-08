@@ -65,7 +65,7 @@ export default function AdminAnnouncementsPage() {
 
       if (!me?.is_admin) {
         showToast('このページにアクセスする権限がありません', 'error')
-        router.push('/mypage')
+        router.push('/menu')
         return
       }
 
@@ -179,7 +179,7 @@ export default function AdminAnnouncementsPage() {
           <p className="muted">トップページに表示される運営からのお知らせ</p>
         </div>
         <div className="row">
-          <button onClick={() => router.push('/mypage')}>マイページへ戻る</button>
+          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
         </div>
       </div>
 

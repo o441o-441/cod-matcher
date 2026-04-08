@@ -43,7 +43,7 @@ export default function TeamEditPage() {
 
       if (!member) {
         showToast('チームに所属していません', 'error')
-        router.push('/mypage')
+        router.push('/menu')
         return
       }
 
@@ -54,14 +54,14 @@ export default function TeamEditPage() {
         .single()
 
       if (!teamData) {
-        router.push('/mypage')
+        router.push('/menu')
         return
       }
 
       // オーナーチェック
       if (teamData.owner_user_id !== currentUserId) {
         showToast('チーム編集はオーナーのみ可能です', 'error')
-        router.push('/mypage')
+        router.push('/menu')
         return
       }
 
@@ -103,7 +103,7 @@ export default function TeamEditPage() {
     }
 
     showToast('チーム名を変更しました', 'success')
-    router.push('/mypage')
+    router.push('/menu')
   }
 
   if (loading) {
@@ -121,7 +121,7 @@ export default function TeamEditPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h1>チーム編集</h1>
-        <button onClick={() => router.push('/mypage')}>
+        <button onClick={() => router.push('/menu')}>
           戻る
         </button>
       </div>
@@ -140,7 +140,7 @@ export default function TeamEditPage() {
             </div>
 
             <div className="row" style={{ justifyContent: 'flex-end' }}>
-              <button onClick={() => router.push('/mypage')}>
+              <button onClick={() => router.push('/menu')}>
                 キャンセル
               </button>
               <button onClick={handleSave} disabled={saving}>

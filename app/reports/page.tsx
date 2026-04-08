@@ -81,7 +81,7 @@ export default function MyReportsPage() {
           <p className="muted">自分が送信した通報の一覧</p>
         </div>
         <div className="row">
-          <button onClick={() => router.push('/mypage')}>マイページへ戻る</button>
+          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
         </div>
       </div>
 

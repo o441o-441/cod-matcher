@@ -37,7 +37,6 @@ export default function MyPage() {
   const [team, setTeam] = useState<TeamRow | null>(null)
   const [pageError, setPageError] = useState('')
   const [waitingCount, setWaitingCount] = useState(0)
-  const [isAdmin, setIsAdmin] = useState(false)
   const [bio, setBio] = useState<string | null>(null)
 
   const realtimeRef = useRef<RealtimeChannel | null>(null)
@@ -208,10 +207,9 @@ export default function MyPage() {
 
     const { data: profileRow } = await supabase
       .from('profiles')
-      .select('is_admin, bio')
+      .select('bio')
       .eq('id', authUser.id)
-      .maybeSingle<{ is_admin: boolean | null; bio: string | null }>()
-    setIsAdmin(!!profileRow?.is_admin)
+      .maybeSingle<{ bio: string | null }>()
     setBio(profileRow?.bio ?? null)
 
     const { data: memberRow, error: memberError } = await supabase
@@ -326,6 +324,7 @@ export default function MyPage() {
 
         <div className="row">
           <span className="muted">ログイン中</span>
+          <button onClick={() => router.push('/menu')}>メニューへ</button>
           <button onClick={handleLogout}>ログアウト</button>
         </div>
       </div>
@@ -432,85 +431,13 @@ export default function MyPage() {
               </div>
 
               <div className="section row">
-                <button onClick={() => router.push('/team/edit')}>
-                  チーム名を編集
-                </button>
                 <button onClick={() => router.push(`/team/${team.id}`)}>
                   チーム詳細を見る
                 </button>
-                <button onClick={() => router.push('/match')}>対戦開始</button>
-                <button onClick={() => router.push('/friends')}>
-                  フレンド管理
-                </button>
-                <button onClick={() => router.push('/ranking')}>
-                  ランキングを見る
-                </button>
-                <button onClick={() => router.push('/history')}>
-                  マッチ履歴
-                </button>
-                <button onClick={() => router.push('/rules')}>
-                  ルール一覧
-                </button>
-                <button onClick={() => router.push('/blog')}>
-                  ブログ
-                </button>
-                <button onClick={() => router.push('/reports')}>
-                  通報履歴
-                </button>
-                {isAdmin && (
-                  <button onClick={() => router.push('/admin/reports')}>
-                    通報管理
-                  </button>
-                )}
-                {isAdmin && (
-                  <button onClick={() => router.push('/admin/announcements')}>
-                    お知らせ管理
-                  </button>
-                )}
               </div>
             </>
           ) : (
-            <>
-              <p>まだチームに所属していません（ソロでも対戦に参加できます）</p>
-
-              <div className="section row">
-                <button onClick={() => router.push('/match')}>対戦開始</button>
-                <button onClick={() => router.push('/friends')}>
-                  フレンド管理
-                </button>
-                <button onClick={() => router.push('/ranking')}>
-                  ランキングを見る
-                </button>
-                <button onClick={() => router.push('/history')}>
-                  マッチ履歴
-                </button>
-                <button onClick={() => router.push('/rules')}>
-                  ルール一覧
-                </button>
-                <button onClick={() => router.push('/blog')}>
-                  ブログ
-                </button>
-                <button onClick={() => router.push('/reports')}>
-                  通報履歴
-                </button>
-                {isAdmin && (
-                  <button onClick={() => router.push('/admin/reports')}>
-                    通報管理
-                  </button>
-                )}
-                {isAdmin && (
-                  <button onClick={() => router.push('/admin/announcements')}>
-                    お知らせ管理
-                  </button>
-                )}
-                <button onClick={() => router.push('/team/create')}>
-                  チームを作成
-                </button>
-                <button onClick={() => router.push('/team/join')}>
-                  チームに参加
-                </button>
-              </div>
-            </>
+            <p>まだチームに所属していません（ソロでも対戦に参加できます）</p>
           )}
         </div>
       </div>

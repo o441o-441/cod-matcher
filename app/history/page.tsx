@@ -115,7 +115,7 @@ export default function HistoryPage() {
       <p>完了した試合の履歴です</p>
 
       <div style={{ marginTop: 12 }}>
-        <button onClick={() => router.push('/mypage')}>マイページへ戻る</button>
+        <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
       </div>
 
       <section style={{ marginTop: 24 }}>

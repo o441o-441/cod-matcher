@@ -83,7 +83,7 @@ export default function AdminReportsPage() {
 
       if (!me?.is_admin) {
         showToast('このページにアクセスする権限がありません', 'error')
-        router.push('/mypage')
+        router.push('/menu')
         return
       }
 
@@ -143,7 +143,7 @@ export default function AdminReportsPage() {
           <p className="muted">運営者向けの通報対応画面</p>
         </div>
         <div className="row">
-          <button onClick={() => router.push('/mypage')}>マイページへ戻る</button>
+          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
         </div>
       </div>
 

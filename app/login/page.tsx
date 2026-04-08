@@ -10,7 +10,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'discord',
       options: {
-        redirectTo: `${window.location.origin}/mypage`,
+        redirectTo: `${window.location.origin}/menu`,
       },
     })
 

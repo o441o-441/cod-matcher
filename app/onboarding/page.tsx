@@ -61,7 +61,7 @@ export default function OnboardingPage() {
       return
     }
 
-    router.push('/mypage')
+    router.push('/menu')
   }
 
   return (
