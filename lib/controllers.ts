@@ -51,6 +51,16 @@ export const CONTROLLER_GROUPS: ControllerGroup[] = [
     ],
   },
   {
+    manufacturer: 'Flydigi',
+    options: [
+      'Flydigi Vader 3 Pro',
+      'Flydigi Vader 4 Pro',
+      'Flydigi Vader 5 Pro',
+      'Flydigi Apex 4',
+      'Flydigi Direwolf 2',
+    ],
+  },
+  {
     manufacturer: 'GameSir',
     options: [
       'GameSir G7 SE',
