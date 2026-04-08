@@ -283,6 +283,11 @@ export default function FriendsPage() {
                   )}
                   <div className="row" style={{ marginTop: 8 }}>
                     <button
+                      onClick={() => router.push(`/users/${f.friend_user_id}`)}
+                    >
+                      プロフィール
+                    </button>
+                    <button
                       onClick={() => handleRemove(f.friend_user_id)}
                       disabled={busyId === f.friend_user_id}
                     >

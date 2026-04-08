@@ -37,6 +37,7 @@ export default function MyPage() {
   const [team, setTeam] = useState<TeamRow | null>(null)
   const [pageError, setPageError] = useState('')
   const [waitingCount, setWaitingCount] = useState(0)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const realtimeRef = useRef<RealtimeChannel | null>(null)
 
@@ -203,6 +204,13 @@ export default function MyPage() {
     }
 
     setProfile(syncedUser)
+
+    const { data: adminRow } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', authUser.id)
+      .maybeSingle<{ is_admin: boolean | null }>()
+    setIsAdmin(!!adminRow?.is_admin)
 
     const { data: memberRow, error: memberError } = await supabase
       .from('team_members')
@@ -432,6 +440,14 @@ export default function MyPage() {
                 <button onClick={() => router.push('/rules')}>
                   ルール一覧
                 </button>
+                <button onClick={() => router.push('/reports')}>
+                  通報履歴
+                </button>
+                {isAdmin && (
+                  <button onClick={() => router.push('/admin/reports')}>
+                    通報管理
+                  </button>
+                )}
               </div>
             </>
           ) : (
@@ -452,6 +468,14 @@ export default function MyPage() {
                 <button onClick={() => router.push('/rules')}>
                   ルール一覧
                 </button>
+                <button onClick={() => router.push('/reports')}>
+                  通報履歴
+                </button>
+                {isAdmin && (
+                  <button onClick={() => router.push('/admin/reports')}>
+                    通報管理
+                  </button>
+                )}
                 <button onClick={() => router.push('/team/create')}>
                   チームを作成
                 </button>

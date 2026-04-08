@@ -622,7 +622,13 @@ export default function BanpickPage() {
                     {groupedMembers.alpha.map((m) => (
                       <div key={m.id} className="rounded bg-white/5 px-3 py-2 text-sm">
                         <div className="flex items-center justify-between">
-                          <span>{m.profiles?.display_name ?? m.user_id}</span>
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/users/${m.user_id}?match=${matchId}`)}
+                            className="text-left text-cyan-300 underline decoration-dotted hover:text-white"
+                          >
+                            {m.profiles?.display_name ?? m.user_id}
+                          </button>
                           <div className="flex gap-2 text-[11px] text-white/50">
                             {m.is_party_leader && <span>Leader</span>}
                             {match?.host_user_id === m.user_id && <span>Host</span>}
@@ -648,7 +654,13 @@ export default function BanpickPage() {
                     {groupedMembers.bravo.map((m) => (
                       <div key={m.id} className="rounded bg-white/5 px-3 py-2 text-sm">
                         <div className="flex items-center justify-between">
-                          <span>{m.profiles?.display_name ?? m.user_id}</span>
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/users/${m.user_id}?match=${matchId}`)}
+                            className="text-left text-cyan-300 underline decoration-dotted hover:text-white"
+                          >
+                            {m.profiles?.display_name ?? m.user_id}
+                          </button>
                           <div className="flex gap-2 text-[11px] text-white/50">
                             {m.is_party_leader && <span>Leader</span>}
                             {match?.host_user_id === m.user_id && <span>Host</span>}
