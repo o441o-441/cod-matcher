@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { RealtimeChannel, User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -27,18 +27,6 @@ type TeamRow = {
   matches_played: number
 }
 
-type MatchRow = {
-  id: string
-  team1_id: string
-  team2_id: string
-  status: string
-  approval_status: string | null
-  reported_by_team_id?: string | null
-  created_at: string
-}
-
-type TeamNameMap = Record<string, string>
-
 export default function MyPage() {
   const router = useRouter()
   const { showToast } = useToast()
@@ -46,8 +34,6 @@ export default function MyPage() {
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<UserRow | null>(null)
   const [team, setTeam] = useState<TeamRow | null>(null)
-  const [pendingMatches, setPendingMatches] = useState<MatchRow[]>([])
-  const [teamNames, setTeamNames] = useState<TeamNameMap>({})
   const [pageError, setPageError] = useState('')
   const [waitingCount, setWaitingCount] = useState(0)
 
@@ -243,50 +229,8 @@ export default function MyPage() {
       } else {
         setTeam(teamRow as TeamRow)
       }
-
-      const { data: pendingData, error: pendingError } = await supabase
-        .from('matches')
-        .select(
-          'id, team1_id, team2_id, status, approval_status, reported_by_team_id, created_at'
-        )
-        .or(`team1_id.eq.${memberRow.team_id},team2_id.eq.${memberRow.team_id}`)
-        .eq('approval_status', 'pending')
-        .order('created_at', { ascending: false })
-
-      if (pendingError) {
-        console.error('pendingError:', pendingError)
-        setPageError('未承認試合の取得に失敗しました')
-      } else {
-        const matchList = (pendingData || []) as MatchRow[]
-        setPendingMatches(matchList)
-
-        const uniqueTeamIds = Array.from(
-          new Set(matchList.flatMap((m) => [m.team1_id, m.team2_id]))
-        )
-
-        if (uniqueTeamIds.length > 0) {
-          const { data: teamsData, error: teamsError } = await supabase
-            .from('teams')
-            .select('id, name')
-            .in('id', uniqueTeamIds)
-
-          if (teamsError) {
-            console.error('teamsError:', teamsError)
-          } else {
-            const map: TeamNameMap = {}
-            for (const item of teamsData || []) {
-              map[item.id] = item.name
-            }
-            setTeamNames(map)
-          }
-        } else {
-          setTeamNames({})
-        }
-      }
     } else {
       setTeam(null)
-      setPendingMatches([])
-      setTeamNames({})
     }
 
     await fetchWaitingCount()
@@ -351,20 +295,6 @@ export default function MyPage() {
     showToast('ログアウトしました', 'info')
     router.push('/login')
   }
-
-  const getOpponentId = (match: MatchRow, myTeamId: string) => {
-    return match.team1_id === myTeamId ? match.team2_id : match.team1_id
-  }
-
-  const approvalNeededMatches = useMemo(() => {
-    if (!team) return []
-    return pendingMatches.filter((match) => match.reported_by_team_id !== team.id)
-  }, [pendingMatches, team])
-
-  const waitingOpponentMatches = useMemo(() => {
-    if (!team) return []
-    return pendingMatches.filter((match) => match.reported_by_team_id === team.id)
-  }, [pendingMatches, team])
 
   if (loading) {
     return (
@@ -437,96 +367,14 @@ export default function MyPage() {
         <div className="card-strong">
           <h2>現在の状況</h2>
 
-          <div className="grid grid-3">
+          <div className="grid grid-2">
             <div className="card">
               <p className="muted">待機中チーム数</p>
               <h3>{waitingCount}チーム</h3>
             </div>
-
-            <div className="card">
-              <p className="muted">あなたの承認待ち</p>
-              <h3>{approvalNeededMatches.length}件</h3>
-            </div>
-
-            <div className="card">
-              <p className="muted">相手の承認待ち</p>
-              <h3>{waitingOpponentMatches.length}件</h3>
-            </div>
           </div>
         </div>
       </div>
-
-      {team && approvalNeededMatches.length > 0 && (
-        <div className="section">
-          <div className="card-strong">
-            <h2>あなたの承認が必要</h2>
-
-            <div className="stack">
-              {approvalNeededMatches.map((match) => {
-                const opponentId = getOpponentId(match, team.id)
-                const opponentName = teamNames[opponentId] || '不明'
-
-                return (
-                  <div key={match.id} className="card">
-                    <p>
-                      <strong>対戦相手:</strong> {opponentName}
-                    </p>
-                    <p>
-                      <strong>状態:</strong> あなたの承認待ち
-                    </p>
-                    <p>
-                      <strong>試合日時:</strong>{' '}
-                      {new Date(match.created_at).toLocaleString()}
-                    </p>
-
-                    <div className="row" style={{ marginTop: '12px' }}>
-                      <button onClick={() => router.push(`/match/${match.id}`)}>
-                        承認しに行く
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {team && waitingOpponentMatches.length > 0 && (
-        <div className="section">
-          <div className="card-strong">
-            <h2>相手の承認待ち</h2>
-
-            <div className="stack">
-              {waitingOpponentMatches.map((match) => {
-                const opponentId = getOpponentId(match, team.id)
-                const opponentName = teamNames[opponentId] || '不明'
-
-                return (
-                  <div key={match.id} className="card">
-                    <p>
-                      <strong>対戦相手:</strong> {opponentName}
-                    </p>
-                    <p>
-                      <strong>状態:</strong> 相手の承認待ち
-                    </p>
-                    <p>
-                      <strong>試合日時:</strong>{' '}
-                      {new Date(match.created_at).toLocaleString()}
-                    </p>
-
-                    <div className="row" style={{ marginTop: '12px' }}>
-                      <button onClick={() => router.push(`/match/${match.id}`)}>
-                        試合詳細へ
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="section">
         <div className="card-strong">
