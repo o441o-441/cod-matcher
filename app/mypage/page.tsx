@@ -451,6 +451,11 @@ export default function MyPage() {
                     通報管理
                   </button>
                 )}
+                {isAdmin && (
+                  <button onClick={() => router.push('/admin/announcements')}>
+                    お知らせ管理
+                  </button>
+                )}
               </div>
             </>
           ) : (
@@ -480,6 +485,11 @@ export default function MyPage() {
                 {isAdmin && (
                   <button onClick={() => router.push('/admin/reports')}>
                     通報管理
+                  </button>
+                )}
+                {isAdmin && (
+                  <button onClick={() => router.push('/admin/announcements')}>
+                    お知らせ管理
                   </button>
                 )}
                 <button onClick={() => router.push('/team/create')}>
