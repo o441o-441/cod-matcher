@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { RealtimeChannel } from '@supabase/supabase-js'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -24,12 +23,9 @@ type PopularPostRow = {
 
 export default function Home() {
   const router = useRouter()
-  const [waitingCount, setWaitingCount] = useState<number>(0)
-  const [loadingStats, setLoadingStats] = useState(true)
   const [announcements, setAnnouncements] = useState<AnnouncementRow[]>([])
   const [popularPosts, setPopularPosts] = useState<PopularPostRow[]>([])
   const [signedIn, setSignedIn] = useState(false)
-  const realtimeRef = useRef<RealtimeChannel | null>(null)
 
   const fetchAnnouncements = async () => {
     const { data, error } = await supabase
@@ -92,23 +88,7 @@ export default function Home() {
     setPopularPosts(ordered)
   }
 
-  const fetchStats = async () => {
-    const { count, error } = await supabase
-      .from('match_queue')
-      .select('*', { count: 'exact', head: true })
-
-    if (error) {
-      console.error('fetchStats error:', error)
-      setLoadingStats(false)
-      return
-    }
-
-    setWaitingCount(count || 0)
-    setLoadingStats(false)
-  }
-
   useEffect(() => {
-    void Promise.resolve().then(fetchStats)
     void fetchAnnouncements()
     void fetchPopularPosts()
     void supabase.auth.getSession().then(({ data }) => {
@@ -118,31 +98,8 @@ export default function Home() {
       setSignedIn(!!session?.user)
     })
 
-    const channel = supabase
-      .channel('home-waiting-count')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'match_queue',
-        },
-        async () => {
-          await fetchStats()
-        }
-      )
-      .subscribe((status) => {
-        console.log('home realtime status:', status)
-      })
-
-    realtimeRef.current = channel
-
     return () => {
       authSub.subscription.unsubscribe()
-      if (realtimeRef.current) {
-        supabase.removeChannel(realtimeRef.current)
-        realtimeRef.current = null
-      }
     }
   }, [])
 
@@ -188,33 +145,6 @@ export default function Home() {
           </div>
         </div>
       )}
-
-      <div className="section grid grid-2">
-        <div className="card">
-          <h2>現在の状況</h2>
-          <div className="stack">
-            <p>
-              <strong>待機中チーム数:</strong>{' '}
-              {loadingStats ? '取得中...' : `${waitingCount}チーム`}
-            </p>
-            <p className="muted">
-              待機中チーム数は自動更新されます
-            </p>
-          </div>
-        </div>
-
-        <div className="card">
-          <h2>このサイトでできること</h2>
-          <div className="stack">
-            <p>・Discordログインで参加</p>
-            <p>・チーム作成 / メンバー管理</p>
-            <p>・ランダムマッチング</p>
-            <p>・試合結果の報告 / 承認 / 却下</p>
-            <p>・レート変動とランキング表示</p>
-            <p>・マッチ履歴の確認</p>
-          </div>
-        </div>
-      </div>
 
       <div className="section card-strong">
         <div className="row" style={{ justifyContent: 'space-between' }}>
