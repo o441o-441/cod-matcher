@@ -60,12 +60,7 @@ export default function BlogPostPage() {
       } = await supabase.auth.getSession()
 
       if (session?.user) {
-        const { data: me } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('auth_user_id', session.user.id)
-          .maybeSingle<{ id: string }>()
-        setCurrentUserProfileId(me?.id ?? null)
+        setCurrentUserProfileId(session.user.id)
 
         const { data: adminFlag } = await supabase.rpc('is_admin')
         setIsAdmin(!!adminFlag)

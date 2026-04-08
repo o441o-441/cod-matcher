@@ -48,7 +48,7 @@ export default function NewBlogPostPage() {
       const { data: me } = await supabase
         .from('profiles')
         .select('id')
-        .eq('auth_user_id', session.user.id)
+        .eq('id', session.user.id)
         .maybeSingle<{ id: string }>()
 
       if (!me?.id) {
