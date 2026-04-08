@@ -70,6 +70,7 @@ export default function Home() {
           <div className="row">
             <button onClick={() => router.push('/login')}>ログイン</button>
             <button onClick={() => router.push('/ranking')}>ランキング</button>
+            <button onClick={() => router.push('/blog')}>ブログ</button>
           </div>
         </div>
       </div>

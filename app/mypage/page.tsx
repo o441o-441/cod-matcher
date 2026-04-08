@@ -440,6 +440,9 @@ export default function MyPage() {
                 <button onClick={() => router.push('/rules')}>
                   ルール一覧
                 </button>
+                <button onClick={() => router.push('/blog')}>
+                  ブログ
+                </button>
                 <button onClick={() => router.push('/reports')}>
                   通報履歴
                 </button>
@@ -467,6 +470,9 @@ export default function MyPage() {
                 </button>
                 <button onClick={() => router.push('/rules')}>
                   ルール一覧
+                </button>
+                <button onClick={() => router.push('/blog')}>
+                  ブログ
                 </button>
                 <button onClick={() => router.push('/reports')}>
                   通報履歴
