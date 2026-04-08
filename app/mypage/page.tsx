@@ -38,6 +38,7 @@ export default function MyPage() {
   const [pageError, setPageError] = useState('')
   const [waitingCount, setWaitingCount] = useState(0)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [bio, setBio] = useState<string | null>(null)
 
   const realtimeRef = useRef<RealtimeChannel | null>(null)
 
@@ -205,12 +206,13 @@ export default function MyPage() {
 
     setProfile(syncedUser)
 
-    const { data: adminRow } = await supabase
+    const { data: profileRow } = await supabase
       .from('profiles')
-      .select('is_admin')
+      .select('is_admin, bio')
       .eq('id', authUser.id)
-      .maybeSingle<{ is_admin: boolean | null }>()
-    setIsAdmin(!!adminRow?.is_admin)
+      .maybeSingle<{ is_admin: boolean | null; bio: string | null }>()
+    setIsAdmin(!!profileRow?.is_admin)
+    setBio(profileRow?.bio ?? null)
 
     const { data: memberRow, error: memberError } = await supabase
       .from('team_members')
@@ -367,6 +369,15 @@ export default function MyPage() {
               <p className="muted">Discord User ID</p>
               <h3>{profile?.discord_user_id || '未設定'}</h3>
             </div>
+          </div>
+
+          <div className="section card">
+            <p className="muted">自己紹介</p>
+            {bio ? (
+              <p style={{ whiteSpace: 'pre-wrap' }}>{bio}</p>
+            ) : (
+              <p className="muted">未設定</p>
+            )}
           </div>
 
           <div className="section row">

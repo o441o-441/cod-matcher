@@ -218,7 +218,10 @@ export default function BlogPostPage() {
         <div>
           <h1>{post.title}</h1>
           <p className="muted">
-            {authorName || '不明'} ・{' '}
+            <Link href={`/users/${post.author_user_id}`}>
+              {authorName || '不明'}
+            </Link>{' '}
+            ・{' '}
             {post.published_at
               ? new Date(post.published_at).toLocaleString('ja-JP')
               : new Date(post.created_at).toLocaleString('ja-JP')}

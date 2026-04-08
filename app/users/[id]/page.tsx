@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/components/ToastProvider'
 import { LoadingCard } from '@/components/UIState'
 
 type ProfileRow = {
@@ -10,6 +11,7 @@ type ProfileRow = {
   display_name: string | null
   current_rating: number | null
   is_banned: boolean | null
+  bio: string | null
 }
 
 type LegacyUser = {
@@ -30,11 +32,14 @@ export default function UserProfilePage() {
       : ''
 
   const matchContext = searchParams.get('match') || ''
+  const { showToast } = useToast()
 
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<ProfileRow | null>(null)
   const [legacy, setLegacy] = useState<LegacyUser | null>(null)
   const [isMe, setIsMe] = useState(false)
+  const [signedIn, setSignedIn] = useState(false)
+  const [sendingFriend, setSendingFriend] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -47,10 +52,11 @@ export default function UserProfilePage() {
         data: { session },
       } = await supabase.auth.getSession()
       setIsMe(session?.user?.id === userId)
+      setSignedIn(!!session?.user)
 
       const { data: p } = await supabase
         .from('profiles')
-        .select('id, display_name, current_rating, is_banned')
+        .select('id, display_name, current_rating, is_banned, bio')
         .eq('id', userId)
         .maybeSingle<ProfileRow>()
       setProfile(p ?? null)
@@ -94,6 +100,24 @@ export default function UserProfilePage() {
   const reportHref = matchContext
     ? `/reports/new?reported=${profile.id}&match=${matchContext}`
     : `/reports/new?reported=${profile.id}`
+
+  const handleSendFriendRequest = async () => {
+    if (!profile?.display_name) {
+      showToast('表示名が未設定のため申請を送れません', 'error')
+      return
+    }
+    setSendingFriend(true)
+    const { error } = await supabase.rpc('rpc_send_friend_request', {
+      p_target_display_name: profile.display_name,
+    })
+    setSendingFriend(false)
+    if (error) {
+      console.error('send friend request error:', error)
+      showToast(error.message || 'フレンド申請に失敗しました', 'error')
+      return
+    }
+    showToast('フレンド申請を送信しました', 'success')
+  }
 
   return (
     <main>
@@ -142,15 +166,24 @@ export default function UserProfilePage() {
             </h3>
           </div>
         </div>
+
+        <div className="section card">
+          <p className="muted">自己紹介</p>
+          {profile.bio ? (
+            <p style={{ whiteSpace: 'pre-wrap' }}>{profile.bio}</p>
+          ) : (
+            <p className="muted">未設定</p>
+          )}
+        </div>
       </div>
 
-      {!isMe && (
+      {!isMe && signedIn && (
         <div className="section card-strong">
-          <h2>このプレイヤーを通報</h2>
-          <p className="muted">
-            ルール違反、チート、暴言などを発見したら通報できます。
-          </p>
+          <h2>このプレイヤーと交流</h2>
           <div className="section row">
+            <button onClick={handleSendFriendRequest} disabled={sendingFriend}>
+              {sendingFriend ? '送信中...' : 'フレンド申請を送る'}
+            </button>
             <button onClick={() => router.push(reportHref)}>通報する</button>
           </div>
         </div>

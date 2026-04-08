@@ -28,6 +28,8 @@ export default function ProfileEditPage() {
   const [activisionId, setActivisionId] = useState('')
   const [discordId, setDiscordId] = useState('')
   const [controller, setController] = useState('')
+  const [bio, setBio] = useState('')
+  const [authUserId, setAuthUserId] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -39,6 +41,7 @@ export default function ProfileEditPage() {
         router.push('/login')
         return
       }
+      setAuthUserId(session.user.id)
 
       const { data, error } = await supabase
         .from('users')
@@ -58,6 +61,14 @@ export default function ProfileEditPage() {
       setActivisionId(data.activision_id || '')
       setDiscordId(data.discord_id || '')
       setController(data.controller || '')
+
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('bio')
+        .eq('id', session.user.id)
+        .maybeSingle<{ bio: string | null }>()
+      setBio(prof?.bio ?? '')
+
       setLoading(false)
     }
 
@@ -94,6 +105,19 @@ export default function ProfileEditPage() {
       showToast('プロフィール更新に失敗しました', 'error')
       setSaving(false)
       return
+    }
+
+    if (authUserId) {
+      const { error: bioErr } = await supabase
+        .from('profiles')
+        .update({ bio: bio.trim() || null })
+        .eq('id', authUserId)
+      if (bioErr) {
+        console.error('save bio error:', bioErr)
+        showToast('自己紹介の保存に失敗しました', 'error')
+        setSaving(false)
+        return
+      }
     }
 
     showToast('プロフィールを更新しました', 'success')
@@ -177,6 +201,16 @@ export default function ProfileEditPage() {
               <p className="muted">Discord ID</p>
               <h3>{discordId || '未設定'}</h3>
               <p className="muted">Discord ID はログイン情報のため編集できません</p>
+            </div>
+
+            <div className="card">
+              <p className="muted">自己紹介</p>
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="プレイスタイルや得意な役割など、自由に書いてください"
+                rows={5}
+              />
             </div>
           </div>
 
