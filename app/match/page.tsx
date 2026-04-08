@@ -772,9 +772,18 @@ export default function MatchPage() {
   return (
     <div className="min-h-screen bg-neutral-950 text-white">
       <div className="mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-6 border-b border-white/10 pb-4">
-          <h1 className="text-3xl font-bold">ASCENT マッチング</h1>
-          <p className="mt-2 text-sm text-white/60">招待制パーティ + 自動マッチ生成</p>
+        <div className="mb-6 flex items-start justify-between gap-4 border-b border-white/10 pb-4">
+          <div>
+            <h1 className="text-3xl font-bold">ASCENT マッチング</h1>
+            <p className="mt-2 text-sm text-white/60">招待制パーティ + 自動マッチ生成</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push("/mypage")}
+            className="rounded border border-white/20 bg-white/5 px-3 py-2 text-sm hover:bg-white/10"
+          >
+            マイページに戻る
+          </button>
         </div>
 
         {errorText && (
