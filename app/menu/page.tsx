@@ -125,6 +125,7 @@ export default function MenuPage() {
         </div>
         <div className="row">
           <button onClick={() => router.push('/mypage')}>マイページ</button>
+          <button onClick={() => router.push('/')}>トップページに戻る</button>
         </div>
       </div>
 
