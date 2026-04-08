@@ -13,6 +13,7 @@ type UserRow = {
   discord_name: string | null
   discord_user_id: string | null
   activision_id: string | null
+  controller: string | null
   is_profile_complete: boolean | null
 }
 
@@ -342,6 +343,11 @@ export default function MyPage() {
             <div className="card">
               <p className="muted">Activision ID</p>
               <h3>{profile?.activision_id || '未設定'}</h3>
+            </div>
+
+            <div className="card">
+              <p className="muted">使用デバイス</p>
+              <h3>{profile?.controller || '未設定'}</h3>
             </div>
 
             <div className="card">

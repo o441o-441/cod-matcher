@@ -3,11 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { CONTROLLER_GROUPS } from '@/lib/controllers'
 
 export default function OnboardingPage() {
   const router = useRouter()
   const [displayName, setDisplayName] = useState('')
   const [activisionId, setActivisionId] = useState('')
+  const [controller, setController] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleSave = async () => {
@@ -30,6 +32,7 @@ export default function OnboardingPage() {
       .update({
         display_name: displayName,
         activision_id: activisionId,
+        controller: controller || null,
         is_profile_complete: true,
       })
       .eq('auth_user_id', user.id)
@@ -81,6 +84,25 @@ export default function OnboardingPage() {
           onChange={e => setActivisionId(e.target.value)}
           placeholder="Activision IDを入力"
         />
+      </div>
+
+      <div style={{ marginTop: '20px' }}>
+        <p>使用デバイス</p>
+        <select
+          value={controller}
+          onChange={(e) => setController(e.target.value)}
+        >
+          <option value="">選択してください</option>
+          {CONTROLLER_GROUPS.map((g) => (
+            <optgroup key={g.manufacturer} label={g.manufacturer}>
+              {g.options.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
       </div>
 
       <div style={{ marginTop: '20px' }}>

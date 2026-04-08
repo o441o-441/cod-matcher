@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
+import { CONTROLLER_GROUPS } from '@/lib/controllers'
 
 type UserRow = {
   id: string
@@ -11,6 +12,7 @@ type UserRow = {
   display_name: string | null
   discord_id: string | null
   activision_id: string | null
+  controller: string | null
   is_profile_complete: boolean | null
 }
 
@@ -25,6 +27,7 @@ export default function ProfileEditPage() {
   const [displayName, setDisplayName] = useState('')
   const [activisionId, setActivisionId] = useState('')
   const [discordId, setDiscordId] = useState('')
+  const [controller, setController] = useState('')
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -54,6 +57,7 @@ export default function ProfileEditPage() {
       setDisplayName(data.display_name || '')
       setActivisionId(data.activision_id || '')
       setDiscordId(data.discord_id || '')
+      setController(data.controller || '')
       setLoading(false)
     }
 
@@ -81,6 +85,7 @@ export default function ProfileEditPage() {
       .update({
         display_name: trimmedDisplayName,
         activision_id: trimmedActivisionId || null,
+        controller: controller || null,
       })
       .eq('id', profile.id)
 
@@ -147,6 +152,25 @@ export default function ProfileEditPage() {
                 onChange={(e) => setActivisionId(e.target.value)}
                 placeholder="Activision IDを入力"
               />
+            </div>
+
+            <div className="card">
+              <p className="muted">使用デバイス</p>
+              <select
+                value={controller}
+                onChange={(e) => setController(e.target.value)}
+              >
+                <option value="">選択してください</option>
+                {CONTROLLER_GROUPS.map((g) => (
+                  <optgroup key={g.manufacturer} label={g.manufacturer}>
+                    {g.options.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
             </div>
 
             <div className="card">
