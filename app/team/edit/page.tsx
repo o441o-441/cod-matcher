@@ -32,23 +32,13 @@ export default function TeamEditPage() {
         return
       }
 
-      // 自分取得
-      const { data: userData } = await supabase
-        .from('users')
-        .select('id')
-        .eq('auth_user_id', session.user.id)
-        .single()
-
-      if (!userData) {
-        router.push('/mypage')
-        return
-      }
+      const currentUserId = session.user.id
 
       // チーム取得
       const { data: member } = await supabase
         .from('team_members')
         .select('team_id')
-        .eq('user_id', userData.id)
+        .eq('user_id', currentUserId)
         .single()
 
       if (!member) {
@@ -69,7 +59,7 @@ export default function TeamEditPage() {
       }
 
       // オーナーチェック
-      if (teamData.owner_user_id !== userData.id) {
+      if (teamData.owner_user_id !== currentUserId) {
         showToast('チーム編集はオーナーのみ可能です', 'error')
         router.push('/mypage')
         return

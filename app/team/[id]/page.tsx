@@ -20,16 +20,14 @@ type TeamRow = {
 type UserRow = {
   id: string
   display_name: string | null
-  activision_id: string | null
 }
 
 type TeamMemberRow = {
   id: string
   role: string
   user_id: string
-  users: {
+  profiles: {
     display_name: string | null
-    activision_id: string | null
   } | null
 }
 
@@ -102,24 +100,13 @@ export default function TeamDetailPage() {
       return
     }
 
-    const { data: currentUser, error: currentUserError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('auth_user_id', session.user.id)
-      .single()
-
-    if (currentUserError || !currentUser) {
-      console.error('currentUserError:', currentUserError)
-      router.push('/mypage')
-      return
-    }
-
-    setMyUserId(currentUser.id)
+    const currentUserId = session.user.id
+    setMyUserId(currentUserId)
 
     const { data: myMembership, error: myMembershipError } = await supabase
       .from('team_members')
       .select('team_id, role')
-      .eq('user_id', currentUser.id)
+      .eq('user_id', currentUserId)
       .maybeSingle()
 
     if (myMembershipError) {
@@ -149,9 +136,8 @@ export default function TeamDetailPage() {
         id,
         role,
         user_id,
-        users (
-          display_name,
-          activision_id
+        profiles (
+          display_name
         )
       `)
       .eq('team_id', teamId)
@@ -162,14 +148,14 @@ export default function TeamDetailPage() {
       return
     }
 
-    type RawMember = Omit<TeamMemberRow, 'users'> & {
-      users: TeamMemberRow['users'] | TeamMemberRow['users'][]
+    type RawMember = Omit<TeamMemberRow, 'profiles'> & {
+      profiles: TeamMemberRow['profiles'] | TeamMemberRow['profiles'][]
     }
     const normalizedMembers: TeamMemberRow[] = (memberData || []).map((m) => {
       const raw = m as unknown as RawMember
       return {
         ...raw,
-        users: Array.isArray(raw.users) ? raw.users[0] ?? null : raw.users ?? null,
+        profiles: Array.isArray(raw.profiles) ? raw.profiles[0] ?? null : raw.profiles ?? null,
       }
     })
 
@@ -234,8 +220,8 @@ export default function TeamDetailPage() {
     setSearchedUser(null)
 
     const { data, error } = await supabase
-      .from('users')
-      .select('id, display_name, activision_id')
+      .from('profiles')
+      .select('id, display_name')
       .eq('display_name', searchName.trim())
       .maybeSingle()
 
@@ -307,7 +293,7 @@ export default function TeamDetailPage() {
     }
 
     const ok = window.confirm(
-      `${member.users?.display_name || 'このユーザー'} をチームから削除しますか？`
+      `${member.profiles?.display_name || 'このユーザー'} をチームから削除しますか？`
     )
     if (!ok) return
 
@@ -576,11 +562,7 @@ export default function TeamDetailPage() {
                   return (
                     <div key={member.id} className="card">
                       <p>
-                        <strong>名前:</strong> {member.users?.display_name || '未設定'}
-                      </p>
-                      <p>
-                        <strong>Activision ID:</strong>{' '}
-                        {member.users?.activision_id || '未設定'}
+                        <strong>名前:</strong> {member.profiles?.display_name || '未設定'}
                       </p>
                       <p>
                         <strong>役割:</strong> {member.role}
@@ -639,10 +621,6 @@ export default function TeamDetailPage() {
                 <div className="card" style={{ marginTop: '12px' }}>
                   <p>
                     <strong>名前:</strong> {searchedUser.display_name}
-                  </p>
-                  <p>
-                    <strong>Activision ID:</strong>{' '}
-                    {searchedUser.activision_id || '未設定'}
                   </p>
                   <div className="row" style={{ marginTop: '12px' }}>
                     <button onClick={handleAddMember} disabled={addLoading}>
@@ -729,7 +707,7 @@ export default function TeamDetailPage() {
         title="ownerを譲渡しますか？"
         message={
           transferTarget
-            ? `${transferTarget.users?.display_name || 'このメンバー'} にowner権限を譲渡します。実行後、あなたはmemberになります。`
+            ? `${transferTarget.profiles?.display_name || 'このメンバー'} にowner権限を譲渡します。実行後、あなたはmemberになります。`
             : ''
         }
         confirmText={

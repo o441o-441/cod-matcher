@@ -220,7 +220,7 @@ export default function MyPage() {
     const { data: memberRow, error: memberError } = await supabase
       .from('team_members')
       .select('team_id')
-      .eq('user_id', syncedUser.id)
+      .eq('user_id', authUser.id)
       .maybeSingle()
 
     if (memberError) {

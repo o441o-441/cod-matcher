@@ -24,26 +24,12 @@ export default function CreateTeamPage() {
       }
 
       const authUserId = session.user.id
-
-      const { data: currentUser, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('auth_user_id', authUserId)
-        .single()
-
-      if (userError || !currentUser) {
-        console.error('userError:', userError)
-        alert('ユーザー情報の取得に失敗しました')
-        setChecking(false)
-        return
-      }
-
-      setMyUserId(currentUser.id)
+      setMyUserId(authUserId)
 
       const { data: existingMembership, error: membershipError } = await supabase
         .from('team_members')
         .select('team_id')
-        .eq('user_id', currentUser.id)
+        .eq('user_id', authUserId)
         .maybeSingle()
 
       if (membershipError) {

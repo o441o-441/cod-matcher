@@ -424,53 +424,42 @@ export default function MatchPage() {
         );
       }
 
-      // 固定チーム情報（旧 users / team_members 経由）
-      const { data: legacyMe } = await supabase
-        .from("users")
-        .select("id")
-        .eq("auth_user_id", uid)
-        .maybeSingle<{ id: string }>();
+      // 固定チーム情報（team_members.user_id は profiles.id = auth.uid()）
+      const { data: myMembership } = await supabase
+        .from("team_members")
+        .select("team_id")
+        .eq("user_id", uid)
+        .maybeSingle<{ team_id: string }>();
 
-      if (legacyMe?.id) {
-        const { data: myMembership } = await supabase
+      if (myMembership?.team_id) {
+        const { data: teamRow } = await supabase
+          .from("teams")
+          .select("id, name")
+          .eq("id", myMembership.team_id)
+          .maybeSingle<{ id: string; name: string }>();
+
+        const { data: memberRows } = await supabase
           .from("team_members")
-          .select("team_id")
-          .eq("user_id", legacyMe.id)
-          .maybeSingle<{ team_id: string }>();
+          .select("user_id, profiles!inner(id, display_name)")
+          .eq("team_id", myMembership.team_id);
 
-        if (myMembership?.team_id) {
-          const { data: teamRow } = await supabase
-            .from("teams")
-            .select("id, name")
-            .eq("id", myMembership.team_id)
-            .maybeSingle<{ id: string; name: string }>();
+        type RawTeamMemberRow = {
+          user_id: string;
+          profiles:
+            | { id: string; display_name: string | null }
+            | { id: string; display_name: string | null }[]
+            | null;
+        };
 
-          const { data: memberRows } = await supabase
-            .from("team_members")
-            .select("users(id, auth_user_id, display_name)")
-            .eq("team_id", myMembership.team_id);
+        const otherMembers: MyTeamMember[] = ((memberRows ?? []) as RawTeamMemberRow[])
+          .map((row) => {
+            const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+            return { auth_user_id: row.user_id, display_name: p?.display_name ?? null };
+          })
+          .filter((m) => m.auth_user_id && m.auth_user_id !== uid);
 
-          type RawTeamMemberRow = {
-            users:
-              | { id: string; auth_user_id: string; display_name: string | null }
-              | { id: string; auth_user_id: string; display_name: string | null }[]
-              | null;
-          };
-
-          const otherMembers: MyTeamMember[] = ((memberRows ?? []) as RawTeamMemberRow[])
-            .map((row) => (Array.isArray(row.users) ? row.users[0] : row.users))
-            .filter(
-              (u): u is { id: string; auth_user_id: string; display_name: string | null } =>
-                !!u && !!u.auth_user_id
-            )
-            .filter((u) => u.auth_user_id !== uid)
-            .map((u) => ({ auth_user_id: u.auth_user_id, display_name: u.display_name }));
-
-          if (teamRow) {
-            setMyTeam({ id: teamRow.id, name: teamRow.name, members: otherMembers });
-          } else {
-            setMyTeam(null);
-          }
+        if (teamRow) {
+          setMyTeam({ id: teamRow.id, name: teamRow.name, members: otherMembers });
         } else {
           setMyTeam(null);
         }

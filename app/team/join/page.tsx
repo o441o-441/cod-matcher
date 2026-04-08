@@ -37,19 +37,7 @@ export default function TeamJoinPage() {
         return
       }
 
-      const { data: user, error } = await supabase
-        .from('users')
-        .select('id')
-        .eq('auth_user_id', session.user.id)
-        .single()
-
-      if (error || !user) {
-        showToast('ユーザー情報の取得に失敗しました', 'error')
-        router.push('/mypage')
-        return
-      }
-
-      setMyUserId(user.id)
+      setMyUserId(session.user.id)
       setLoading(false)
     }
 
