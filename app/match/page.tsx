@@ -133,6 +133,9 @@ export default function MatchPage() {
   const queueType = "ranked" as const;
   const [sourceTeamId, setSourceTeamId] = useState("");
 
+  type MyTeamMember = { auth_user_id: string; display_name: string | null };
+  const [myTeam, setMyTeam] = useState<{ id: string; name: string; members: MyTeamMember[] } | null>(null);
+
   const [friends, setFriends] = useState<{ friend_user_id: string; friend_display_name: string | null }[]>([]);
   const [selectedFriendId, setSelectedFriendId] = useState("");
 
@@ -205,6 +208,7 @@ export default function MatchPage() {
         setMyWaitingEntry(null);
         setMyMatchedEntryIds([]);
         setMyActiveMatch(null);
+        setMyTeam(null);
         setLoading(false);
         return;
       }
@@ -259,6 +263,7 @@ export default function MatchPage() {
         setMyWaitingEntry(null);
         setMyMatchedEntryIds([]);
         setMyActiveMatch(null);
+        setMyTeam(null);
         setLoading(false);
         return;
       }
@@ -418,6 +423,60 @@ export default function MatchPage() {
           (friendsData as { friend_user_id: string; friend_display_name: string | null }[] | null) ?? []
         );
       }
+
+      // 固定チーム情報（旧 users / team_members 経由）
+      const { data: legacyMe } = await supabase
+        .from("users")
+        .select("id")
+        .eq("auth_user_id", uid)
+        .maybeSingle<{ id: string }>();
+
+      if (legacyMe?.id) {
+        const { data: myMembership } = await supabase
+          .from("team_members")
+          .select("team_id")
+          .eq("user_id", legacyMe.id)
+          .maybeSingle<{ team_id: string }>();
+
+        if (myMembership?.team_id) {
+          const { data: teamRow } = await supabase
+            .from("teams")
+            .select("id, name")
+            .eq("id", myMembership.team_id)
+            .maybeSingle<{ id: string; name: string }>();
+
+          const { data: memberRows } = await supabase
+            .from("team_members")
+            .select("users(id, auth_user_id, display_name)")
+            .eq("team_id", myMembership.team_id);
+
+          type RawTeamMemberRow = {
+            users:
+              | { id: string; auth_user_id: string; display_name: string | null }
+              | { id: string; auth_user_id: string; display_name: string | null }[]
+              | null;
+          };
+
+          const otherMembers: MyTeamMember[] = ((memberRows ?? []) as RawTeamMemberRow[])
+            .map((row) => (Array.isArray(row.users) ? row.users[0] : row.users))
+            .filter(
+              (u): u is { id: string; auth_user_id: string; display_name: string | null } =>
+                !!u && !!u.auth_user_id
+            )
+            .filter((u) => u.auth_user_id !== uid)
+            .map((u) => ({ auth_user_id: u.auth_user_id, display_name: u.display_name }));
+
+          if (teamRow) {
+            setMyTeam({ id: teamRow.id, name: teamRow.name, members: otherMembers });
+          } else {
+            setMyTeam(null);
+          }
+        } else {
+          setMyTeam(null);
+        }
+      } else {
+        setMyTeam(null);
+      }
     } catch (e) {
       console.error("loadMyState error:", e);
       let message = "状態の読み込みに失敗しました。";
@@ -539,6 +598,78 @@ export default function MatchPage() {
       await loadMyState();
     } catch (e) {
       const message = e instanceof Error ? e.message : "パーティ作成に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCreatePartyFromTeam = async () => {
+    if (!myTeam) {
+      setErrorText("固定チームに所属していません。");
+      return;
+    }
+    if (myParty) {
+      setErrorText("既にパーティがあります。");
+      return;
+    }
+
+    clearMessages();
+    setBusy(true);
+
+    try {
+      const { error: createError } = await supabase.rpc("rpc_create_party", {
+        p_source_team_id: myTeam.id,
+      });
+      if (createError) throw createError;
+
+      // 作成したパーティ ID を取得（リーダーが自分の最新の open/queued パーティ）
+      const { data: newPartyRow, error: findPartyError } = await supabase
+        .from("parties")
+        .select("id")
+        .eq("leader_user_id", myUserId ?? "")
+        .in("status", ["open", "queued"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<{ id: string }>();
+
+      if (findPartyError) throw findPartyError;
+
+      const newPartyId = newPartyRow?.id ?? null;
+      if (!newPartyId) {
+        throw new Error("作成したパーティが見つかりませんでした。");
+      }
+
+      const failures: string[] = [];
+      for (const m of myTeam.members) {
+        const { error: inviteError } = await supabase.rpc("rpc_invite_to_party", {
+          p_party_id: newPartyId,
+          p_invitee_user_id: m.auth_user_id,
+        });
+        if (inviteError) {
+          console.error("invite error for", m.auth_user_id, inviteError);
+          failures.push(m.display_name ?? m.auth_user_id);
+        }
+      }
+
+      if (failures.length > 0) {
+        setInfoText(
+          `パーティを作成し、招待を送信しました（${myTeam.members.length - failures.length}/${myTeam.members.length} 件成功）。失敗: ${failures.join(", ")}`
+        );
+      } else if (myTeam.members.length === 0) {
+        setInfoText("パーティを作成しました（チームに他のメンバーはいません）。");
+      } else {
+        setInfoText(`パーティを作成し、${myTeam.members.length} 名に招待を送信しました。`);
+      }
+
+      await loadMyState();
+    } catch (e) {
+      const message =
+        e instanceof Error
+          ? e.message
+          : e && typeof e === "object" && "message" in e && typeof (e as { message?: unknown }).message === "string"
+          ? ((e as { message: string }).message)
+          : "パーティ作成に失敗しました。";
       setErrorText(message);
     } finally {
       setBusy(false);
@@ -876,6 +1007,18 @@ export default function MatchPage() {
                   >
                     パーティ作成
                   </button>
+
+                  {myTeam && (
+                    <button
+                      onClick={handleCreatePartyFromTeam}
+                      disabled={!canCreateParty}
+                      className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      title={`チーム「${myTeam.name}」のメンバー全員に招待を送ります`}
+                    >
+                      チーム「{myTeam.name}」で作成＋全員招待
+                      {myTeam.members.length > 0 && `（${myTeam.members.length}名）`}
+                    </button>
+                  )}
                 </div>
 
                 <div className="rounded border border-white/10 bg-black/20 p-4">
