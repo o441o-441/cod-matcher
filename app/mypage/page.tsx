@@ -375,10 +375,6 @@ export default function MyPage() {
               <h3>{profile?.discord_name || '未設定'}</h3>
             </div>
 
-            <div className="card">
-              <p className="muted">Discord User ID</p>
-              <h3>{profile?.discord_user_id || '未設定'}</h3>
-            </div>
           </div>
 
           <div className="section grid grid-2">
