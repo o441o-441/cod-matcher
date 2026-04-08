@@ -36,26 +36,12 @@ export default function MyPage() {
   const [profile, setProfile] = useState<UserRow | null>(null)
   const [team, setTeam] = useState<TeamRow | null>(null)
   const [pageError, setPageError] = useState('')
-  const [waitingCount, setWaitingCount] = useState(0)
   const [bio, setBio] = useState<string | null>(null)
   const [rating, setRating] = useState<number | null>(null)
   const [wins, setWins] = useState<number | null>(null)
   const [losses, setLosses] = useState<number | null>(null)
 
   const realtimeRef = useRef<RealtimeChannel | null>(null)
-
-  const fetchWaitingCount = async () => {
-    const { count, error } = await supabase
-      .from('match_queue')
-      .select('*', { count: 'exact', head: true })
-
-    if (error) {
-      console.error('fetchWaitingCount error:', error)
-      return
-    }
-
-    setWaitingCount(count || 0)
-  }
 
   const pickString = (
     obj: Record<string, unknown> | undefined,
@@ -253,7 +239,6 @@ export default function MyPage() {
       setTeam(null)
     }
 
-    await fetchWaitingCount()
     setLoading(false)
   }
 
@@ -273,17 +258,6 @@ export default function MyPage() {
   useEffect(() => {
     const channel = supabase
       .channel('mypage-realtime-global')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'match_queue',
-        },
-        async () => {
-          await fetchWaitingCount()
-        }
-      )
       .on(
         'postgres_changes',
         {
@@ -403,19 +377,6 @@ export default function MyPage() {
             <button onClick={() => router.push('/profile/edit')}>
               プロフィールを編集
             </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="section">
-        <div className="card-strong">
-          <h2>現在の状況</h2>
-
-          <div className="grid grid-2">
-            <div className="card">
-              <p className="muted">待機中チーム数</p>
-              <h3>{waitingCount}チーム</h3>
-            </div>
           </div>
         </div>
       </div>
