@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type MatchRow = {
@@ -90,6 +90,7 @@ function teamLabel(team: MatchTeamRow | null) {
 }
 
 export default function ReportPage() {
+  const router = useRouter();
   const params = useParams<{ id: string }>();
   const matchId = params?.id;
 
@@ -369,9 +370,20 @@ export default function ReportPage() {
   return (
     <div className="min-h-screen bg-neutral-950 text-white">
       <div className="mx-auto max-w-7xl px-4 py-6">
-        <div className="mb-6 border-b border-white/10 pb-4">
-          <h1 className="text-2xl font-bold">ASCENT 試合結果報告</h1>
-          <p className="mt-1 text-sm text-white/60">Match ID: {matchId}</p>
+        <div className="mb-6 flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">ASCENT 試合結果報告</h1>
+            <p className="mt-1 text-sm text-white/60">Match ID: {matchId}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => router.push("/menu")}
+              className="rounded border border-white/20 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+            >
+              メニューへ戻る
+            </button>
+          </div>
         </div>
 
         {errorText && (
