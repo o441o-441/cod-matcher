@@ -548,6 +548,9 @@ export default function MatchPage() {
         if (!isExpectedAutoMatchMiss(error.message)) {
           setErrorText(error.message);
         }
+        // Race may have been lost (someone else matched us already).
+        // Refresh state so the auto-redirect effect can pick up the new active match.
+        await loadMyState();
         return;
       }
 
@@ -557,12 +560,24 @@ export default function MatchPage() {
         setInfoText("マッチが成立しました。");
         await loadMyState();
         router.push(`/match/${row.match_id}/banpick`);
+      } else {
+        await loadMyState();
       }
     } finally {
       autoMatchBusyRef.current = false;
       setAutoMatching(false);
     }
   }, [myWaitingEntry, isPartyLeader, myActiveMatch?.id, supabase, loadMyState, router]);
+
+  useEffect(() => {
+    if (!myActiveMatch?.id) return;
+    if (routePushedRef.current) return;
+    if (myActiveMatch.status === "banpick") {
+      routePushedRef.current = true;
+      setInfoText("マッチが成立しました。バンピック画面へ移動します。");
+      router.push(`/match/${myActiveMatch.id}/banpick`);
+    }
+  }, [myActiveMatch?.id, myActiveMatch?.status, router]);
 
   useEffect(() => {
     if (!isWaiting || !isPartyLeader || !!myActiveMatch) return;
