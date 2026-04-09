@@ -355,7 +355,9 @@ export default function BanpickPage() {
         { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${matchId}` },
         () => void loadAll()
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("banpick realtime status:", status);
+      });
 
     return () => {
       void supabase.removeChannel(channel);
