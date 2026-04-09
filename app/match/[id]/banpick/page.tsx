@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { useParams, useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
@@ -111,23 +111,6 @@ const PHASE_LABEL: Record<BanpickPhase, string> = {
 
 const SIDE_OPTIONS = ["JSOC", "ギルド"];
 
-function getSupabaseClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !anon) {
-    throw new Error("Supabase env is missing");
-  }
-
-  return createClient(url, anon, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-  });
-}
-
 function parsePhaseState(
   selected: Json,
   phase: "hp" | "snd" | "ovl"
@@ -194,8 +177,6 @@ export default function BanpickPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const matchId = params?.id;
-
-  const [supabase] = useState(() => getSupabaseClient());
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
