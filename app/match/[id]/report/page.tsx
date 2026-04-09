@@ -269,7 +269,8 @@ export default function ReportPage() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [matchId, loadAll, supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId]);
 
   const handleGameChange = <K extends keyof ReportFormGame>(
     index: number,

@@ -424,7 +424,8 @@ export default function BanpickPage() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [matchId, loadAll, supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId]);
 
   const clearMessages = () => {
     setErrorText(null);
