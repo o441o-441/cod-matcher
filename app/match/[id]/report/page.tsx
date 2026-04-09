@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { useParams } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 type MatchRow = {
   id: string;
@@ -72,23 +72,6 @@ type ReportFormGame = {
   was_played: boolean;
 };
 
-function getSupabaseClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !anon) {
-    throw new Error("Supabase env is missing");
-  }
-
-  return createClient(url, anon, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-  });
-}
-
 const MODE_OPTIONS = ["hp", "snd", "control", "overload"];
 const MAP_OPTIONS = [
   "Hacienda",
@@ -109,8 +92,6 @@ function teamLabel(team: MatchTeamRow | null) {
 export default function ReportPage() {
   const params = useParams<{ id: string }>();
   const matchId = params?.id;
-
-  const [supabase] = useState(() => getSupabaseClient());
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -256,7 +237,7 @@ export default function ReportPage() {
     } finally {
       setLoading(false);
     }
-  }, [matchId, supabase]);
+  }, [matchId]);
 
   useEffect(() => {
     void loadAll();
