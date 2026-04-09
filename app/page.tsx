@@ -219,10 +219,6 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="section row">
-          <button onClick={() => router.push('/login')}>ログインして始める</button>
-          <button onClick={() => router.push('/ranking')}>ランキングを見る</button>
-        </div>
       </div>
 
       <div className="section row" style={{ justifyContent: 'center', gap: 16 }}>
