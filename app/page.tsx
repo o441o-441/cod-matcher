@@ -196,29 +196,49 @@ export default function Home() {
         <div className="stack">
           <div className="card">
             <p>
-              <strong>1.</strong> Discordでログイン
+              <strong>1. Discordでログイン</strong>
+            </p>
+            <p className="muted">
+              右上の「ログイン」から Discord 認証で参加。アカウント作成は不要です。
             </p>
           </div>
 
           <div className="card">
             <p>
-              <strong>2.</strong> チームを作成
+              <strong>2. プロフィールを登録</strong>
+            </p>
+            <p className="muted">
+              表示名・Activision ID・使用デバイスを入力。初回ログイン時に一度だけ求められます。
             </p>
           </div>
 
           <div className="card">
             <p>
-              <strong>3.</strong> 対戦開始
+              <strong>3. メニューから対戦開始</strong>
+            </p>
+            <p className="muted">
+              ソロでもチームでも参加できます。フレンドを誘ってパーティを組むことも可能。
             </p>
           </div>
 
           <div className="card">
             <p>
-              <strong>4.</strong> 試合結果を報告
+              <strong>4. マッチング → バンピック → 試合</strong>
+            </p>
+            <p className="muted">
+              レートが近いチームと自動マッチング。マップ・モードのバンピックを経て対戦開始です。
+            </p>
+          </div>
+
+          <div className="card">
+            <p>
+              <strong>5. 結果を報告 → 相手の承認で確定</strong>
+            </p>
+            <p className="muted">
+              試合後にスコアを報告し、相手チームの承認でレートと戦績が反映されます。
             </p>
           </div>
         </div>
-
       </div>
 
       <div className="section row" style={{ justifyContent: 'center', gap: 16 }}>
