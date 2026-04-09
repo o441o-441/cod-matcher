@@ -305,9 +305,11 @@ export default function BanpickPage() {
     };
   }, [members, alphaTeam?.id, bravoTeam?.id]);
 
-  const loadAll = useCallback(async () => {
+  const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
     if (!matchId) return;
-    setLoading(true);
+    if (!opts?.silent) {
+      setLoading(true);
+    }
     setErrorText(null);
 
     try {
@@ -380,7 +382,9 @@ export default function BanpickPage() {
       const message = e instanceof Error ? e.message : "読み込みに失敗しました。";
       setErrorText(message);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) {
+        setLoading(false);
+      }
     }
   }, [matchId, supabase]);
 
@@ -402,7 +406,7 @@ export default function BanpickPage() {
         { event: "*", schema: "public", table: "matches", filter: `id=eq.${matchId}` },
         (payload) => {
           console.log("banpick realtime event:", payload.table, payload.eventType);
-          void loadAll();
+          void loadAll({ silent: true });
         }
       )
       .on(
@@ -410,7 +414,7 @@ export default function BanpickPage() {
         { event: "*", schema: "public", table: "banpick_sessions", filter: `match_id=eq.${matchId}` },
         (payload) => {
           console.log("banpick realtime event:", payload.table, payload.eventType);
-          void loadAll();
+          void loadAll({ silent: true });
         }
       )
       .on(
@@ -418,7 +422,7 @@ export default function BanpickPage() {
         { event: "*", schema: "public", table: "banpick_actions", filter: `match_id=eq.${matchId}` },
         (payload) => {
           console.log("banpick realtime event:", payload.table, payload.eventType);
-          void loadAll();
+          void loadAll({ silent: true });
         }
       )
       .on(
@@ -426,7 +430,7 @@ export default function BanpickPage() {
         { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${matchId}` },
         (payload) => {
           console.log("banpick realtime event:", payload.table, payload.eventType);
-          void loadAll();
+          void loadAll({ silent: true });
         }
       )
       .subscribe((status) => {
@@ -439,14 +443,6 @@ export default function BanpickPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
 
-  useEffect(() => {
-    if (!matchId) return;
-    const interval = window.setInterval(() => {
-      void loadAll();
-    }, 5000);
-    return () => window.clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchId]);
 
   const clearMessages = () => {
     setErrorText(null);
