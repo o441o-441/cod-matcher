@@ -195,6 +195,7 @@ export default function ReportPage() {
             .from("match_reports")
             .select("id,match_id,submitted_by_user_id,submitted_by_match_team_id,status,winner_match_team_id,score_summary,notes,submitted_at,decided_at")
             .eq("match_id", matchId)
+            .in("status", ["pending", "approved"])
             .order("submitted_at", { ascending: false })
             .limit(1)
             .maybeSingle<MatchReportRow>(),
