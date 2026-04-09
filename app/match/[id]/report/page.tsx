@@ -299,41 +299,29 @@ export default function ReportPage() {
     );
   };
 
-  const handleSubmitReport = async () => {
+  const handleSubmitReportWith = async (winnerId: string) => {
     if (!matchId) return;
     clearMessages();
 
-    if (!winnerMatchTeamId) {
+    if (!winnerId) {
       setErrorText("勝者チームを選択してください。");
-      return;
-    }
-
-    if (!scoreSummary.trim()) {
-      setErrorText("スコアを入力してください。");
       return;
     }
 
     setBusy(true);
     try {
-      const payload = games.map((g) => ({
-        game_number: g.game_number,
-        mode: g.mode,
-        map_name: g.map_name || null,
-        winner_match_team_id: g.was_played ? g.winner_match_team_id || "" : "",
-        was_played: g.was_played,
-      }));
-
       const { error } = await supabase.rpc("rpc_submit_match_report", {
         p_match_id: matchId,
-        p_winner_match_team_id: winnerMatchTeamId,
-        p_score_summary: scoreSummary,
-        p_notes: notes || null,
-        p_games_json: payload,
+        p_winner_match_team_id: winnerId,
+        p_score_summary: "勝敗のみ報告",
+        p_notes: null,
+        p_games_json: [],
       });
 
       if (error) throw error;
 
-      setInfoText("試合結果を申請しました。");
+      setWinnerMatchTeamId(winnerId);
+      setInfoText("試合結果を申請しました。相手の承認を待っています。");
       await loadAll();
     } catch (e) {
       const message = e instanceof Error ? e.message : "結果申請に失敗しました。";
@@ -486,120 +474,26 @@ export default function ReportPage() {
 
             {!report && match?.status !== "completed" && (
               <section className="rounded border border-white/10 bg-white/5 p-4">
-                <h2 className="mb-3 text-lg font-semibold">結果申請</h2>
+                <h2 className="mb-3 text-lg font-semibold">勝者を選択</h2>
+                <p className="mb-4 text-sm text-white/60">
+                  勝利したチームのボタンを押して申請してください。相手チームの承認でレートと戦績が反映されます。
+                </p>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium">勝者チーム</label>
-                    <select
-                      value={winnerMatchTeamId}
-                      onChange={(e) => setWinnerMatchTeamId(e.target.value)}
-                      className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                    >
-                      <option value="">選択してください</option>
-                      {alphaTeam && <option value={alphaTeam.id}>{teamLabel(alphaTeam)}</option>}
-                      {bravoTeam && <option value={bravoTeam.id}>{teamLabel(bravoTeam)}</option>}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium">スコア</label>
-                    <input
-                      value={scoreSummary}
-                      onChange={(e) => setScoreSummary(e.target.value)}
-                      placeholder="例: 2-0"
-                      className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium">備考</label>
-                    <textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={3}
-                      placeholder="任意"
-                      className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="mb-2 text-sm font-medium">ゲーム別結果</div>
-                    <div className="space-y-3">
-                      {games.map((game, index) => (
-                        <div key={game.game_number} className="rounded border border-white/10 bg-black/20 p-3">
-                          <div className="mb-3 text-sm font-semibold">Game {game.game_number}</div>
-
-                          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-                            <div>
-                              <label className="mb-1 block text-xs text-white/60">モード</label>
-                              <select
-                                value={game.mode}
-                                onChange={(e) => handleGameChange(index, "mode", e.target.value)}
-                                className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                              >
-                                {MODE_OPTIONS.map((mode) => (
-                                  <option key={mode} value={mode}>
-                                    {mode}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="mb-1 block text-xs text-white/60">マップ</label>
-                              <select
-                                value={game.map_name}
-                                onChange={(e) => handleGameChange(index, "map_name", e.target.value)}
-                                className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                              >
-                                <option value="">未選択</option>
-                                {MAP_OPTIONS.map((map) => (
-                                  <option key={map} value={map}>
-                                    {map}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="mb-1 block text-xs text-white/60">勝者</label>
-                              <select
-                                value={game.winner_match_team_id}
-                                onChange={(e) =>
-                                  handleGameChange(index, "winner_match_team_id", e.target.value)
-                                }
-                                disabled={!game.was_played}
-                                className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none disabled:opacity-50"
-                              >
-                                <option value="">選択してください</option>
-                                {alphaTeam && <option value={alphaTeam.id}>{teamLabel(alphaTeam)}</option>}
-                                {bravoTeam && <option value={bravoTeam.id}>{teamLabel(bravoTeam)}</option>}
-                              </select>
-                            </div>
-
-                            <div className="flex items-end">
-                              <label className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={game.was_played}
-                                  onChange={(e) => handleGameChange(index, "was_played", e.target.checked)}
-                                />
-                                実際にプレイした
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <button
+                    onClick={() => alphaTeam && void handleSubmitReportWith(alphaTeam.id)}
+                    disabled={busy || !alphaTeam}
+                    className="rounded border border-cyan-400 bg-cyan-500/20 px-6 py-6 text-lg font-bold text-white hover:bg-cyan-500/30 disabled:opacity-50"
+                  >
+                    {teamLabel(alphaTeam)} 勝利
+                  </button>
 
                   <button
-                    onClick={handleSubmitReport}
-                    disabled={busy}
-                    className="rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+                    onClick={() => bravoTeam && void handleSubmitReportWith(bravoTeam.id)}
+                    disabled={busy || !bravoTeam}
+                    className="rounded border border-fuchsia-400 bg-fuchsia-500/20 px-6 py-6 text-lg font-bold text-white hover:bg-fuchsia-500/30 disabled:opacity-50"
                   >
-                    結果申請
+                    {teamLabel(bravoTeam)} 勝利
                   </button>
                 </div>
               </section>
@@ -740,10 +634,8 @@ export default function ReportPage() {
             <section className="rounded border border-white/10 bg-white/5 p-4">
               <h2 className="mb-3 text-lg font-semibold">使い方</h2>
               <div className="space-y-2 text-sm text-white/80">
-                <div>1. 勝者チームを選択します。</div>
-                <div>2. スコアを入力します。</div>
-                <div>3. 各ゲームの結果を入れます。</div>
-                <div>4. 相手チームが承認するとレートが更新されます。</div>
+                <div>1. 勝者チームのボタンを押します。</div>
+                <div>2. 相手チームが承認するとレートと戦績が更新されます。</div>
               </div>
             </section>
           </div>
