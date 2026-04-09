@@ -45,24 +45,25 @@ type MatchTeamMemberRow = {
   } | null;
 };
 
+type BanpickPhase = "hp" | "snd" | "ovl" | "completed";
+type BanpickActionType = "ban" | "pick_map" | "pick_side";
+
+type PhaseState = {
+  bans: string[];
+  map: string | null;
+  side: string | null;
+};
+
 type BanpickSessionRow = {
   id: string;
   match_id: string;
   status: "pending" | "in_progress" | "completed" | "timeout" | "cancelled";
-  phase:
-    | "mode1_ban"
-    | "mode1_pick"
-    | "mode2_ban"
-    | "mode2_pick"
-    | "mode3_ban"
-    | "mode3_pick"
-    | "completed";
+  phase: BanpickPhase;
   current_turn_match_team_id: string | null;
-  current_action_type: "ban" | "pick" | "side_pick" | null;
+  current_action_type: BanpickActionType | null;
   turn_number: number;
   selected_maps: Json;
-  banned_maps: Json;
-  side_choices: Json;
+  deadline_at: string | null;
 };
 
 type BanpickActionRow = {
@@ -73,7 +74,7 @@ type BanpickActionRow = {
   actor_match_team_id: string;
   turn_number: number;
   phase: string;
-  action_type: "ban" | "pick" | "side_pick" | "auto_timeout";
+  action_type: "ban" | "pick_map" | "pick_side" | "auto_timeout";
   target: string;
   created_at: string;
   profiles?: {
@@ -95,16 +96,18 @@ type MatchMessageRow = {
   } | null;
 };
 
-const MAP_OPTIONS = [
-  "Hacienda",
-  "Exposure",
-  "Vault",
-  "Protocol",
-  "Skyline",
-  "Rewind",
-  "Derelict",
-  "Red Card",
-];
+const PHASE_POOLS: Record<"hp" | "snd" | "ovl", string[]> = {
+  hp: ["ブラックハート", "コロッサス", "デン", "エクスポージャー", "スカー"],
+  snd: ["コロッサス", "デン", "エクスポージャー", "レイド", "スカー"],
+  ovl: ["デン", "エクスポージャー", "スカー"],
+};
+
+const PHASE_LABEL: Record<BanpickPhase, string> = {
+  hp: "Phase 1 ハードポイント",
+  snd: "Phase 2 サーチ&デストロイ",
+  ovl: "Phase 3 オーバーロード",
+  completed: "バンピック完了",
+};
 
 const SIDE_OPTIONS = ["JSOC", "ギルド"];
 
@@ -125,39 +128,52 @@ function getSupabaseClient(): SupabaseClient {
   });
 }
 
-function asStringArray(v: Json): string[] {
-  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+function parsePhaseState(
+  selected: Json,
+  phase: "hp" | "snd" | "ovl"
+): PhaseState {
+  if (!selected || typeof selected !== "object" || Array.isArray(selected)) {
+    return { bans: [], map: null, side: null };
+  }
+  const node = (selected as Record<string, Json>)[phase];
+  if (!node || typeof node !== "object" || Array.isArray(node)) {
+    return { bans: [], map: null, side: null };
+  }
+  const obj = node as Record<string, Json>;
+  const bansRaw = obj.bans;
+  const bans = Array.isArray(bansRaw)
+    ? bansRaw.filter((x): x is string => typeof x === "string")
+    : [];
+  const map = typeof obj.map === "string" ? obj.map : null;
+  const side = typeof obj.side === "string" ? obj.side : null;
+  return { bans, map, side };
 }
 
-function phaseLabel(phase: BanpickSessionRow["phase"] | string) {
-  switch (phase) {
-    case "mode1_ban":
-      return "モード1 BAN";
-    case "mode1_pick":
-      return "モード1 PICK";
-    case "mode2_ban":
-      return "モード2 BAN";
-    case "mode2_pick":
-      return "モード2 PICK";
-    case "mode3_ban":
-      return "モード3 BAN";
-    case "mode3_pick":
-      return "モード3 PICK";
-    case "completed":
-      return "完了";
-    default:
-      return phase;
+function parseTeamAssignment(selected: Json): { teamA: string | null; teamB: string | null } {
+  if (!selected || typeof selected !== "object" || Array.isArray(selected)) {
+    return { teamA: null, teamB: null };
   }
+  const obj = selected as Record<string, Json>;
+  const teamA = typeof obj.team_a === "string" ? obj.team_a : null;
+  const teamB = typeof obj.team_b === "string" ? obj.team_b : null;
+  return { teamA, teamB };
+}
+
+function phaseLabel(phase: BanpickPhase | string) {
+  if (phase === "hp" || phase === "snd" || phase === "ovl" || phase === "completed") {
+    return PHASE_LABEL[phase];
+  }
+  return phase;
 }
 
 function actionTypeLabel(actionType: string | null) {
   switch (actionType) {
     case "ban":
       return "BAN";
-    case "pick":
-      return "PICK";
-    case "side_pick":
-      return "サイド選択";
+    case "pick_map":
+      return "マップ PICK";
+    case "pick_side":
+      return "サイド PICK";
     default:
       return "-";
   }
@@ -195,7 +211,6 @@ export default function BanpickPage() {
   const [actions, setActions] = useState<BanpickActionRow[]>([]);
   const [messages, setMessages] = useState<MatchMessageRow[]>([]);
 
-  const [banpickTarget, setBanpickTarget] = useState("");
   const [chatInput, setChatInput] = useState("");
   const [lobbyCodeInput, setLobbyCodeInput] = useState("");
 
@@ -220,16 +235,63 @@ export default function BanpickPage() {
   const isBanpickCompleted = session?.status === "completed" || match?.status === "ready" || match?.status === "report_pending" || match?.status === "completed";
   const isHost = !!match?.host_user_id && match.host_user_id === myUserId;
 
-  const selectedMaps = useMemo(() => asStringArray(session?.selected_maps ?? []), [session]);
-  const bannedMaps = useMemo(() => asStringArray(session?.banned_maps ?? []), [session]);
-  const sideChoices = useMemo(() => asStringArray(session?.side_choices ?? []), [session]);
+  const phaseStates = useMemo(() => {
+    return {
+      hp: parsePhaseState(session?.selected_maps ?? null, "hp"),
+      snd: parsePhaseState(session?.selected_maps ?? null, "snd"),
+      ovl: parsePhaseState(session?.selected_maps ?? null, "ovl"),
+    };
+  }, [session?.selected_maps]);
 
-  const actionOptions = useMemo(() => {
-    if (session?.current_action_type === "side_pick") {
-      return SIDE_OPTIONS;
+  const teamAssignment = useMemo(
+    () => parseTeamAssignment(session?.selected_maps ?? null),
+    [session?.selected_maps]
+  );
+
+  const myTeamLetter: "A" | "B" | null = useMemo(() => {
+    if (!myMatchTeamId) return null;
+    if (myMatchTeamId === teamAssignment.teamA) return "A";
+    if (myMatchTeamId === teamAssignment.teamB) return "B";
+    return null;
+  }, [myMatchTeamId, teamAssignment]);
+
+  const currentTeamLetter: "A" | "B" | null = useMemo(() => {
+    if (!session?.current_turn_match_team_id) return null;
+    if (session.current_turn_match_team_id === teamAssignment.teamA) return "A";
+    if (session.current_turn_match_team_id === teamAssignment.teamB) return "B";
+    return null;
+  }, [session?.current_turn_match_team_id, teamAssignment]);
+
+  const [remainingSec, setRemainingSec] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!session?.deadline_at || session.status !== "in_progress") {
+      setRemainingSec(null);
+      return;
     }
-    return MAP_OPTIONS;
-  }, [session?.current_action_type]);
+    const deadline = new Date(session.deadline_at).getTime();
+    const tick = () => {
+      const diff = Math.floor((deadline - Date.now()) / 1000);
+      setRemainingSec(diff);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [session?.deadline_at, session?.status]);
+
+  useEffect(() => {
+    if (remainingSec === null) return;
+    if (remainingSec > 0) return;
+    if (!matchId) return;
+    if (session?.status !== "in_progress") return;
+    void (async () => {
+      try {
+        await supabase.rpc("rpc_resolve_banpick_timeout", { p_match_id: matchId });
+      } catch (e) {
+        console.error("resolve timeout error:", e);
+      }
+    })();
+  }, [remainingSec, matchId, session?.status, supabase]);
 
   const hostDisplayName = useMemo(() => {
     if (!match?.host_user_id) return null;
@@ -284,7 +346,7 @@ export default function BanpickPage() {
             .returns<MatchTeamMemberRow[]>(),
           supabase
             .from("banpick_sessions")
-            .select("id,match_id,status,phase,current_turn_match_team_id,current_action_type,turn_number,selected_maps,banned_maps,side_choices")
+            .select("id,match_id,status,phase,current_turn_match_team_id,current_action_type,turn_number,selected_maps,deadline_at")
             .eq("match_id", matchId)
             .maybeSingle<BanpickSessionRow>(),
           supabase
@@ -391,13 +453,13 @@ export default function BanpickPage() {
     }
   };
 
-  const handleSubmitBanpickAction = async () => {
+  const handleSubmitBanpickActionWith = async (target: string) => {
     if (!matchId || !session) return;
     clearMessages();
 
-    const target = banpickTarget.trim();
-    if (!target) {
-      setErrorText("対象を入力または選択してください。");
+    const trimmed = target.trim();
+    if (!trimmed) {
+      setErrorText("対象を選択してください。");
       return;
     }
 
@@ -406,12 +468,11 @@ export default function BanpickPage() {
       const { error } = await supabase.rpc("rpc_submit_banpick_action", {
         p_match_id: matchId,
         p_action_type: session.current_action_type,
-        p_target: target,
+        p_target: trimmed,
       });
 
       if (error) throw error;
 
-      setBanpickTarget("");
       setInfoText("バンピックを更新しました。");
       await loadAll();
     } catch (e) {
@@ -676,90 +737,145 @@ export default function BanpickPage() {
             </section>
 
             <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">バンピック操作</h2>
+              <h2 className="mb-3 text-lg font-semibold">バンピック</h2>
 
               {!session ? (
                 <div className="text-sm text-white/60">まだバンピックは開始されていません。</div>
               ) : (
                 <div className="space-y-4">
                   <div className="rounded bg-black/20 p-3 text-sm">
-                    <div>フェーズ: {phaseLabel(session.phase)}</div>
-                    <div className="mt-1">操作: {actionTypeLabel(session.current_action_type)}</div>
-                    <div className="mt-1">
-                      手番:{" "}
-                      {currentTurnTeam
-                        ? `${currentTurnTeam.side.toUpperCase()} (${currentTurnTeam.display_name ?? currentTurnTeam.side})`
-                        : "-"}
-                    </div>
-                    <div className="mt-1">
-                      あなたの状態: {isMyTurn ? "あなたのチームの手番です" : "相手チームの手番です"}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <div className="rounded bg-black/20 p-3">
-                      <div className="mb-2 text-sm font-semibold">BAN済み</div>
-                      <div className="space-y-1 text-sm text-white/80">
-                        {bannedMaps.length === 0 ? <div className="text-white/40">なし</div> : bannedMaps.map((x, i) => <div key={`${x}-${i}`}>{x}</div>)}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="font-semibold">{phaseLabel(session.phase)}</div>
+                        <div className="mt-1 text-white/60">
+                          手番:{" "}
+                          {currentTeamLetter
+                            ? `Team ${currentTeamLetter}`
+                            : session.status === "completed" || session.status === "timeout"
+                            ? "-"
+                            : "?"}{" "}
+                          / 操作: {actionTypeLabel(session.current_action_type)}
+                        </div>
+                        <div className="mt-1 text-white/60">
+                          あなたの所属: {myTeamLetter ? `Team ${myTeamLetter}` : "観戦"}
+                          {" / "}
+                          {isMyTurn ? "あなたの操作待ち" : "相手の操作待ち"}
+                        </div>
                       </div>
-                    </div>
-
-                    <div className="rounded bg-black/20 p-3">
-                      <div className="mb-2 text-sm font-semibold">PICK済み</div>
-                      <div className="space-y-1 text-sm text-white/80">
-                        {selectedMaps.length === 0 ? <div className="text-white/40">なし</div> : selectedMaps.map((x, i) => <div key={`${x}-${i}`}>{x}</div>)}
-                      </div>
-                    </div>
-
-                    <div className="rounded bg-black/20 p-3">
-                      <div className="mb-2 text-sm font-semibold">サイド選択</div>
-                      <div className="space-y-1 text-sm text-white/80">
-                        {sideChoices.length === 0 ? <div className="text-white/40">なし</div> : sideChoices.map((x, i) => <div key={`${x}-${i}`}>{x}</div>)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded border border-white/10 bg-black/20 p-4">
-                    <div className="mb-3 text-sm font-semibold">
-                      {session.status === "completed" ? "バンピック完了" : "現在の操作を送信"}
-                    </div>
-
-                    <div className="mb-3 flex flex-wrap gap-2">
-                      {actionOptions.map((option) => {
-                        const active = banpickTarget === option;
-                        return (
-                          <button
-                            key={option}
-                            type="button"
-                            onClick={() => setBanpickTarget(option)}
-                            className={`rounded px-3 py-2 text-sm ${
-                              active ? "bg-white text-black" : "border border-white/20 bg-transparent text-white"
+                      {remainingSec !== null && session.status === "in_progress" && (
+                        <div className="text-right">
+                          <div className="text-xs text-white/50">残り時間</div>
+                          <div
+                            className={`text-2xl font-bold ${
+                              remainingSec <= 30 ? "text-red-400" : "text-white"
                             }`}
                           >
-                            {option}
-                          </button>
-                        );
-                      })}
+                            {remainingSec > 0
+                              ? `${Math.floor(remainingSec / 60)}:${String(remainingSec % 60).padStart(2, "0")}`
+                              : "0:00"}
+                          </div>
+                        </div>
+                      )}
                     </div>
-
-                    <div className="mb-3">
-                      <input
-                        value={banpickTarget}
-                        onChange={(e) => setBanpickTarget(e.target.value)}
-                        placeholder="対象を直接入力してもOK"
-                        className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                        disabled={busy || !isMyTurn || session.status !== "in_progress"}
-                      />
-                    </div>
-
-                    <button
-                      onClick={handleSubmitBanpickAction}
-                      disabled={busy || !isMyTurn || session.status !== "in_progress"}
-                      className="rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
-                    >
-                      {session.current_action_type ? `${actionTypeLabel(session.current_action_type)} を送信` : "送信"}
-                    </button>
                   </div>
+
+                  {(["hp", "snd", "ovl"] as const).map((phaseKey) => {
+                    const state = phaseStates[phaseKey];
+                    const pool = PHASE_POOLS[phaseKey];
+                    const isCurrent = session.phase === phaseKey;
+                    const allowInteraction =
+                      isCurrent &&
+                      isMyTurn &&
+                      session.status === "in_progress" &&
+                      session.current_action_type !== null;
+
+                    return (
+                      <div
+                        key={phaseKey}
+                        className={`rounded border p-4 ${
+                          isCurrent ? "border-cyan-400/60 bg-cyan-500/5" : "border-white/10 bg-black/20"
+                        }`}
+                      >
+                        <div className="mb-2 flex items-center justify-between">
+                          <div className="font-semibold">
+                            {phaseKey === "hp" && "Phase 1 / HARDPOINT"}
+                            {phaseKey === "snd" && "Phase 2 / SEARCH & DESTROY"}
+                            {phaseKey === "ovl" && "Phase 3 / OVERLOAD"}
+                          </div>
+                          {isCurrent && (
+                            <span className="rounded bg-cyan-500/30 px-2 py-0.5 text-xs text-cyan-100">
+                              進行中
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mb-3 flex flex-wrap gap-2">
+                          {pool.map((mapName) => {
+                            const banned = state.bans.includes(mapName);
+                            const picked = state.map === mapName;
+                            const canClickAsMapAction =
+                              allowInteraction &&
+                              (session.current_action_type === "ban" ||
+                                session.current_action_type === "pick_map") &&
+                              !banned &&
+                              state.map === null;
+
+                            return (
+                              <button
+                                key={mapName}
+                                type="button"
+                                disabled={busy || !canClickAsMapAction}
+                                onClick={() => {
+                                  if (!canClickAsMapAction) return;
+                                  void handleSubmitBanpickActionWith(mapName);
+                                }}
+                                className={`rounded px-3 py-2 text-sm transition ${
+                                  picked
+                                    ? "bg-emerald-500/30 text-emerald-100 border border-emerald-400"
+                                    : banned
+                                    ? "bg-red-500/10 text-red-300 line-through border border-red-500/30"
+                                    : canClickAsMapAction
+                                    ? "border border-white/30 bg-white/5 hover:bg-white/10"
+                                    : "border border-white/10 bg-white/5 text-white/40"
+                                }`}
+                              >
+                                {mapName}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 text-sm text-white/70">
+                          <div>
+                            Map: <span className="text-white">{state.map ?? "-"}</span>
+                          </div>
+                          <div>
+                            Side: <span className="text-white">{state.side ?? "-"}</span>
+                          </div>
+                        </div>
+
+                        {isCurrent &&
+                          session.current_action_type === "pick_side" &&
+                          allowInteraction && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {SIDE_OPTIONS.map((s) => (
+                                <button
+                                  key={s}
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => {
+                                    void handleSubmitBanpickActionWith(s);
+                                  }}
+                                  className="rounded border border-white/30 bg-white/10 px-4 py-2 text-sm hover:bg-white/20"
+                                >
+                                  {s}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </section>
