@@ -90,14 +90,25 @@ export default function TeamEditPage() {
 
     setSaving(true)
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('teams')
       .update({ name: trimmed })
       .eq('id', team.id)
+      .select('id, name')
 
     if (error) {
       console.error(error)
-      showToast('更新に失敗しました', 'error')
+      showToast(error.message || '更新に失敗しました', 'error')
+      setSaving(false)
+      return
+    }
+
+    if (!data || data.length === 0) {
+      console.error('teams update returned 0 rows', { teamId: team.id })
+      showToast(
+        '更新権限がありません（RLSで弾かれた可能性があります）',
+        'error'
+      )
       setSaving(false)
       return
     }
