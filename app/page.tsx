@@ -173,15 +173,38 @@ export default function Home() {
 
         <div className="grid grid-2">
           <div className="card">
+            <h3 style={{ marginTop: 0 }}>試合形式</h3>
             <p>・4v4 チーム戦</p>
-            <p>・Black Ops 7 / CDLルール準拠</p>
-            <p>・3モード中2勝でシリーズ勝利</p>
+            <p>・Black Ops 7 GA（ジェントルマンズアグリーメント）準拠</p>
+            <p>
+              ・対象モード: ハードポイント / サーチ&amp;デストロイ / オーバーロード
+            </p>
+            <p>・マップは公式ルールで指定されたものに限定</p>
           </div>
 
           <div className="card">
-            <p>・対象モード: Hardpoint / S&amp;D / Overload</p>
-            <p>・結果は相手チームの承認で確定</p>
-            <p>・直近2試合の相手は再戦回避</p>
+            <h3 style={{ marginTop: 0 }}>マッチング & 結果</h3>
+            <p>・レートが近いチームと自動マッチング</p>
+            <p>・試合前にマップ/モードのバンピックを実施</p>
+            <p>・試合結果は相手チームの承認で確定</p>
+            <p>・承認後にレート・個人戦績・チーム戦績へ自動反映</p>
+          </div>
+
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>使用制限</h3>
+            <p>・使用可能な武器・アタッチメントは厳格に制限</p>
+            <p>・パーク / 装備 / スコアストリークにも制限あり</p>
+            <p>・グリッチ（スネーク・階段）禁止</p>
+            <p className="danger">
+              ・参加前に「詳細ルール」を必ず確認してください
+            </p>
+          </div>
+
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>違反への対応</h3>
+            <p>・違反プレイヤーは「通報」から運営へ報告できます</p>
+            <p>・運営が確認後、状況に応じて対応します</p>
+            <p>・通報はマイページ &gt; 通報履歴 から確認可能</p>
           </div>
         </div>
 
