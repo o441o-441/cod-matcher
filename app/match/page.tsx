@@ -108,7 +108,7 @@ function inferPartyLabel(size: number): "solo" | "duo" | "trio" | "full" | "inva
 }
 
 function isExpectedAutoMatchMiss(message: string) {
-  const normalized = message.toLowerCase();
+  const normalized = message.toLowerCase().replace(/\s+/g, " ").trim();
   return (
     normalized.includes("not enough compatible waiting players") ||
     normalized.includes("failed to split teams into 4v4") ||
