@@ -143,6 +143,14 @@ export default function Home() {
               <>
                 <span className="muted">ログイン中</span>
                 <button onClick={() => router.push('/menu')}>メニュー</button>
+                <button
+                  onClick={async () => {
+                    await supabase.auth.signOut()
+                    setSignedIn(false)
+                  }}
+                >
+                  ログアウト
+                </button>
               </>
             ) : (
               <button onClick={() => router.push('/login')}>ログイン</button>
