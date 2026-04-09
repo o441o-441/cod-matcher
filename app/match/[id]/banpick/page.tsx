@@ -400,22 +400,34 @@ export default function BanpickPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "matches", filter: `id=eq.${matchId}` },
-        () => void loadAll()
+        (payload) => {
+          console.log("banpick realtime event:", payload.table, payload.eventType);
+          void loadAll();
+        }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "banpick_sessions", filter: `match_id=eq.${matchId}` },
-        () => void loadAll()
+        (payload) => {
+          console.log("banpick realtime event:", payload.table, payload.eventType);
+          void loadAll();
+        }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "banpick_actions", filter: `match_id=eq.${matchId}` },
-        () => void loadAll()
+        (payload) => {
+          console.log("banpick realtime event:", payload.table, payload.eventType);
+          void loadAll();
+        }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${matchId}` },
-        () => void loadAll()
+        (payload) => {
+          console.log("banpick realtime event:", payload.table, payload.eventType);
+          void loadAll();
+        }
       )
       .subscribe((status) => {
         console.log("banpick realtime status:", status);
