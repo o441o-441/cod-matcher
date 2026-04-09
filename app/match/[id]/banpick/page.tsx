@@ -610,6 +610,15 @@ export default function BanpickPage() {
               </button>
             )}
 
+            {isBanpickCompleted && (
+              <button
+                onClick={() => router.push(`/match/${matchId}/report`)}
+                className="rounded bg-cyan-500 px-4 py-2 text-sm font-semibold text-white"
+              >
+                試合結果を報告する
+              </button>
+            )}
+
             <button
               onClick={() => void loadAll()}
               disabled={busy}
