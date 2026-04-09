@@ -110,7 +110,7 @@ export default function Home() {
           <div>
             <h1>ASCENT</h1>
             <p className="muted">
-              Black Ops 7 / 4v4 / CDLルール準拠のレート対戦プラットフォーム
+              Black Ops 7 / 4v4 / GA準拠のレート対戦プラットフォーム
             </p>
           </div>
 
