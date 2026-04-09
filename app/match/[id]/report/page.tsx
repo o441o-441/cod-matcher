@@ -11,6 +11,7 @@ type MatchRow = {
   winner_match_team_id: string | null;
   loser_match_team_id: string | null;
   completed_at: string | null;
+  disputed: boolean | null;
 };
 
 type MatchTeamRow = {
@@ -107,6 +108,7 @@ export default function ReportPage() {
   const [report, setReport] = useState<MatchReportRow | null>(null);
   const [reportGames, setReportGames] = useState<MatchReportGameRow[]>([]);
   const [messages, setMessages] = useState<MatchMessageRow[]>([]);
+  const [priorRejectCount, setPriorRejectCount] = useState(0);
 
   const [winnerMatchTeamId, setWinnerMatchTeamId] = useState("");
   const [scoreSummary, setScoreSummary] = useState("2-0");
@@ -167,11 +169,17 @@ export default function ReportPage() {
       if (userError) throw userError;
       setMyUserId(user?.id ?? null);
 
-      const [{ data: matchData, error: matchError }, { data: teamsData, error: teamsError }, { data: membersData, error: membersError }, { data: reportData, error: reportError }, { data: messagesData, error: messagesError }] =
-        await Promise.all([
+      const [
+        { data: matchData, error: matchError },
+        { data: teamsData, error: teamsError },
+        { data: membersData, error: membersError },
+        { data: reportData, error: reportError },
+        { count: rejectCountValue, error: rejectCountError },
+        { data: messagesData, error: messagesError },
+      ] = await Promise.all([
           supabase
             .from("matches")
-            .select("id,status,approval_status,winner_match_team_id,loser_match_team_id,completed_at")
+            .select("id,status,approval_status,winner_match_team_id,loser_match_team_id,completed_at,disputed")
             .eq("id", matchId)
             .maybeSingle<MatchRow>(),
           supabase
@@ -200,6 +208,11 @@ export default function ReportPage() {
             .limit(1)
             .maybeSingle<MatchReportRow>(),
           supabase
+            .from("match_reports")
+            .select("id", { count: "exact", head: true })
+            .eq("match_id", matchId)
+            .eq("status", "rejected"),
+          supabase
             .from("match_messages")
             .select("id,match_id,sender_user_id,message_type,body,created_at")
             .eq("match_id", matchId)
@@ -212,12 +225,14 @@ export default function ReportPage() {
       if (teamsError) throw teamsError;
       if (membersError) throw membersError;
       if (reportError) throw reportError;
+      if (rejectCountError) throw rejectCountError;
       if (messagesError) throw messagesError;
 
       setMatch(matchData ?? null);
       setTeams(teamsData ?? []);
       setMembers(membersData ?? []);
       setReport(reportData ?? null);
+      setPriorRejectCount(rejectCountValue ?? 0);
       setMessages(messagesData ?? []);
 
       if (reportData?.id) {
@@ -552,6 +567,12 @@ export default function ReportPage() {
                   <div className="mt-4 rounded border border-white/10 bg-black/20 p-4">
                     <div className="mb-3 text-sm font-semibold">相手チームの申請を確認</div>
 
+                    {priorRejectCount >= 1 && (
+                      <div className="mb-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                        ⚠ 既に1回却下されています。次の却下で<strong>申請通りの結果で自動確定</strong>され、相手プレイヤーへの通報が必要になります。
+                      </div>
+                    )}
+
                     <div className="mb-3">
                       <label className="mb-2 block text-sm font-medium">却下理由（任意）</label>
                       <textarea
@@ -577,7 +598,7 @@ export default function ReportPage() {
                         disabled={busy}
                         className="rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                       >
-                        却下する
+                        {priorRejectCount >= 1 ? "却下する（自動確定 + dispute）" : "却下する"}
                       </button>
                     </div>
                   </div>
@@ -592,14 +613,56 @@ export default function ReportPage() {
             )}
 
             {match?.status === "completed" && (
-              <section className="rounded border border-emerald-500/20 bg-emerald-500/10 p-4">
-                <h2 className="mb-2 text-lg font-semibold">試合確定済み</h2>
-                <div className="text-sm">
+              <section
+                className={`rounded border p-4 ${
+                  match.disputed
+                    ? "border-amber-500/40 bg-amber-500/10"
+                    : "border-emerald-500/20 bg-emerald-500/10"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold">試合確定済み</h2>
+                  {match.disputed && (
+                    <span className="rounded bg-amber-500 px-2 py-0.5 text-xs font-bold text-black">
+                      DISPUTED
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2 text-sm">
                   勝者: <span className="font-semibold">{teamLabel(completedWinnerTeam)}</span>
                 </div>
                 {match.completed_at && (
                   <div className="mt-1 text-xs text-white/60">
                     確定日時: {new Date(match.completed_at).toLocaleString()}
+                  </div>
+                )}
+
+                {match.disputed && (
+                  <div className="mt-4 rounded border border-amber-500/30 bg-black/20 p-3">
+                    <div className="mb-2 text-sm font-semibold text-amber-200">
+                      この試合は dispute 状態で確定しました
+                    </div>
+                    <p className="mb-3 text-xs text-white/70">
+                      却下が連続したため申請通りの結果で自動確定しています。結果に異議がある場合は、相手プレイヤーを通報してください。運営が確認します。
+                    </p>
+                    <div className="space-y-2">
+                      {members
+                        .filter((m) => m.match_team_id !== myMatchTeamId)
+                        .map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() =>
+                              router.push(
+                                `/reports/new?reported=${m.user_id}&match=${matchId}`
+                              )
+                            }
+                            className="block w-full rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-left text-sm hover:bg-amber-500/20"
+                          >
+                            {m.profiles?.display_name ?? m.user_id} を通報する
+                          </button>
+                        ))}
+                    </div>
                   </div>
                 )}
               </section>
