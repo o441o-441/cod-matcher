@@ -188,7 +188,7 @@ export default function MatchPage() {
     if (isWaiting) return false;
     if (isMatched) return false;
     if (myPartySize < 1 || myPartySize > 4) return false;
-    if (!["open", "cancelled"].includes(myParty.status)) return false;
+    if (!["open", "cancelled", "matched"].includes(myParty.status)) return false;
     return true;
   }, [myParty, isPartyLeader, busy, isWaiting, isMatched, myPartySize]);
 
