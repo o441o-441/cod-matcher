@@ -392,7 +392,7 @@ export default function MatchPage() {
                 .from("matches")
                 .select("id,status,matched_at")
                 .in("id", matchIds)
-                .in("status", ["banpick", "ready", "in_progress", "report_pending", "completed"])
+                .in("status", ["banpick", "ready", "in_progress", "report_pending"])
                 .order("matched_at", { ascending: false })
                 .limit(1)
                 .returns<MatchRow[]>();
@@ -887,7 +887,7 @@ export default function MatchPage() {
       return;
     }
 
-    if (["ready", "in_progress", "report_pending", "completed"].includes(myActiveMatch.status)) {
+    if (["ready", "in_progress", "report_pending"].includes(myActiveMatch.status)) {
       router.push(`/match/${myActiveMatch.id}/report`);
       return;
     }
