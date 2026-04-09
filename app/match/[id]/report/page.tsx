@@ -155,9 +155,11 @@ export default function ReportPage() {
     setInfoText(null);
   };
 
-  const loadAll = useCallback(async () => {
+  const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
     if (!matchId) return;
-    setLoading(true);
+    if (!opts?.silent) {
+      setLoading(true);
+    }
     setErrorText(null);
 
     try {
@@ -252,7 +254,9 @@ export default function ReportPage() {
       const message = e instanceof Error ? e.message : "読み込みに失敗しました。";
       setErrorText(message);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) {
+        setLoading(false);
+      }
     }
   }, [matchId]);
 
@@ -268,19 +272,30 @@ export default function ReportPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "matches", filter: `id=eq.${matchId}` },
-        () => void loadAll()
+        (payload) => {
+          console.log("report realtime:", payload.table, payload.eventType);
+          void loadAll({ silent: true });
+        }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "match_reports", filter: `match_id=eq.${matchId}` },
-        () => void loadAll()
+        (payload) => {
+          console.log("report realtime:", payload.table, payload.eventType);
+          void loadAll({ silent: true });
+        }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${matchId}` },
-        () => void loadAll()
+        (payload) => {
+          console.log("report realtime:", payload.table, payload.eventType);
+          void loadAll({ silent: true });
+        }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("report realtime status:", status);
+      });
 
     return () => {
       void supabase.removeChannel(channel);
