@@ -21,10 +21,19 @@ type PopularPostRow = {
   comment_count: number
 }
 
+type RecentPostRow = {
+  id: string
+  slug: string
+  title: string
+  excerpt: string | null
+  published_at: string | null
+}
+
 export default function Home() {
   const router = useRouter()
   const [announcements, setAnnouncements] = useState<AnnouncementRow[]>([])
   const [popularPosts, setPopularPosts] = useState<PopularPostRow[]>([])
+  const [recentPosts, setRecentPosts] = useState<RecentPostRow[]>([])
   const [signedIn, setSignedIn] = useState(false)
 
   const fetchAnnouncements = async () => {
@@ -88,9 +97,24 @@ export default function Home() {
     setPopularPosts(ordered)
   }
 
+  const fetchRecentPosts = async () => {
+    const { data, error } = await supabase
+      .from('posts')
+      .select('id, slug, title, excerpt, published_at')
+      .eq('status', 'published')
+      .order('published_at', { ascending: false, nullsFirst: false })
+      .limit(5)
+    if (error) {
+      console.error('fetchRecentPosts error:', error)
+      return
+    }
+    setRecentPosts((data ?? []) as RecentPostRow[])
+  }
+
   useEffect(() => {
     void fetchAnnouncements()
     void fetchPopularPosts()
+    void fetchRecentPosts()
     void supabase.auth.getSession().then(({ data }) => {
       setSignedIn(!!data.session?.user)
     })
@@ -145,6 +169,32 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <div className="section card-strong">
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <h2 style={{ margin: 0 }}>新着ブログ</h2>
+          <button onClick={() => router.push('/blog')}>ブログ一覧</button>
+        </div>
+        {recentPosts.length === 0 ? (
+          <p className="muted">まだ記事がありません</p>
+        ) : (
+          <div className="stack">
+            {recentPosts.map((p) => (
+              <div key={p.id} className="card">
+                <h3 style={{ marginTop: 0 }}>
+                  <Link href={`/blog/${p.slug}`}>{p.title}</Link>
+                </h3>
+                {p.excerpt && <p>{p.excerpt}</p>}
+                <p className="muted">
+                  {p.published_at
+                    ? new Date(p.published_at).toLocaleString('ja-JP')
+                    : ''}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="section card-strong">
         <div className="row" style={{ justifyContent: 'space-between' }}>
