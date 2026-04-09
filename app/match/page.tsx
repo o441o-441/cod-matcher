@@ -192,8 +192,10 @@ export default function MatchPage() {
     return true;
   }, [myParty, isPartyLeader, busy, isWaiting, isMatched, myPartySize]);
 
-  const loadMyState = useCallback(async () => {
-    setLoading(true);
+  const loadMyState = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setLoading(true);
+    }
     setErrorText(null);
 
     try {
@@ -217,7 +219,7 @@ export default function MatchPage() {
         setMyMatchedEntryIds([]);
         setMyActiveMatch(null);
         setMyTeam(null);
-        setLoading(false);
+        if (!opts?.silent) setLoading(false);
         return;
       }
 
@@ -272,7 +274,7 @@ export default function MatchPage() {
         setMyMatchedEntryIds([]);
         setMyActiveMatch(null);
         setMyTeam(null);
-        setLoading(false);
+        if (!opts?.silent) setLoading(false);
         return;
       }
 
@@ -485,7 +487,7 @@ export default function MatchPage() {
       }
       setErrorText(message);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, [supabase]);
 
@@ -549,8 +551,8 @@ export default function MatchPage() {
           setErrorText(error.message);
         }
         // Race may have been lost (someone else matched us already).
-        // Refresh state so the auto-redirect effect can pick up the new active match.
-        await loadMyState();
+        // Silent refresh so polling doesn't blank the page every cycle.
+        await loadMyState({ silent: true });
         return;
       }
 
@@ -558,10 +560,10 @@ export default function MatchPage() {
       if (row?.match_id) {
         routePushedRef.current = true;
         setInfoText("マッチが成立しました。");
-        await loadMyState();
+        await loadMyState({ silent: true });
         router.push(`/match/${row.match_id}/banpick`);
       } else {
-        await loadMyState();
+        await loadMyState({ silent: true });
       }
     } finally {
       autoMatchBusyRef.current = false;
