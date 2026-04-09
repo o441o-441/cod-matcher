@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import type { RealtimeChannel } from '@supabase/supabase-js'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -11,20 +10,11 @@ export default function MenuPage() {
   const [loading, setLoading] = useState(true)
   const [hasTeam, setHasTeam] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [waitingCount, setWaitingCount] = useState(0)
   const [rating, setRating] = useState<number | null>(null)
   const [wins, setWins] = useState<number | null>(null)
   const [losses, setLosses] = useState<number | null>(null)
   const [teamWins, setTeamWins] = useState<number | null>(null)
   const [teamLosses, setTeamLosses] = useState<number | null>(null)
-  const realtimeRef = useRef<RealtimeChannel | null>(null)
-
-  const fetchWaitingCount = async () => {
-    const { count } = await supabase
-      .from('match_queue')
-      .select('*', { count: 'exact', head: true })
-    setWaitingCount(count || 0)
-  }
 
   useEffect(() => {
     const init = async () => {
@@ -130,32 +120,11 @@ export default function MenuPage() {
       setWins(profileRow?.wins ?? null)
       setLosses(profileRow?.losses ?? null)
 
-      await fetchWaitingCount()
       setLoading(false)
     }
 
     void Promise.resolve().then(init)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    const channel = supabase
-      .channel('menu-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'match_queue' },
-        async () => {
-          await fetchWaitingCount()
-        }
-      )
-      .subscribe()
-    realtimeRef.current = channel
-    return () => {
-      if (realtimeRef.current) {
-        supabase.removeChannel(realtimeRef.current)
-        realtimeRef.current = null
-      }
-    }
   }, [])
 
   if (loading) {
@@ -182,9 +151,6 @@ export default function MenuPage() {
 
       <div className="section card-strong">
         <h2 style={{ marginTop: 0, textAlign: 'center' }}>対戦を始める</h2>
-        <p className="muted" style={{ textAlign: 'center' }}>
-          現在の待機チーム数: {waitingCount}
-        </p>
         <div
           className="row"
           style={{
