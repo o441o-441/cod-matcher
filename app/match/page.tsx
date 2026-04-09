@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 type ProfileRow = {
   id: string;
@@ -82,23 +82,6 @@ type RpcCreateMatchResult = {
   bravo_member_count: number;
 };
 
-function getSupabaseClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !anon) {
-    throw new Error("Supabase env is missing");
-  }
-
-  return createClient(url, anon, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-  });
-}
-
 function inferPartyLabel(size: number): "solo" | "duo" | "trio" | "full" | "invalid" {
   if (size === 1) return "solo";
   if (size === 2) return "duo";
@@ -127,7 +110,6 @@ function extractErrorMessage(e: unknown, fallback: string): string {
 
 export default function MatchPage() {
   const router = useRouter();
-  const [supabase] = useState(() => getSupabaseClient());
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
