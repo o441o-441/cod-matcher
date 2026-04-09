@@ -427,6 +427,15 @@ export default function BanpickPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
 
+  useEffect(() => {
+    if (!matchId) return;
+    const interval = window.setInterval(() => {
+      void loadAll();
+    }, 5000);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId]);
+
   const clearMessages = () => {
     setErrorText(null);
     setInfoText(null);
