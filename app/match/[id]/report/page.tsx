@@ -269,7 +269,7 @@ export default function ReportPage() {
             .from("match_messages")
             .select("id,match_id,sender_user_id,message_type,body,created_at,profiles!match_messages_sender_user_id_fkey(id,display_name)")
             .eq("match_id", matchId)
-            .order("created_at", { ascending: true })
+            .order("created_at", { ascending: false })
             .returns<MatchMessageRow[]>(),
         ]);
 
