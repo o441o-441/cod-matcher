@@ -160,7 +160,8 @@ const MESSAGE_JA: Record<string, string> = {
 };
 
 function translateBody(body: string): string {
-  return MESSAGE_JA[body] ?? body;
+  const normalized = body.replace(/\s+/g, " ").trim();
+  return MESSAGE_JA[normalized] ?? MESSAGE_JA[body] ?? body;
 }
 
 function actionTypeLabel(actionType: string | null) {
