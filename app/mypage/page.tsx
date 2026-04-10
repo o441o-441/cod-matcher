@@ -387,28 +387,9 @@ export default function MyPage() {
 
           {team ? (
             <>
-              <div className="grid grid-2">
-                <div className="card">
-                  <p className="muted">チーム名</p>
-                  <h3>{team.name}</h3>
-                </div>
-
-                <div className="card">
-                  <p className="muted">レート</p>
-                  <h3>{team.rating}</h3>
-                </div>
-
-                <div className="card">
-                  <p className="muted">戦績</p>
-                  <h3>
-                    {team.wins}勝 {team.losses}敗
-                  </h3>
-                </div>
-
-                <div className="card">
-                  <p className="muted">試合数</p>
-                  <h3>{team.matches_played}</h3>
-                </div>
+              <div className="card">
+                <p className="muted">チーム名</p>
+                <h3>{team.name}</h3>
               </div>
 
               <div className="section row">

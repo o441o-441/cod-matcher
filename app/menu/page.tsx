@@ -13,8 +13,6 @@ export default function MenuPage() {
   const [rating, setRating] = useState<number | null>(null)
   const [wins, setWins] = useState<number | null>(null)
   const [losses, setLosses] = useState<number | null>(null)
-  const [teamWins, setTeamWins] = useState<number | null>(null)
-  const [teamLosses, setTeamLosses] = useState<number | null>(null)
 
   useEffect(() => {
     const init = async () => {
@@ -95,16 +93,6 @@ export default function MenuPage() {
         .maybeSingle<{ team_id: string | null }>()
       setHasTeam(!!memberRow?.team_id)
 
-      if (memberRow?.team_id) {
-        const { data: teamRow } = await supabase
-          .from('teams')
-          .select('wins, losses')
-          .eq('id', memberRow.team_id)
-          .maybeSingle<{ wins: number | null; losses: number | null }>()
-        setTeamWins(teamRow?.wins ?? null)
-        setTeamLosses(teamRow?.losses ?? null)
-      }
-
       const { data: profileRow } = await supabase
         .from('profiles')
         .select('is_admin, current_rating, wins, losses')
@@ -182,14 +170,6 @@ export default function MenuPage() {
                 {wins ?? 0}勝 {losses ?? 0}敗
               </h3>
             </div>
-            {hasTeam && (
-              <div className="card" style={{ minWidth: 140, textAlign: 'center' }}>
-                <p className="muted" style={{ margin: 0 }}>チーム戦績</p>
-                <h3 style={{ margin: '4px 0 0' }}>
-                  {teamWins ?? 0}勝 {teamLosses ?? 0}敗
-                </h3>
-              </div>
-            )}
           </div>
         </div>
       </div>

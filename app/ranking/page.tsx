@@ -1,32 +1,31 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import type { RealtimeChannel } from '@supabase/supabase-js'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LoadingCard, EmptyCard } from '@/components/UIState'
 
-type TeamRow = {
+type ProfileRow = {
   id: string
-  name: string
-  rating: number
-  wins: number
-  losses: number
-  matches_played: number
+  display_name: string | null
+  current_rating: number | null
+  wins: number | null
+  losses: number | null
+  rating_games_played: number | null
 }
 
 export default function RankingPage() {
   const router = useRouter()
-  const [teams, setTeams] = useState<TeamRow[]>([])
+  const [players, setPlayers] = useState<ProfileRow[]>([])
   const [loading, setLoading] = useState(true)
-  const realtimeRef = useRef<RealtimeChannel | null>(null)
 
   const fetchRanking = async () => {
     const { data, error } = await supabase
-      .from('teams')
-      .select('id, name, rating, wins, losses, matches_played')
-      .eq('is_disbanded', false)
-      .order('rating', { ascending: false })
+      .from('profiles')
+      .select('id, display_name, current_rating, wins, losses, rating_games_played')
+      .gt('rating_games_played', 0)
+      .order('current_rating', { ascending: false })
+      .limit(100)
 
     if (error) {
       console.error('ranking error:', error)
@@ -34,42 +33,13 @@ export default function RankingPage() {
       return
     }
 
-    setTeams(data || [])
+    setPlayers((data || []) as ProfileRow[])
     setLoading(false)
   }
 
   useEffect(() => {
     void Promise.resolve().then(fetchRanking)
-
-    const channel = supabase
-      .channel('ranking-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'teams',
-        },
-        async () => {
-          await fetchRanking()
-        }
-      )
-      .subscribe()
-
-    realtimeRef.current = channel
-
-    return () => {
-      if (realtimeRef.current) {
-        void supabase.removeChannel(realtimeRef.current)
-        realtimeRef.current = null
-      }
-    }
   }, [])
-
-  const getWinRate = (team: TeamRow) => {
-    if (!team.matches_played) return '0.0'
-    return ((team.wins / team.matches_played) * 100).toFixed(1)
-  }
 
   if (loading) {
     return (
@@ -85,51 +55,46 @@ export default function RankingPage() {
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
           <h1>ランキング</h1>
-          <p className="muted">現在の順位一覧です</p>
+          <p className="muted">個人レート順位</p>
         </div>
-
         <div className="row">
           <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
         </div>
       </div>
 
-      <div className="section">
-        <div className="card-strong">
-          <h2>順位一覧</h2>
+      <div className="section card-strong">
+        {players.length === 0 ? (
+          <EmptyCard title="まだランキングデータがありません" message="試合を行うとランキングに反映されます。" />
+        ) : (
+          <div className="stack">
+            {players.map((p, index) => {
+              const wins = p.wins ?? 0
+              const losses = p.losses ?? 0
+              const total = wins + losses
+              const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : '0.0'
 
-          {teams.length === 0 ? (
-            <EmptyCard title="チームがありません" message="表示できるチームがまだありません。" />
-          ) : (
-            <div className="stack">
-              {teams.map((team, index) => (
-                <div key={team.id} className="card">
-                  <p>
-                    <strong>順位:</strong> #{index + 1}
-                  </p>
-                  <h3>{team.name}</h3>
-                  <p>
-                    <strong>レート:</strong> {team.rating}
-                  </p>
-                  <p>
-                    <strong>戦績:</strong> {team.wins}勝 {team.losses}敗
-                  </p>
-                  <p>
-                    <strong>試合数:</strong> {team.matches_played}
-                  </p>
-                  <p>
-                    <strong>勝率:</strong> {getWinRate(team)}%
-                  </p>
-
-                  <div className="row" style={{ marginTop: '12px' }}>
-                    <button onClick={() => router.push(`/team/${team.id}`)}>
-                      チーム詳細
+              return (
+                <div key={p.id} className="card">
+                  <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <p className="muted">#{index + 1}</p>
+                      <h3 style={{ marginTop: 0 }}>{p.display_name || '(名前未設定)'}</h3>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <h3 style={{ marginTop: 0 }}>{p.current_rating ?? '-'}</h3>
+                      <p className="muted">{wins}勝 {losses}敗 / 勝率 {winRate}%</p>
+                    </div>
+                  </div>
+                  <div className="row" style={{ marginTop: 8 }}>
+                    <button onClick={() => router.push(`/users/${p.id}`)}>
+                      プロフィール
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </main>
   )
