@@ -498,6 +498,13 @@ export default function ReportPage() {
             >
               メニューへ戻る
             </button>
+            <button
+              type="button"
+              onClick={() => router.push(`/match/${matchId}/banpick`)}
+              className="rounded border border-white/20 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+            >
+              バンピック画面へ
+            </button>
           </div>
         </div>
 
