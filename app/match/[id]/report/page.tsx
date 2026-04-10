@@ -63,6 +63,10 @@ type MatchMessageRow = {
   message_type: "text" | "lobby_code" | "system";
   body: string;
   created_at: string;
+  profiles?: {
+    id: string;
+    display_name: string;
+  } | null;
 };
 
 type ReportFormGame = {
@@ -216,7 +220,7 @@ export default function ReportPage() {
             .eq("status", "rejected"),
           supabase
             .from("match_messages")
-            .select("id,match_id,sender_user_id,message_type,body,created_at")
+            .select("id,match_id,sender_user_id,message_type,body,created_at,profiles!match_messages_sender_user_id_fkey(id,display_name)")
             .eq("match_id", matchId)
             .order("created_at", { ascending: false })
             .limit(10)
@@ -681,14 +685,32 @@ export default function ReportPage() {
                 {messages.length === 0 ? (
                   <div className="text-sm text-white/50">メッセージはありません。</div>
                 ) : (
-                  messages.map((msg) => (
-                    <div key={msg.id} className="rounded bg-black/20 px-3 py-2 text-sm">
-                      <div className="mb-1 text-[11px] text-white/50">
-                        {new Date(msg.created_at).toLocaleString()} / {msg.message_type}
+                  messages.map((msg) => {
+                    const senderName = msg.profiles?.display_name ?? null;
+                    const bodyLabel =
+                      msg.body === "match report submitted"
+                        ? "試合結果を申請しました"
+                        : msg.body === "match report approved"
+                        ? "試合結果を承認しました。レートが更新されました"
+                        : msg.body === "match report rejected"
+                        ? "試合結果申請を却下しました。再申請してください"
+                        : msg.body === "auto-confirmed as dispute (2nd reject)"
+                        ? "却下が連続したため申請通りの結果で自動確定しました"
+                        : msg.body;
+                    return (
+                      <div key={msg.id} className="rounded bg-black/20 px-3 py-2 text-sm">
+                        <div className="mb-1 text-[11px] text-white/50">
+                          {new Date(msg.created_at).toLocaleString()}
+                        </div>
+                        <div className="whitespace-pre-wrap break-words">
+                          {senderName && (
+                            <span className="font-semibold text-cyan-300">{senderName}: </span>
+                          )}
+                          {bodyLabel}
+                        </div>
                       </div>
-                      <div className="whitespace-pre-wrap break-words">{msg.body}</div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </section>
