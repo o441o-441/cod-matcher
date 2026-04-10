@@ -156,6 +156,7 @@ const MESSAGE_JA: Record<string, string> = {
   "match report approved": "試合結果を承認しました。レートが更新されました。",
   "match report rejected": "試合結果申請を却下しました。再申請してください。",
   "auto-confirmed as dispute (2nd reject)": "却下が連続したため申請通りの結果で自動確定しました。異議がある場合は相手を通報してください。",
+  "report auto-approved after timeout": "承認期限を超過したため自動承認されました。レートが更新されました。",
 };
 
 function translateBody(body: string): string {

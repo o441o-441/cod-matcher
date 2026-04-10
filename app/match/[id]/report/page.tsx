@@ -44,6 +44,7 @@ type MatchReportRow = {
   notes: string | null;
   submitted_at: string;
   decided_at: string | null;
+  deadline_at: string | null;
 };
 
 type MatchReportGameRow = {
@@ -96,6 +97,7 @@ const MESSAGE_JA: Record<string, string> = {
   "match report approved": "試合結果を承認しました。レートが更新されました。",
   "match report rejected": "試合結果申請を却下しました。再申請してください。",
   "auto-confirmed as dispute (2nd reject)": "却下が連続したため申請通りの結果で自動確定しました。",
+  "report auto-approved after timeout": "承認期限を超過したため自動承認されました。レートが更新されました。",
 };
 
 function translateBody(body: string): string {
@@ -137,6 +139,37 @@ export default function ReportPage() {
     { game_number: 2, mode: "snd", map_name: "", winner_match_team_id: "", was_played: true },
     { game_number: 3, mode: "control", map_name: "", winner_match_team_id: "", was_played: true },
   ]);
+
+  const [reportRemainingSec, setReportRemainingSec] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!report?.deadline_at || report.status !== "pending") {
+      setReportRemainingSec(null);
+      return;
+    }
+    const deadline = new Date(report.deadline_at).getTime();
+    const tick = () => {
+      setReportRemainingSec(Math.floor((deadline - Date.now()) / 1000));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [report?.deadline_at, report?.status]);
+
+  useEffect(() => {
+    if (reportRemainingSec === null) return;
+    if (reportRemainingSec > 0) return;
+    if (!matchId) return;
+    if (report?.status !== "pending") return;
+    void (async () => {
+      try {
+        await supabase.rpc("rpc_resolve_report_timeout", { p_match_id: matchId });
+        await loadAll({ silent: true });
+      } catch (e) {
+        console.error("resolve report timeout error:", e);
+      }
+    })();
+  }, [reportRemainingSec, matchId, report?.status]);
 
   const alphaTeam = useMemo(() => teams.find((t) => t.side === "alpha") ?? null, [teams]);
   const bravoTeam = useMemo(() => teams.find((t) => t.side === "bravo") ?? null, [teams]);
@@ -220,7 +253,7 @@ export default function ReportPage() {
             .returns<MatchTeamMemberRow[]>(),
           supabase
             .from("match_reports")
-            .select("id,match_id,submitted_by_user_id,submitted_by_match_team_id,status,winner_match_team_id,score_summary,notes,submitted_at,decided_at")
+            .select("id,match_id,submitted_by_user_id,submitted_by_match_team_id,status,winner_match_team_id,score_summary,notes,submitted_at,decided_at,deadline_at")
             .eq("match_id", matchId)
             .in("status", ["pending", "approved"])
             .order("submitted_at", { ascending: false })
@@ -597,7 +630,16 @@ export default function ReportPage() {
 
                 {canApproveOrReject && (
                   <div className="mt-4 rounded border border-white/10 bg-black/20 p-4">
-                    <div className="mb-3 text-sm font-semibold">相手チームの申請を確認</div>
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="text-sm font-semibold">相手チームの申請を確認</div>
+                      {reportRemainingSec !== null && (
+                        <div className={`text-lg font-bold ${reportRemainingSec <= 60 ? "text-red-400" : "text-white"}`}>
+                          {reportRemainingSec > 0
+                            ? `${Math.floor(reportRemainingSec / 60)}:${String(reportRemainingSec % 60).padStart(2, "0")}`
+                            : "0:00"}
+                        </div>
+                      )}
+                    </div>
 
                     {priorRejectCount >= 1 && (
                       <div className="mb-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
@@ -627,7 +669,17 @@ export default function ReportPage() {
 
                 {isMyOwnReport && report.status === "pending" && (
                   <div className="mt-4 rounded border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
-                    相手チームの承認待ちです。
+                    <div>相手チームの承認待ちです。</div>
+                    {reportRemainingSec !== null && (
+                      <div className="mt-2">
+                        承認期限まで残り:{" "}
+                        <span className={`font-bold ${reportRemainingSec <= 60 ? "text-red-400" : ""}`}>
+                          {reportRemainingSec > 0
+                            ? `${Math.floor(reportRemainingSec / 60)}:${String(reportRemainingSec % 60).padStart(2, "0")}`
+                            : "0:00（自動承認処理中...）"}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </section>
