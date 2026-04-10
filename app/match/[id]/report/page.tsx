@@ -337,9 +337,9 @@ export default function ReportPage() {
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "match_messages" },
+        { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${matchId}` },
         (payload) => {
-          console.log("report realtime (no filter):", payload.table, payload.eventType, payload);
+          console.log("report realtime:", payload.table, payload.eventType);
           void loadAll({ silent: true });
         }
       )
