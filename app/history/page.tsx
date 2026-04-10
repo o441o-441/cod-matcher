@@ -1,34 +1,35 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { RealtimeChannel } from '@supabase/supabase-js'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LoadingCard, EmptyCard } from '@/components/UIState'
 
 type MatchRow = {
   id: string
-  team1_id: string
-  team2_id: string
-  winner_team_id: string | null
-  loser_team_id: string | null
   status: string
+  winner_match_team_id: string | null
+  loser_match_team_id: string | null
   created_at: string
 }
 
-type TeamMap = Record<string, string>
+type MatchTeamRow = {
+  id: string
+  match_id: string
+  side: 'alpha' | 'bravo'
+  display_name: string | null
+}
 
 export default function HistoryPage() {
   const router = useRouter()
   const [matches, setMatches] = useState<MatchRow[]>([])
-  const [teamNames, setTeamNames] = useState<TeamMap>({})
+  const [matchTeams, setMatchTeams] = useState<MatchTeamRow[]>([])
   const [loading, setLoading] = useState(true)
-  const realtimeRef = useRef<RealtimeChannel | null>(null)
 
   const fetchHistory = async () => {
     const { data, error } = await supabase
       .from('matches')
-      .select('id, team1_id, team2_id, winner_team_id, loser_team_id, status, created_at')
+      .select('id, status, winner_match_team_id, loser_match_team_id, created_at')
       .eq('status', 'completed')
       .order('created_at', { ascending: false })
       .limit(20)
@@ -39,30 +40,24 @@ export default function HistoryPage() {
       return
     }
 
-    const matchList = data || []
+    const matchList = (data || []) as MatchRow[]
     setMatches(matchList)
 
-    const teamIds = Array.from(
-      new Set(matchList.flatMap((m) => [m.team1_id, m.team2_id])),
-    )
+    const matchIds = matchList.map((m) => m.id)
 
-    if (teamIds.length > 0) {
-      const { data: teams, error: teamError } = await supabase
-        .from('teams')
-        .select('id, name')
-        .in('id', teamIds)
+    if (matchIds.length > 0) {
+      const { data: teams, error: teamsError } = await supabase
+        .from('match_teams')
+        .select('id, match_id, side, display_name')
+        .in('match_id', matchIds)
 
-      if (teamError) {
-        console.error('teamError:', teamError)
+      if (teamsError) {
+        console.error('teams error:', teamsError)
       } else {
-        const map: TeamMap = {}
-        for (const team of teams || []) {
-          map[team.id] = team.name
-        }
-        setTeamNames(map)
+        setMatchTeams((teams || []) as MatchTeamRow[])
       }
     } else {
-      setTeamNames({})
+      setMatchTeams([])
     }
 
     setLoading(false)
@@ -70,38 +65,22 @@ export default function HistoryPage() {
 
   useEffect(() => {
     void Promise.resolve().then(fetchHistory)
-
-    const channel = supabase
-      .channel('history-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'matches',
-        },
-        async (payload) => {
-          const newRow = payload.new as MatchRow
-          if (newRow.status === 'completed') {
-            await fetchHistory()
-          }
-        },
-      )
-      .subscribe()
-
-    realtimeRef.current = channel
-
-    return () => {
-      if (realtimeRef.current) {
-        supabase.removeChannel(realtimeRef.current)
-        realtimeRef.current = null
-      }
-    }
   }, [])
+
+  const getTeamsForMatch = (matchId: string) => {
+    return matchTeams.filter((t) => t.match_id === matchId)
+  }
+
+  const getTeamLabel = (teamId: string | null) => {
+    if (!teamId) return '未確定'
+    const team = matchTeams.find((t) => t.id === teamId)
+    if (!team) return '不明'
+    return `${team.side.toUpperCase()}${team.display_name ? ` (${team.display_name})` : ''}`
+  }
 
   if (loading) {
     return (
-      <main style={{ maxWidth: 720, margin: '32px auto', padding: '0 16px' }}>
+      <main>
         <h1>マッチ履歴</h1>
         <LoadingCard message="履歴を読み込み中です..." />
       </main>
@@ -109,54 +88,52 @@ export default function HistoryPage() {
   }
 
   return (
-    <main style={{ maxWidth: 720, margin: '32px auto', padding: '0 16px' }}>
-      <h1>マッチ履歴</h1>
-
-      <p>完了した試合の履歴です</p>
-
-      <div style={{ marginTop: 12 }}>
-        <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
+    <main>
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <div>
+          <h1>マッチ履歴</h1>
+          <p className="muted">完了した試合の履歴です</p>
+        </div>
+        <div className="row">
+          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
+        </div>
       </div>
 
-      <section style={{ marginTop: 24 }}>
-        <h2>履歴一覧</h2>
-
+      <div className="section card-strong">
         {matches.length === 0 ? (
           <EmptyCard title="履歴がありません" message="完了した試合がまだありません。" />
         ) : (
-          <div style={{ display: 'grid', gap: 12 }}>
-            {matches.map((m) => (
-              <div
-                key={m.id}
-                style={{
-                  border: '1px solid #ddd',
-                  borderRadius: 8,
-                  padding: 12,
-                }}
-              >
-                <div>
-                  <strong>対戦:</strong> {teamNames[m.team1_id] || '不明'} vs{' '}
-                  {teamNames[m.team2_id] || '不明'}
-                </div>
+          <div className="stack">
+            {matches.map((m) => {
+              const teams = getTeamsForMatch(m.id)
+              const alpha = teams.find((t) => t.side === 'alpha')
+              const bravo = teams.find((t) => t.side === 'bravo')
 
-                <div style={{ marginTop: 6 }}>
-                  <strong>勝者:</strong> {teamNames[m.winner_team_id || ''] || '未確定'}
+              return (
+                <div key={m.id} className="card">
+                  <p>
+                    <strong>対戦:</strong>{' '}
+                    {alpha ? `ALPHA${alpha.display_name ? ` (${alpha.display_name})` : ''}` : '不明'}{' '}
+                    vs{' '}
+                    {bravo ? `BRAVO${bravo.display_name ? ` (${bravo.display_name})` : ''}` : '不明'}
+                  </p>
+                  <p>
+                    <strong>勝者:</strong> {getTeamLabel(m.winner_match_team_id)}
+                  </p>
+                  <p className="muted">
+                    {new Date(m.created_at).toLocaleString('ja-JP')}
+                  </p>
+                  <div className="section row">
+                    <button onClick={() => router.push(`/match/${m.id}/report`)}>
+                      試合詳細
+                    </button>
+                  </div>
                 </div>
-
-                <div style={{ marginTop: 6 }}>
-                  <strong>日時:</strong> {new Date(m.created_at).toLocaleString('ja-JP')}
-                </div>
-
-                <div style={{ marginTop: 12 }}>
-                  <button onClick={() => router.push(`/match/${m.id}/report`)}>
-                    試合詳細
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
-      </section>
+      </div>
     </main>
   )
 }
