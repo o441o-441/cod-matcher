@@ -20,10 +20,21 @@ type MatchTeamRow = {
   display_name: string | null
 }
 
+type MatchTeamMemberRow = {
+  id: string
+  match_team_id: string
+  user_id: string
+  profiles?: {
+    id: string
+    display_name: string
+  } | null
+}
+
 export default function HistoryPage() {
   const router = useRouter()
   const [matches, setMatches] = useState<MatchRow[]>([])
   const [matchTeams, setMatchTeams] = useState<MatchTeamRow[]>([])
+  const [members, setMembers] = useState<MatchTeamMemberRow[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchHistory = async () => {
@@ -54,10 +65,26 @@ export default function HistoryPage() {
       if (teamsError) {
         console.error('teams error:', teamsError)
       } else {
-        setMatchTeams((teams || []) as MatchTeamRow[])
+        const teamRows = (teams || []) as MatchTeamRow[]
+        setMatchTeams(teamRows)
+
+        const teamIds = teamRows.map((t) => t.id)
+        if (teamIds.length > 0) {
+          const { data: membersData, error: membersError } = await supabase
+            .from('match_team_members')
+            .select('id, match_team_id, user_id, profiles!match_team_members_user_id_fkey(id, display_name)')
+            .in('match_team_id', teamIds)
+
+          if (membersError) {
+            console.error('members error:', membersError)
+          } else {
+            setMembers((membersData || []) as unknown as MatchTeamMemberRow[])
+          }
+        }
       }
     } else {
       setMatchTeams([])
+      setMembers([])
     }
 
     setLoading(false)
@@ -67,15 +94,17 @@ export default function HistoryPage() {
     void Promise.resolve().then(fetchHistory)
   }, [])
 
-  const getTeamsForMatch = (matchId: string) => {
-    return matchTeams.filter((t) => t.match_id === matchId)
+  const getMemberNames = (matchTeamId: string): string => {
+    const teamMembers = members.filter((m) => m.match_team_id === matchTeamId)
+    if (teamMembers.length === 0) return '不明'
+    return teamMembers
+      .map((m) => m.profiles?.display_name ?? m.user_id.slice(0, 8))
+      .join(', ')
   }
 
-  const getTeamLabel = (teamId: string | null) => {
-    if (!teamId) return '未確定'
-    const team = matchTeams.find((t) => t.id === teamId)
-    if (!team) return '不明'
-    return `${team.side.toUpperCase()}${team.display_name ? ` (${team.display_name})` : ''}`
+  const getWinnerNames = (winnerTeamId: string | null): string => {
+    if (!winnerTeamId) return '未確定'
+    return getMemberNames(winnerTeamId)
   }
 
   if (loading) {
@@ -105,20 +134,24 @@ export default function HistoryPage() {
         ) : (
           <div className="stack">
             {matches.map((m) => {
-              const teams = getTeamsForMatch(m.id)
+              const teams = matchTeams.filter((t) => t.match_id === m.id)
               const alpha = teams.find((t) => t.side === 'alpha')
               const bravo = teams.find((t) => t.side === 'bravo')
 
               return (
                 <div key={m.id} className="card">
-                  <p>
-                    <strong>対戦:</strong>{' '}
-                    {alpha ? `ALPHA${alpha.display_name ? ` (${alpha.display_name})` : ''}` : '不明'}{' '}
-                    vs{' '}
-                    {bravo ? `BRAVO${bravo.display_name ? ` (${bravo.display_name})` : ''}` : '不明'}
-                  </p>
-                  <p>
-                    <strong>勝者:</strong> {getTeamLabel(m.winner_match_team_id)}
+                  <div className="grid grid-2">
+                    <div>
+                      <p className="muted">ALPHA</p>
+                      <p><strong>{alpha ? getMemberNames(alpha.id) : '不明'}</strong></p>
+                    </div>
+                    <div>
+                      <p className="muted">BRAVO</p>
+                      <p><strong>{bravo ? getMemberNames(bravo.id) : '不明'}</strong></p>
+                    </div>
+                  </div>
+                  <p style={{ marginTop: 8 }}>
+                    <strong>勝者:</strong> {getWinnerNames(m.winner_match_team_id)}
                   </p>
                   <p className="muted">
                     {new Date(m.matched_at).toLocaleString('ja-JP')}
