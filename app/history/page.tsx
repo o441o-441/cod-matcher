@@ -10,7 +10,7 @@ type MatchRow = {
   status: string
   winner_match_team_id: string | null
   loser_match_team_id: string | null
-  created_at: string
+  matched_at: string
 }
 
 type MatchTeamRow = {
@@ -29,9 +29,9 @@ export default function HistoryPage() {
   const fetchHistory = async () => {
     const { data, error } = await supabase
       .from('matches')
-      .select('id, status, winner_match_team_id, loser_match_team_id, created_at')
+      .select('id, status, winner_match_team_id, loser_match_team_id, matched_at')
       .eq('status', 'completed')
-      .order('created_at', { ascending: false })
+      .order('matched_at', { ascending: false })
       .limit(20)
 
     if (error) {
@@ -121,7 +121,7 @@ export default function HistoryPage() {
                     <strong>勝者:</strong> {getTeamLabel(m.winner_match_team_id)}
                   </p>
                   <p className="muted">
-                    {new Date(m.created_at).toLocaleString('ja-JP')}
+                    {new Date(m.matched_at).toLocaleString('ja-JP')}
                   </p>
                   <div className="section row">
                     <button onClick={() => router.push(`/match/${m.id}/report`)}>
