@@ -37,6 +37,7 @@ export default function UserProfilePage() {
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<ProfileRow | null>(null)
   const [legacy, setLegacy] = useState<LegacyUser | null>(null)
+  const [teamName, setTeamName] = useState<string | null>(null)
   const [isMe, setIsMe] = useState(false)
   const [signedIn, setSignedIn] = useState(false)
   const [sendingFriend, setSendingFriend] = useState(false)
@@ -67,6 +68,22 @@ export default function UserProfilePage() {
         .eq('auth_user_id', userId)
         .maybeSingle<LegacyUser>()
       setLegacy(l ?? null)
+
+      const { data: memberRow } = await supabase
+        .from('team_members')
+        .select('team_id')
+        .eq('user_id', userId)
+        .maybeSingle<{ team_id: string }>()
+      if (memberRow?.team_id) {
+        const { data: teamRow } = await supabase
+          .from('teams')
+          .select('name, is_disbanded')
+          .eq('id', memberRow.team_id)
+          .maybeSingle<{ name: string; is_disbanded: boolean }>()
+        if (teamRow && !teamRow.is_disbanded) {
+          setTeamName(teamRow.name)
+        }
+      }
 
       setLoading(false)
     }
@@ -124,7 +141,8 @@ export default function UserProfilePage() {
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
           <h1>{profile.display_name || '(名前未設定)'}</h1>
-          <p className="muted">プレイヤープロフィール</p>
+          {teamName && <p className="muted">{teamName}</p>}
+          {!teamName && <p className="muted">プレイヤープロフィール</p>}
         </div>
         <div className="row">
           <button onClick={() => router.back()}>戻る</button>

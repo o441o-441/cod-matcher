@@ -17,6 +17,7 @@ type ProfileRow = {
 export default function RankingPage() {
   const router = useRouter()
   const [players, setPlayers] = useState<ProfileRow[]>([])
+  const [teamNames, setTeamNames] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
 
   const fetchRanking = async () => {
@@ -33,7 +34,39 @@ export default function RankingPage() {
       return
     }
 
-    setPlayers((data || []) as ProfileRow[])
+    const profileList = (data || []) as ProfileRow[]
+    setPlayers(profileList)
+
+    const userIds = profileList.map((p) => p.id)
+    if (userIds.length > 0) {
+      const { data: memberData } = await supabase
+        .from('team_members')
+        .select('user_id, team_id')
+        .in('user_id', userIds)
+
+      if (memberData && memberData.length > 0) {
+        const teamIds = [...new Set((memberData as { user_id: string; team_id: string }[]).map((m) => m.team_id))]
+        const { data: teamsData } = await supabase
+          .from('teams')
+          .select('id, name')
+          .in('id', teamIds)
+          .eq('is_disbanded', false)
+
+        const teamMap: Record<string, string> = {}
+        for (const t of (teamsData || []) as { id: string; name: string }[]) {
+          teamMap[t.id] = t.name
+        }
+
+        const userTeamMap: Record<string, string> = {}
+        for (const m of memberData as { user_id: string; team_id: string }[]) {
+          if (teamMap[m.team_id]) {
+            userTeamMap[m.user_id] = teamMap[m.team_id]
+          }
+        }
+        setTeamNames(userTeamMap)
+      }
+    }
+
     setLoading(false)
   }
 
@@ -79,6 +112,9 @@ export default function RankingPage() {
                     <div>
                       <p className="muted">#{index + 1}</p>
                       <h3 style={{ marginTop: 0 }}>{p.display_name || '(名前未設定)'}</h3>
+                      {teamNames[p.id] && (
+                        <p className="muted" style={{ marginTop: 2 }}>{teamNames[p.id]}</p>
+                      )}
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <h3 style={{ marginTop: 0 }}>{p.current_rating ?? '-'}</h3>
