@@ -350,13 +350,13 @@ export default function BanpickPage() {
             .from("banpick_actions")
             .select("id,banpick_session_id,match_id,actor_user_id,actor_match_team_id,turn_number,phase,action_type,target,created_at,profiles!banpick_actions_actor_user_id_fkey(id,display_name)")
             .eq("match_id", matchId)
-            .order("created_at", { ascending: true })
+            .order("created_at", { ascending: false })
             .returns<BanpickActionRow[]>(),
           supabase
             .from("match_messages")
             .select("id,match_id,sender_user_id,message_type,body,created_at,profiles!match_messages_sender_user_id_fkey(id,display_name)")
             .eq("match_id", matchId)
-            .order("created_at", { ascending: true })
+            .order("created_at", { ascending: false })
             .returns<MatchMessageRow[]>(),
         ]);
 
