@@ -89,6 +89,19 @@ const MAP_OPTIONS = [
   "Red Card",
 ];
 
+const MESSAGE_JA: Record<string, string> = {
+  "banpick completed": "バンピックが完了しました。ホストを決定してください。",
+  "banpick timeout: action side lost": "バンピック制限時間を超過したため、操作側の敗北として処理されました。",
+  "match report submitted": "試合結果を申請しました。",
+  "match report approved": "試合結果を承認しました。レートが更新されました。",
+  "match report rejected": "試合結果申請を却下しました。再申請してください。",
+  "auto-confirmed as dispute (2nd reject)": "却下が連続したため申請通りの結果で自動確定しました。",
+};
+
+function translateBody(body: string): string {
+  return MESSAGE_JA[body] ?? body;
+}
+
 function teamLabel(team: MatchTeamRow | null) {
   if (!team) return "-";
   return `${team.side.toUpperCase()}${team.display_name ? ` (${team.display_name})` : ""}`;
@@ -687,16 +700,6 @@ export default function ReportPage() {
                 ) : (
                   messages.map((msg) => {
                     const senderName = msg.profiles?.display_name ?? null;
-                    const bodyLabel =
-                      msg.body === "match report submitted"
-                        ? "試合結果を申請しました"
-                        : msg.body === "match report approved"
-                        ? "試合結果を承認しました。レートが更新されました"
-                        : msg.body === "match report rejected"
-                        ? "試合結果申請を却下しました。再申請してください"
-                        : msg.body === "auto-confirmed as dispute (2nd reject)"
-                        ? "却下が連続したため申請通りの結果で自動確定しました"
-                        : msg.body;
                     return (
                       <div key={msg.id} className="rounded bg-black/20 px-3 py-2 text-sm">
                         <div className="mb-1 text-[11px] text-white/50">
@@ -706,7 +709,7 @@ export default function ReportPage() {
                           {senderName && (
                             <span className="font-semibold text-cyan-300">{senderName}: </span>
                           )}
-                          {bodyLabel}
+                          {translateBody(msg.body)}
                         </div>
                       </div>
                     );

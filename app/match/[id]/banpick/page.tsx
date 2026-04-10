@@ -149,6 +149,19 @@ function phaseLabel(phase: BanpickPhase | string) {
   return phase;
 }
 
+const MESSAGE_JA: Record<string, string> = {
+  "banpick completed": "バンピックが完了しました。ホストを決定してください。",
+  "banpick timeout: action side lost": "バンピック制限時間を超過したため、操作側の敗北として処理されました。",
+  "match report submitted": "試合結果を申請しました。相手チームは確認して承認してください。",
+  "match report approved": "試合結果を承認しました。レートが更新されました。",
+  "match report rejected": "試合結果申請を却下しました。再申請してください。",
+  "auto-confirmed as dispute (2nd reject)": "却下が連続したため申請通りの結果で自動確定しました。異議がある場合は相手を通報してください。",
+};
+
+function translateBody(body: string): string {
+  return MESSAGE_JA[body] ?? body;
+}
+
 function actionTypeLabel(actionType: string | null) {
   switch (actionType) {
     case "ban":
@@ -980,7 +993,7 @@ export default function BanpickPage() {
                           </span>
                           <span>{new Date(msg.created_at).toLocaleString()}</span>
                         </div>
-                        <div className="break-words whitespace-pre-wrap">{msg.body}</div>
+                        <div className="break-words whitespace-pre-wrap">{translateBody(msg.body)}</div>
                       </div>
                     ))
                   )}
