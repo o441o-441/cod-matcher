@@ -353,6 +353,13 @@ export default function ReportPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
 
+  useEffect(() => {
+    if (!matchId) return;
+    const interval = setInterval(() => void loadAll({ silent: true }), 5000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId]);
+
   const handleGameChange = <K extends keyof ReportFormGame>(
     index: number,
     key: K,
