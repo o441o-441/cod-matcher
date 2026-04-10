@@ -588,17 +588,6 @@ export default function ReportPage() {
                       </div>
                     )}
 
-                    <div className="mb-3">
-                      <label className="mb-2 block text-sm font-medium">却下理由（任意）</label>
-                      <textarea
-                        value={rejectReason}
-                        onChange={(e) => setRejectReason(e.target.value)}
-                        rows={3}
-                        placeholder="例: スコアが違います"
-                        className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                      />
-                    </div>
-
                     <div className="flex flex-wrap gap-2">
                       <button
                         onClick={handleApproveReport}
