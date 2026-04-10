@@ -133,6 +133,7 @@ export default function ReportPage() {
   const [scoreSummary, setScoreSummary] = useState("2-0");
   const [notes, setNotes] = useState("");
   const [rejectReason, setRejectReason] = useState("");
+  const [chatInput, setChatInput] = useState("");
 
   const [games, setGames] = useState<ReportFormGame[]>([
     { game_number: 1, mode: "hp", map_name: "", winner_match_team_id: "", was_played: true },
@@ -435,6 +436,31 @@ export default function ReportPage() {
       await loadAll();
     } catch (e) {
       const message = e instanceof Error ? e.message : "却下に失敗しました。";
+      setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSendChat = async () => {
+    if (!matchId) return;
+    clearMessages();
+    const body = chatInput.trim();
+    if (!body) {
+      setErrorText("メッセージを入力してください。");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc("rpc_send_match_message", {
+        p_match_id: matchId,
+        p_body: body,
+      });
+      if (error) throw error;
+      setChatInput("");
+      await loadAll({ silent: true });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "メッセージ送信に失敗しました。";
       setErrorText(message);
     } finally {
       setBusy(false);
@@ -744,29 +770,57 @@ export default function ReportPage() {
 
           <div className="space-y-4">
             <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">最近のシステムメッセージ</h2>
+              <h2 className="mb-3 text-lg font-semibold">試合チャット</h2>
+
+              <div className="mb-3 h-[420px] overflow-y-auto rounded border border-white/10 bg-black/20 p-3">
+                <div className="space-y-2">
+                  {messages.length === 0 ? (
+                    <div className="text-sm text-white/50">まだメッセージはありません。</div>
+                  ) : (
+                    messages.map((msg) => {
+                      const senderName = msg.profiles?.display_name ?? null;
+                      return (
+                        <div
+                          key={msg.id}
+                          className={`rounded px-3 py-2 text-sm ${
+                            msg.message_type === "system"
+                              ? "bg-white/5 text-white/70"
+                              : "bg-white/10 text-white"
+                          }`}
+                        >
+                          <div className="mb-1 text-[11px] text-white/50">
+                            {new Date(msg.created_at).toLocaleString()}
+                          </div>
+                          <div className="whitespace-pre-wrap break-words">
+                            {senderName && (
+                              <span className="font-semibold text-cyan-300">{senderName}: </span>
+                            )}
+                            {translateBody(msg.body)}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
 
               <div className="space-y-2">
-                {messages.length === 0 ? (
-                  <div className="text-sm text-white/50">メッセージはありません。</div>
-                ) : (
-                  messages.map((msg) => {
-                    const senderName = msg.profiles?.display_name ?? null;
-                    return (
-                      <div key={msg.id} className="rounded bg-black/20 px-3 py-2 text-sm">
-                        <div className="mb-1 text-[11px] text-white/50">
-                          {new Date(msg.created_at).toLocaleString()}
-                        </div>
-                        <div className="whitespace-pre-wrap break-words">
-                          {senderName && (
-                            <span className="font-semibold text-cyan-300">{senderName}: </span>
-                          )}
-                          {translateBody(msg.body)}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
+                <textarea
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="メッセージを入力"
+                  rows={3}
+                  maxLength={300}
+                  className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                  disabled={busy}
+                />
+                <button
+                  onClick={handleSendChat}
+                  disabled={busy}
+                  className="w-full rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+                >
+                  メッセージ送信
+                </button>
               </div>
             </section>
 
