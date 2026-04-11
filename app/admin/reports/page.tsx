@@ -185,6 +185,7 @@ export default function AdminReportsPage() {
           <p className="muted">運営者向けの通報対応画面</p>
         </div>
         <div className="row">
+          <button onClick={() => router.push('/admin/bans')}>BANリスト</button>
           <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
         </div>
       </div>
