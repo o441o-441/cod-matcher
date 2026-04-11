@@ -9,7 +9,7 @@ const REPORT_TUTORIAL = [
   { title: "試合結果報告", body: "試合が終わったら、勝者チームのボタンを押して結果を報告します。" },
   { title: "承認と却下", body: "相手チームがあなたの報告を確認します。正しければ「承認」、間違いなら「却下」を押します。" },
   { title: "自動承認", body: "報告から1時間以内に相手が操作しない場合、自動で承認されます。" },
-  { title: "dispute", body: "2回連続で却下されると、報告通りの結果で自動確定します（dispute）。異議がある場合は相手を通報できます。" },
+  { title: "無効試合", body: "2回連続で却下されると無効試合となり、レート変動はありません。虚偽の報告や不当な却下をするプレイヤーは通報してください。" },
 ];
 
 type MatchRow = {
@@ -105,6 +105,7 @@ const MESSAGE_JA: Record<string, string> = {
   "match report approved": "試合結果を承認しました。レートが更新されました。",
   "match report rejected": "試合結果申請を却下しました。再申請してください。",
   "auto-confirmed as dispute (2nd reject)": "却下が連続したため申請通りの結果で自動確定しました。",
+  "match voided after 2 rejections": "却下が連続したため無効試合になりました。レート変動はありません。",
   "report auto-approved after timeout": "承認期限を超過したため自動承認されました。レートが更新されました。",
   "match created": "マッチが成立しました。バンピックを開始してください。",
   "all players on report page, deadline shortened to 5 min": "全員が結果報告画面を開きました。承認期限が5分に短縮されました。",
@@ -720,7 +721,7 @@ export default function ReportPage() {
 
                     {priorRejectCount >= 1 && (
                       <div className="mb-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-                        ⚠ 既に1回却下されています。次の却下で<strong>申請通りの結果で自動確定</strong>され、相手プレイヤーへの通報が必要になります。
+                        既に1回却下されています。次の却下で<strong>無効試合</strong>となり、レート変動はありません。虚偽の報告や不当な却下をするプレイヤーは通報してください。
                       </div>
                     )}
 
@@ -738,7 +739,7 @@ export default function ReportPage() {
                         disabled={busy}
                         className="rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                       >
-                        {priorRejectCount >= 1 ? "却下する（自動確定 + dispute）" : "却下する"}
+                        {priorRejectCount >= 1 ? "却下する（無効試合になります）" : "却下する"}
                       </button>
                     </div>
                   </div>
@@ -769,57 +770,46 @@ export default function ReportPage() {
               </section>
             )}
 
-            {match?.status === "completed" && (
-              <section
-                className={`rounded border p-4 ${
-                  match.disputed
-                    ? "border-amber-500/40 bg-amber-500/10"
-                    : "border-emerald-500/20 bg-emerald-500/10"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-semibold">試合確定済み</h2>
-                  {match.disputed && (
-                    <span className="rounded bg-amber-500 px-2 py-0.5 text-xs font-bold text-black">
-                      DISPUTED
-                    </span>
-                  )}
+            {match?.status === "completed" && match.approval_status === "voided" && (
+              <section className="rounded border border-amber-500/40 bg-amber-500/10 p-4">
+                <h2 className="text-lg font-semibold">無効試合</h2>
+                <p className="mt-2 text-sm">
+                  却下が連続したため無効試合となりました。レート変動はありません。
+                </p>
+                {match.completed_at && (
+                  <div className="mt-1 text-xs text-white/60">
+                    確定日時: {new Date(match.completed_at).toLocaleString()}
+                  </div>
+                )}
+                <div className="mt-4 space-y-2">
+                  <p className="text-xs text-white/60">虚偽の報告や不当な却下があった場合は通報してください。</p>
+                  {members
+                    .filter((m) => m.match_team_id !== myMatchTeamId)
+                    .map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() =>
+                          router.push(`/reports/new?reported=${m.user_id}&match=${matchId}`)
+                        }
+                        className="block w-full rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-left text-sm hover:bg-amber-500/20"
+                      >
+                        {m.profiles?.display_name ?? m.user_id} を通報する
+                      </button>
+                    ))}
                 </div>
+              </section>
+            )}
+
+            {match?.status === "completed" && match.approval_status !== "voided" && (
+              <section className="rounded border border-emerald-500/20 bg-emerald-500/10 p-4">
+                <h2 className="text-lg font-semibold">試合確定済み</h2>
                 <div className="mt-2 text-sm">
                   勝者: <span className="font-semibold">{teamLabel(completedWinnerTeam)}</span>
                 </div>
                 {match.completed_at && (
                   <div className="mt-1 text-xs text-white/60">
                     確定日時: {new Date(match.completed_at).toLocaleString()}
-                  </div>
-                )}
-
-                {match.disputed && (
-                  <div className="mt-4 rounded border border-amber-500/30 bg-black/20 p-3">
-                    <div className="mb-2 text-sm font-semibold text-amber-200">
-                      この試合は dispute 状態で確定しました
-                    </div>
-                    <p className="mb-3 text-xs text-white/70">
-                      却下が連続したため申請通りの結果で自動確定しています。結果に異議がある場合は、相手プレイヤーを通報してください。運営が確認します。
-                    </p>
-                    <div className="space-y-2">
-                      {members
-                        .filter((m) => m.match_team_id !== myMatchTeamId)
-                        .map((m) => (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() =>
-                              router.push(
-                                `/reports/new?reported=${m.user_id}&match=${matchId}`
-                              )
-                            }
-                            className="block w-full rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-left text-sm hover:bg-amber-500/20"
-                          >
-                            {m.profiles?.display_name ?? m.user_id} を通報する
-                          </button>
-                        ))}
-                    </div>
                   </div>
                 )}
               </section>

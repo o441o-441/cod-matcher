@@ -171,6 +171,7 @@ const MESSAGE_JA: Record<string, string> = {
   "report auto-approved after timeout": "承認期限を超過したため自動承認されました。レートが更新されました。",
   "match created": "マッチが成立しました。バンピックを開始してください。",
   "all players on report page, deadline shortened to 5 min": "全員が結果報告画面を開きました。承認期限が5分に短縮されました。",
+  "match voided after 2 rejections": "却下が連続したため無効試合になりました。レート変動はありません。",
 };
 
 function translateBody(body: string): string {
