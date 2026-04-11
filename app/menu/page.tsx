@@ -226,6 +226,11 @@ export default function MenuPage() {
               お知らせ管理
             </button>
           )}
+          {isAdmin && (
+            <button onClick={() => router.push('/admin/roles')}>
+              ロール管理
+            </button>
+          )}
         </div>
       </div>
     </main>

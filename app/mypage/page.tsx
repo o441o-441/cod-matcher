@@ -38,6 +38,7 @@ export default function MyPage() {
   const [pageError, setPageError] = useState('')
   const [bio, setBio] = useState<string | null>(null)
   const [isBanned, setIsBanned] = useState(false)
+  const [suspendedUntil, setSuspendedUntil] = useState<string | null>(null)
   const [rating, setRating] = useState<number | null>(null)
   const [wins, setWins] = useState<number | null>(null)
   const [losses, setLosses] = useState<number | null>(null)
@@ -197,7 +198,7 @@ export default function MyPage() {
 
     const { data: profileRow } = await supabase
       .from('profiles')
-      .select('bio, current_rating, wins, losses, is_banned')
+      .select('bio, current_rating, wins, losses, is_banned, suspended_until')
       .eq('id', authUser.id)
       .maybeSingle<{
         bio: string | null
@@ -205,9 +206,11 @@ export default function MyPage() {
         wins: number | null
         losses: number | null
         is_banned: boolean | null
+        suspended_until: string | null
       }>()
     setBio(profileRow?.bio ?? null)
     setIsBanned(!!profileRow?.is_banned)
+    setSuspendedUntil(profileRow?.suspended_until ?? null)
     setRating(profileRow?.current_rating ?? null)
     setWins(profileRow?.wins ?? null)
     setLosses(profileRow?.losses ?? null)
@@ -330,6 +333,13 @@ export default function MyPage() {
       <div className="section">
         <div className="card-strong">
           <h2>プロフィール</h2>
+
+          {suspendedUntil && new Date(suspendedUntil) > new Date() && (
+            <div className="card" style={{ borderColor: 'var(--warning, orange)', marginBottom: 12 }}>
+              <h3 style={{ color: 'var(--warning, orange)' }}>このアカウントは一時停止中です（解除: {new Date(suspendedUntil).toLocaleString('ja-JP')}）</h3>
+              <p className="muted">マッチへの参加が制限されています。</p>
+            </div>
+          )}
 
           {isBanned && (
             <div className="card" style={{ borderColor: 'var(--danger)', marginBottom: 12 }}>

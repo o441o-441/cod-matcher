@@ -19,6 +19,8 @@ const CATEGORIES: { value: string; label: string }[] = [
   { value: 'other', label: 'その他' },
 ]
 
+const INSTANT_CATEGORIES = ['cheat', 'converter', 'banned_weapon', 'banned_attachment', 'glitch', 'afk']
+
 function ReportNewContent() {
   const router = useRouter()
   const params = useSearchParams()
@@ -32,6 +34,9 @@ function ReportNewContent() {
   const [category, setCategory] = useState('')
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [isMonitor, setIsMonitor] = useState(false)
+
+  const isInstantCategory = INSTANT_CATEGORIES.includes(category)
 
   useEffect(() => {
     const init = async () => {
@@ -48,6 +53,13 @@ function ReportNewContent() {
         router.push('/menu')
         return
       }
+
+      const { data: me } = await supabase
+        .from('profiles')
+        .select('is_monitor')
+        .eq('id', session.user.id)
+        .maybeSingle<{ is_monitor: boolean | null }>()
+      setIsMonitor(!!me?.is_monitor)
 
       const { data } = await supabase
         .from('profiles')
@@ -70,18 +82,34 @@ function ReportNewContent() {
     }
 
     setSubmitting(true)
-    const { error } = await supabase.rpc('rpc_create_report', {
-      p_reported_user_id: reportedId,
-      p_category: category,
-      p_description: description.trim() || null,
-      p_match_id: matchId || null,
-    })
-    setSubmitting(false)
 
-    if (error) {
-      console.error('rpc_create_report error:', error)
-      showToast(error.message || '通報送信に失敗しました', 'error')
-      return
+    if (isMonitor && isInstantCategory) {
+      const { error } = await supabase.rpc('rpc_monitor_report', {
+        p_reported_user_id: reportedId,
+        p_category: category,
+        p_match_id: matchId || null,
+      })
+      setSubmitting(false)
+
+      if (error) {
+        console.error('rpc_monitor_report error:', error)
+        showToast(error.message || '通報送信に失敗しました', 'error')
+        return
+      }
+    } else {
+      const { error } = await supabase.rpc('rpc_create_report', {
+        p_reported_user_id: reportedId,
+        p_category: category,
+        p_description: description.trim() || null,
+        p_match_id: matchId || null,
+      })
+      setSubmitting(false)
+
+      if (error) {
+        console.error('rpc_create_report error:', error)
+        showToast(error.message || '通報送信に失敗しました', 'error')
+        return
+      }
     }
 
     showToast('通報を送信しました', 'success')
@@ -101,7 +129,24 @@ function ReportNewContent() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>通報</h1>
+          <h1>
+            通報
+            {isMonitor && (
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  marginLeft: 8,
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  background: 'var(--accent-cyan, #0ff)',
+                  color: '#000',
+                  verticalAlign: 'middle',
+                }}
+              >
+                監視ユーザー
+              </span>
+            )}
+          </h1>
           <p className="muted">ルール違反などを運営に通報します</p>
         </div>
         <div className="row">
@@ -132,6 +177,14 @@ function ReportNewContent() {
           </select>
         </div>
       </div>
+
+      {isMonitor && isInstantCategory && (
+        <div className="section card" style={{ borderColor: 'var(--warning, orange)' }}>
+          <p style={{ color: 'var(--warning, orange)' }}>
+            <strong>注意:</strong> この通報は監視ユーザーとして送信されます。2人目の監視通報で対象者が24時間一時停止されます。
+          </p>
+        </div>
+      )}
 
       <div className="section card-strong">
         <h2>詳細（任意）</h2>
