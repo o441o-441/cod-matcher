@@ -68,10 +68,9 @@ export default function AdminSuspensionsPage() {
     const name = displayName || userId.slice(0, 8)
     if (!confirm(`${name} の一時停止を解除しますか？`)) return
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({ suspended_until: null })
-      .eq('id', userId)
+    const { error } = await supabase.rpc('rpc_admin_lift_suspension', {
+      p_user_id: userId,
+    })
 
     if (error) {
       showToast(error.message || '解除に失敗しました', 'error')
