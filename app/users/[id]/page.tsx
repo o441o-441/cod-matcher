@@ -143,39 +143,7 @@ export default function UserProfilePage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>
-            {profile.display_name || '(名前未設定)'}
-            {profile.is_monitor && (
-              <span
-                style={{
-                  fontSize: '0.7rem',
-                  marginLeft: 8,
-                  padding: '2px 6px',
-                  borderRadius: 4,
-                  background: 'var(--accent-cyan, #0ff)',
-                  color: '#000',
-                  verticalAlign: 'middle',
-                }}
-              >
-                監視ユーザー
-              </span>
-            )}
-            {profile.is_approved && (
-              <span
-                style={{
-                  fontSize: '0.7rem',
-                  marginLeft: 8,
-                  padding: '2px 6px',
-                  borderRadius: 4,
-                  background: 'var(--accent-green, #0f0)',
-                  color: '#000',
-                  verticalAlign: 'middle',
-                }}
-              >
-                承認ユーザー
-              </span>
-            )}
-          </h1>
+          <h1>{profile.display_name || '(名前未設定)'}</h1>
           {teamName && <p className="muted">{teamName}</p>}
           {!teamName && <p className="muted">プレイヤープロフィール</p>}
         </div>

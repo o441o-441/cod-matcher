@@ -38,6 +38,8 @@ export default function MyPage() {
   const [pageError, setPageError] = useState('')
   const [bio, setBio] = useState<string | null>(null)
   const [isBanned, setIsBanned] = useState(false)
+  const [isMonitor, setIsMonitor] = useState(false)
+  const [isApproved, setIsApproved] = useState(false)
   const [suspendedUntil, setSuspendedUntil] = useState<string | null>(null)
   const [rating, setRating] = useState<number | null>(null)
   const [wins, setWins] = useState<number | null>(null)
@@ -198,7 +200,7 @@ export default function MyPage() {
 
     const { data: profileRow } = await supabase
       .from('profiles')
-      .select('bio, current_rating, wins, losses, is_banned, suspended_until')
+      .select('bio, current_rating, wins, losses, is_banned, is_monitor, is_approved, suspended_until')
       .eq('id', authUser.id)
       .maybeSingle<{
         bio: string | null
@@ -206,10 +208,14 @@ export default function MyPage() {
         wins: number | null
         losses: number | null
         is_banned: boolean | null
+        is_monitor: boolean | null
+        is_approved: boolean | null
         suspended_until: string | null
       }>()
     setBio(profileRow?.bio ?? null)
     setIsBanned(!!profileRow?.is_banned)
+    setIsMonitor(!!profileRow?.is_monitor)
+    setIsApproved(!!profileRow?.is_approved)
     setSuspendedUntil(profileRow?.suspended_until ?? null)
     setRating(profileRow?.current_rating ?? null)
     setWins(profileRow?.wins ?? null)
@@ -309,7 +315,19 @@ export default function MyPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>マイページ</h1>
+          <h1>
+            マイページ
+            {isMonitor && (
+              <span style={{ fontSize: '0.7rem', marginLeft: 8, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan, #0ff)', color: '#000', verticalAlign: 'middle' }}>
+                監視ユーザー
+              </span>
+            )}
+            {isApproved && (
+              <span style={{ fontSize: '0.7rem', marginLeft: 8, padding: '2px 6px', borderRadius: 4, background: 'var(--success, #0f0)', color: '#000', verticalAlign: 'middle' }}>
+                承認ユーザー
+              </span>
+            )}
+          </h1>
           <p className="muted">チーム状況や対戦導線をここから管理します</p>
         </div>
 
