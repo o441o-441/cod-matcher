@@ -1289,13 +1289,6 @@ export default function MatchPage() {
               </div>
             </section>
 
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">補足</h2>
-              <div className="space-y-2 text-sm text-white/75">
-                <div>・自動マッチ生成は leader 側だけが試行します。</div>
-                <div>・人数不足などの想定内失敗は静かに再試行します。</div>
-              </div>
-            </section>
           </div>
         </div>
       </div>
