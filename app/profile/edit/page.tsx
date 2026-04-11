@@ -115,13 +115,20 @@ export default function ProfileEditPage() {
     }
 
     if (authUserId) {
-      const { error: bioErr } = await supabase
+      const { error: profileErr } = await supabase
         .from('profiles')
-        .update({ bio: bio.trim() || null })
+        .update({
+          display_name: trimmedDisplayName,
+          bio: bio.trim() || null,
+        })
         .eq('id', authUserId)
-      if (bioErr) {
-        console.error('save bio error:', bioErr)
-        showToast('自己紹介の保存に失敗しました', 'error')
+      if (profileErr) {
+        console.error('save profile error:', profileErr)
+        if (profileErr.code === '23505') {
+          showToast('既に使われている名前です。別の名前を入力してください。', 'error')
+        } else {
+          showToast('プロフィール更新に失敗しました', 'error')
+        }
         setSaving(false)
         return
       }
