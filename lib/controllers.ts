@@ -154,6 +154,7 @@ export const CONTROLLER_GROUPS: ControllerGroup[] = [
       'Void FPS推奨モデル',
       'Void スターターモデル',
       'Void GENESIS',
+      'Void PS4 FireBird',
     ],
   },
   {
