@@ -116,7 +116,6 @@ export default function RulesPage() {
               <ul>
                 <li>キルカメラ: オフ</li>
                 <li>コンパス上の敵: オフ</li>
-                <li>チーム割り当て: オン（シャッフルバグ対策）</li>
                 <li>味方への誤射: オン</li>
               </ul>
             </div>
