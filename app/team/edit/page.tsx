@@ -98,7 +98,11 @@ export default function TeamEditPage() {
 
     if (error) {
       console.error(error)
-      showToast(error.message || '更新に失敗しました', 'error')
+      if (error.code === '23505') {
+        showToast('既に使われている名前です。別の名前を入力してください。', 'error')
+      } else {
+        showToast(error.message || '更新に失敗しました', 'error')
+      }
       setSaving(false)
       return
     }

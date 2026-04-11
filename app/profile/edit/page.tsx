@@ -105,7 +105,11 @@ export default function ProfileEditPage() {
 
     if (error) {
       console.error('save profile error:', error)
-      showToast('プロフィール更新に失敗しました', 'error')
+      if (error.code === '23505') {
+        showToast('既に使われている名前です。別の名前を入力してください。', 'error')
+      } else {
+        showToast('プロフィール更新に失敗しました', 'error')
+      }
       setSaving(false)
       return
     }
