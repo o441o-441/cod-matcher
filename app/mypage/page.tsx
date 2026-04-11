@@ -37,6 +37,7 @@ export default function MyPage() {
   const [team, setTeam] = useState<TeamRow | null>(null)
   const [pageError, setPageError] = useState('')
   const [bio, setBio] = useState<string | null>(null)
+  const [isBanned, setIsBanned] = useState(false)
   const [rating, setRating] = useState<number | null>(null)
   const [wins, setWins] = useState<number | null>(null)
   const [losses, setLosses] = useState<number | null>(null)
@@ -196,15 +197,17 @@ export default function MyPage() {
 
     const { data: profileRow } = await supabase
       .from('profiles')
-      .select('bio, current_rating, wins, losses')
+      .select('bio, current_rating, wins, losses, is_banned')
       .eq('id', authUser.id)
       .maybeSingle<{
         bio: string | null
         current_rating: number | null
         wins: number | null
         losses: number | null
+        is_banned: boolean | null
       }>()
     setBio(profileRow?.bio ?? null)
+    setIsBanned(!!profileRow?.is_banned)
     setRating(profileRow?.current_rating ?? null)
     setWins(profileRow?.wins ?? null)
     setLosses(profileRow?.losses ?? null)
@@ -327,6 +330,13 @@ export default function MyPage() {
       <div className="section">
         <div className="card-strong">
           <h2>プロフィール</h2>
+
+          {isBanned && (
+            <div className="card" style={{ borderColor: 'var(--danger)', marginBottom: 12 }}>
+              <h3 className="danger">このアカウントは BAN されています</h3>
+              <p className="muted">マッチへの参加が制限されています。心当たりがない場合は運営にお問い合わせください。</p>
+            </div>
+          )}
 
           <div className="grid grid-2">
             <div className="card">
