@@ -114,6 +114,7 @@ export default function RankingPage() {
               </option>
             ))}
           </select>
+          <button onClick={() => router.push('/ranking/controllers')}>コントローラー</button>
           <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
         </div>
       </div>
