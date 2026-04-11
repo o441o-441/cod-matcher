@@ -144,7 +144,11 @@ export default function NewBlogPostPage() {
 
     if (error) {
       console.error('post insert error:', error)
-      showToast(error.message || '投稿に失敗しました', 'error')
+      if (error.message?.includes('daily post limit')) {
+        showToast('1日に投稿できるのは1件までです。明日また投稿してください。', 'error')
+      } else {
+        showToast(error.message || '投稿に失敗しました', 'error')
+      }
       return
     }
 
