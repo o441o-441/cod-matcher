@@ -24,6 +24,7 @@ export default function RankingPage() {
 
   const [players, setPlayers] = useState<SeasonRow[]>([])
   const [teamNames, setTeamNames] = useState<Record<string, string>>({})
+  const [controllers, setControllers] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
 
   const fetchTeamNames = async (userIds: string[]) => {
@@ -55,6 +56,22 @@ export default function RankingPage() {
     }
   }
 
+  const fetchControllers = async (userIds: string[]) => {
+    if (userIds.length === 0) return
+    const { data } = await supabase
+      .from('users')
+      .select('auth_user_id, controller')
+      .in('auth_user_id', userIds)
+
+    if (data) {
+      const map: Record<string, string> = {}
+      for (const u of data as { auth_user_id: string; controller: string | null }[]) {
+        if (u.controller) map[u.auth_user_id] = u.controller
+      }
+      setControllers(map)
+    }
+  }
+
   const fetchSeason = async (year: number, month: number) => {
     setLoading(true)
     const { data, error } = await supabase.rpc('rpc_get_season_ranking', {
@@ -70,7 +87,8 @@ export default function RankingPage() {
 
     const rows = (data || []) as SeasonRow[]
     setPlayers(rows)
-    await fetchTeamNames(rows.map((r) => r.user_id))
+    const ids = rows.map((r) => r.user_id)
+    await Promise.all([fetchTeamNames(ids), fetchControllers(ids)])
     setLoading(false)
   }
 
@@ -142,6 +160,9 @@ export default function RankingPage() {
                       <h3 style={{ marginTop: 0 }}>{p.display_name || '(名前未設定)'}</h3>
                       {teamNames[p.user_id] && (
                         <p className="muted" style={{ marginTop: 2 }}>{teamNames[p.user_id]}</p>
+                      )}
+                      {controllers[p.user_id] && (
+                        <p className="muted" style={{ marginTop: 2 }}>{controllers[p.user_id]}</p>
                       )}
                     </div>
                     <div style={{ textAlign: 'right' }}>
