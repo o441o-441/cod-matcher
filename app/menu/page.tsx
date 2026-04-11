@@ -236,6 +236,11 @@ export default function MenuPage() {
               ダッシュボード
             </button>
           )}
+          {isAdmin && (
+            <button onClick={() => router.push('/admin/affiliates')}>
+              購入リンク管理
+            </button>
+          )}
         </div>
       </div>
     </main>

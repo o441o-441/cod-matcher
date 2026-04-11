@@ -14,17 +14,24 @@ type ControllerRow = {
   avg_win_rate: number
 }
 
+type AffiliateUrl = {
+  controller_name: string
+  url: string
+}
+
 export default function ControllerRankingPage() {
   const router = useRouter()
   const [data, setData] = useState<ControllerRow[]>([])
+  const [affiliateUrls, setAffiliateUrls] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [minGames, setMinGames] = useState(5)
 
   const fetchRanking = async (min: number) => {
     setLoading(true)
-    const { data: rows, error } = await supabase.rpc('rpc_get_controller_ranking', {
-      p_min_games: min,
-    })
+    const [{ data: rows, error }, { data: urls }] = await Promise.all([
+      supabase.rpc('rpc_get_controller_ranking', { p_min_games: min }),
+      supabase.from('affiliate_urls').select('controller_name, url'),
+    ])
 
     if (error) {
       console.error('controller ranking error:', error)
@@ -33,12 +40,31 @@ export default function ControllerRankingPage() {
     }
 
     setData((rows ?? []) as ControllerRow[])
+
+    const urlMap: Record<string, string> = {}
+    for (const u of (urls ?? []) as AffiliateUrl[]) {
+      urlMap[u.controller_name] = u.url
+    }
+    setAffiliateUrls(urlMap)
     setLoading(false)
   }
 
   useEffect(() => {
     void fetchRanking(minGames)
   }, [minGames])
+
+  const handleClickLink = async (controllerName: string, url: string) => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    await supabase.from('link_clicks').insert({
+      controller_name: controllerName,
+      user_id: session?.user?.id ?? null,
+    })
+
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
 
   return (
     <main>
@@ -93,6 +119,21 @@ export default function ControllerRankingPage() {
                     </p>
                   </div>
                 </div>
+                {affiliateUrls[row.controller] && (
+                  <div style={{ marginTop: 8 }}>
+                    <button
+                      onClick={() => handleClickLink(row.controller, affiliateUrls[row.controller])}
+                      style={{
+                        background: 'linear-gradient(180deg, var(--accent-cyan, #00e5ff), var(--accent-strong, #00b3ff))',
+                        color: '#fff',
+                        fontWeight: 'bold',
+                        boxShadow: 'var(--glow-cyan)',
+                      }}
+                    >
+                      購入リンク
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

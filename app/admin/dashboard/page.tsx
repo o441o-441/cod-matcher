@@ -39,6 +39,12 @@ type PlatformStat = {
   count: number
 }
 
+type ClickStat = {
+  controller: string
+  total: number
+  thisMonth: number
+}
+
 export default function AdminDashboardPage() {
   const router = useRouter()
   const { showToast } = useToast()
@@ -65,6 +71,8 @@ export default function AdminDashboardPage() {
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([])
   const [disputedCount, setDisputedCount] = useState(0)
   const [voidedCount, setVoidedCount] = useState(0)
+  const [clickStats, setClickStats] = useState<ClickStat[]>([])
+  const [totalClicksThisMonth, setTotalClicksThisMonth] = useState(0)
 
   useEffect(() => {
     const init = async () => {
@@ -207,6 +215,26 @@ export default function AdminDashboardPage() {
         months.push({ month: label, matches: mc2 ?? 0, activeUsers: maSet.size, newUsers: nu2 ?? 0 })
       }
       setMonthlyData(months)
+
+      // Link click stats
+      const { data: allClicks } = await supabase.from('link_clicks').select('controller_name, created_at')
+      const clickMap = new Map<string, { total: number; thisMonth: number }>()
+      let monthClicks = 0
+      for (const c of (allClicks ?? []) as { controller_name: string; created_at: string }[]) {
+        const prev = clickMap.get(c.controller_name) ?? { total: 0, thisMonth: 0 }
+        prev.total++
+        if (c.created_at >= monthStart) {
+          prev.thisMonth++
+          monthClicks++
+        }
+        clickMap.set(c.controller_name, prev)
+      }
+      setClickStats(
+        [...clickMap.entries()]
+          .sort((a, b) => b[1].total - a[1].total)
+          .map(([controller, s]) => ({ controller, ...s }))
+      )
+      setTotalClicksThisMonth(monthClicks)
 
       setLoading(false)
     }
@@ -434,6 +462,33 @@ export default function AdminDashboardPage() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="section card-strong">
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2>購入リンク クリック数</h2>
+          <button onClick={() => router.push('/admin/affiliates')}>リンク管理</button>
+        </div>
+        <div className="card" style={{ textAlign: 'center', marginBottom: 12 }}>
+          <p className="muted">{ml} の総クリック数</p>
+          <h3 style={{ fontSize: '1.5rem' }}>{totalClicksThisMonth}</h3>
+        </div>
+        {clickStats.length === 0 ? (
+          <p className="muted">クリックデータなし</p>
+        ) : (
+          <div className="stack">
+            {clickStats.map((c) => (
+              <div key={c.controller} className="card">
+                <div className="row" style={{ justifyContent: 'space-between' }}>
+                  <span>{c.controller}</span>
+                  <span className="muted">
+                    今月 {c.thisMonth} / 累計 {c.total}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   )
