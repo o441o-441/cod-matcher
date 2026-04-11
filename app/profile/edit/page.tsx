@@ -28,6 +28,7 @@ export default function ProfileEditPage() {
   const [activisionId, setActivisionId] = useState('')
   const [discordId, setDiscordId] = useState('')
   const [controller, setController] = useState('')
+  const [platform, setPlatform] = useState('')
   const [bio, setBio] = useState('')
   const [authUserId, setAuthUserId] = useState<string | null>(null)
 
@@ -61,6 +62,7 @@ export default function ProfileEditPage() {
       setActivisionId(data.activision_id || '')
       setDiscordId(data.discord_id || '')
       setController(data.controller || '')
+      setPlatform(data.platform || '')
 
       const { data: prof } = await supabase
         .from('profiles')
@@ -97,6 +99,7 @@ export default function ProfileEditPage() {
         display_name: trimmedDisplayName,
         activision_id: trimmedActivisionId || null,
         controller: controller || null,
+        platform: platform || null,
       })
       .eq('id', profile.id)
 
@@ -194,6 +197,20 @@ export default function ProfileEditPage() {
                     ))}
                   </optgroup>
                 ))}
+              </select>
+            </div>
+
+            <div className="card">
+              <p className="muted">プラットフォーム</p>
+              <select
+                value={platform}
+                onChange={(e) => setPlatform(e.target.value)}
+              >
+                <option value="">選択してください</option>
+                <option value="Battle.net">Battle.net</option>
+                <option value="Steam">Steam</option>
+                <option value="PlayStation">PlayStation</option>
+                <option value="Xbox">Xbox</option>
               </select>
             </div>
 

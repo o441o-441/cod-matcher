@@ -18,6 +18,7 @@ type LegacyUser = {
   controller: string | null
   activision_id: string | null
   discord_name: string | null
+  platform: string | null
 }
 
 export default function UserProfilePage() {
@@ -64,7 +65,7 @@ export default function UserProfilePage() {
 
       const { data: l } = await supabase
         .from('users')
-        .select('controller, activision_id, discord_name')
+        .select('controller, activision_id, discord_name, platform')
         .eq('auth_user_id', userId)
         .maybeSingle<LegacyUser>()
       setLegacy(l ?? null)
@@ -165,6 +166,11 @@ export default function UserProfilePage() {
           <div className="card">
             <p className="muted">使用デバイス</p>
             <h3>{legacy?.controller || '未設定'}</h3>
+          </div>
+
+          <div className="card">
+            <p className="muted">プラットフォーム</p>
+            <h3>{legacy?.platform || '未設定'}</h3>
           </div>
 
           <div className="card">

@@ -10,6 +10,7 @@ export default function OnboardingPage() {
   const [displayName, setDisplayName] = useState('')
   const [activisionId, setActivisionId] = useState('')
   const [controller, setController] = useState('')
+  const [platform, setPlatform] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleSave = async () => {
@@ -33,6 +34,7 @@ export default function OnboardingPage() {
         display_name: displayName,
         activision_id: activisionId,
         controller: controller || null,
+        platform: platform || null,
         is_profile_complete: true,
       })
       .eq('auth_user_id', user.id)
@@ -102,6 +104,20 @@ export default function OnboardingPage() {
               ))}
             </optgroup>
           ))}
+        </select>
+      </div>
+
+      <div style={{ marginTop: '20px' }}>
+        <p>プラットフォーム</p>
+        <select
+          value={platform}
+          onChange={(e) => setPlatform(e.target.value)}
+        >
+          <option value="">選択してください</option>
+          <option value="Battle.net">Battle.net</option>
+          <option value="Steam">Steam</option>
+          <option value="PlayStation">PlayStation</option>
+          <option value="Xbox">Xbox</option>
         </select>
       </div>
 
