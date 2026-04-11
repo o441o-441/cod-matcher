@@ -1294,8 +1294,6 @@ export default function MatchPage() {
               <div className="space-y-2 text-sm text-white/75">
                 <div>・自動マッチ生成は leader 側だけが試行します。</div>
                 <div>・人数不足などの想定内失敗は静かに再試行します。</div>
-                <div>・手動ボタンも残してあるのでテストしやすいです。</div>
-                <div>・本番前には RPC 側の競合対策強化があるとより安全です。</div>
               </div>
             </section>
           </div>
