@@ -5,6 +5,60 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Tutorial } from "@/components/Tutorial";
 
+const RULES_KEY = "rules_accepted_v1";
+
+function RulesGate({ onAccept }: { onAccept: () => void }) {
+  const router = useRouter();
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.8)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+        zIndex: 10000,
+      }}
+    >
+      <div
+        className="card-strong"
+        style={{ width: "100%", maxWidth: 520, padding: 24 }}
+      >
+        <h2 style={{ marginTop: 0 }}>ルール確認</h2>
+        <p style={{ lineHeight: 1.8 }}>
+          ASCENT では GA（ジェントルマンズアグリーメント）に基づいたルールを採用しています。
+          対戦に参加する前に、以下のルールを確認してください。
+        </p>
+
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="stack" style={{ fontSize: "0.9rem" }}>
+            <p>・使用可能な武器 / アタッチメント / パーク / 装備に制限があります</p>
+            <p>・グリッチ（スネーク / 階段等）の使用は禁止です</p>
+            <p>・コンバーター / チートの使用は即時停止の対象です</p>
+            <p>・試合結果は相手チームの承認で確定します</p>
+            <p>・違反者は通報 → 運営対応または監視ユーザーによる即時停止となります</p>
+          </div>
+        </div>
+
+        <div className="section row" style={{ justifyContent: "space-between" }}>
+          <button
+            type="button"
+            onClick={() => router.push("/rules")}
+            style={{ background: "rgba(255,255,255,0.08)", boxShadow: "none" }}
+          >
+            ルール詳細を見る
+          </button>
+          <button type="button" onClick={onAccept}>
+            ルールを遵守して対戦します
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const MATCH_TUTORIAL = [
   { title: "マッチング画面", body: "ここで対戦相手を探します。パーティを作成してキューに参加すると、自動でマッチングが行われます。" },
   { title: "ソロ参加", body: "パーティを作成して「既存パーティで待機開始」を押すとキューに入ります。1人でもパーティを作れるので、チームメンバーがいなくてもOKです。" },
@@ -119,6 +173,7 @@ function extractErrorMessage(e: unknown, fallback: string): string {
 export default function MatchPage() {
   const router = useRouter();
 
+  const [rulesAccepted, setRulesAccepted] = useState(true);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [autoMatching, setAutoMatching] = useState(false);
@@ -480,6 +535,15 @@ export default function MatchPage() {
       if (!opts?.silent) setLoading(false);
     }
   }, [supabase]);
+
+  useEffect(() => {
+    setRulesAccepted(!!localStorage.getItem(RULES_KEY));
+  }, []);
+
+  const handleAcceptRules = () => {
+    localStorage.setItem(RULES_KEY, "1");
+    setRulesAccepted(true);
+  };
 
   useEffect(() => {
     void loadMyState();
@@ -918,6 +982,7 @@ export default function MatchPage() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white">
+      {!rulesAccepted && <RulesGate onAccept={handleAcceptRules} />}
       <div className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6 flex items-start justify-between gap-4 border-b border-white/10 pb-4">
           <div>
