@@ -981,7 +981,7 @@ export default function BanpickPage() {
                   <input
                     value={lobbyCodeInput}
                     onChange={(e) => setLobbyCodeInput(e.target.value)}
-                    placeholder={isHost ? "例: ABCD-1234" : "ホストのみ送信可能"}
+                    placeholder={isHost ? "例: ABCDE" : "ホストのみ送信可能"}
                     className="mb-2 w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
                     disabled={busy || !isHost}
                   />
