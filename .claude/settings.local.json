@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx next:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx tsc:*)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(rm:*)",
+      "WebFetch(domain:monoru.trie-marketing.co.jp)",
+      "WebFetch(domain:gamepadla.com)",
+      "WebFetch(domain:hallowed-monarch-bfc.notion.site)",
+      "Bash(git -C C:/Users/cake4/cod-matcher log --oneline -20)",
+      "Bash(npm run:*)"
+    ]
+  }
+}
