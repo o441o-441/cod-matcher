@@ -605,7 +605,7 @@ export default function BanpickPage() {
         <div className="mb-6 flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-2xl font-bold">ASCENT バンピック</h1>
-            <p className="mt-1 text-sm text-white/60">Match ID: {matchId}</p>
+            <p className="mt-1 text-sm text-white/60">マッチ ID: {matchId}</p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -730,8 +730,8 @@ export default function BanpickPage() {
                             {m.profiles?.display_name ?? m.user_id}
                           </button>
                           <div className="flex gap-2 text-[11px] text-white/50">
-                            {m.is_party_leader && <span>Leader</span>}
-                            {match?.host_user_id === m.user_id && <span>Host</span>}
+                            {m.is_party_leader && <span>リーダー</span>}
+                            {match?.host_user_id === m.user_id && <span>ホスト</span>}
                           </div>
                         </div>
                       </div>
@@ -762,8 +762,8 @@ export default function BanpickPage() {
                             {m.profiles?.display_name ?? m.user_id}
                           </button>
                           <div className="flex gap-2 text-[11px] text-white/50">
-                            {m.is_party_leader && <span>Leader</span>}
-                            {match?.host_user_id === m.user_id && <span>Host</span>}
+                            {m.is_party_leader && <span>リーダー</span>}
+                            {match?.host_user_id === m.user_id && <span>ホスト</span>}
                           </div>
                         </div>
                       </div>
@@ -884,10 +884,10 @@ export default function BanpickPage() {
 
                         <div className="flex flex-wrap items-center gap-3 text-sm text-white/70">
                           <div>
-                            Map: <span className="text-white">{state.map ?? "-"}</span>
+                            マップ: <span className="text-white">{state.map ?? "-"}</span>
                           </div>
                           <div>
-                            Side: <span className="text-white">{state.side ?? "-"}</span>
+                            サイド: <span className="text-white">{state.side ?? "-"}</span>
                           </div>
                         </div>
 
@@ -928,7 +928,7 @@ export default function BanpickPage() {
                     <div key={action.id} className="rounded bg-black/20 px-3 py-2 text-sm">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          Turn {action.turn_number} / {phaseLabel(action.phase)}
+                          ターン {action.turn_number} / {phaseLabel(action.phase)}
                         </div>
                         <div className="text-white/50">{new Date(action.created_at).toLocaleString()}</div>
                       </div>

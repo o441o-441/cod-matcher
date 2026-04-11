@@ -497,7 +497,7 @@ export default function ReportPage() {
         <div className="mb-6 flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-2xl font-bold">ASCENT 試合結果報告</h1>
-            <p className="mt-1 text-sm text-white/60">Match ID: {matchId}</p>
+            <p className="mt-1 text-sm text-white/60">マッチ ID: {matchId}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Tutorial pageKey="report" steps={REPORT_TUTORIAL} />

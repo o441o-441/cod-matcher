@@ -1026,13 +1026,13 @@ export default function MatchPage() {
                   ) : (
                     <div className="space-y-3">
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-                        <div className="rounded bg-white/5 px-3 py-2 text-sm">状態: {myParty.status}</div>
+                        <div className="rounded bg-white/5 px-3 py-2 text-sm">状態: {myParty.status === 'open' ? '待機可' : myParty.status === 'queued' ? 'キュー中' : myParty.status === 'matched' ? 'マッチ済' : myParty.status === 'cancelled' ? 'キャンセル' : myParty.status}</div>
                         <div className="rounded bg-white/5 px-3 py-2 text-sm">
-                          種別: {myPartyLabel === "invalid" ? myParty.party_type : myPartyLabel}
+                          種別: {myPartySize === 1 ? 'ソロ' : myPartySize === 2 ? 'デュオ' : myPartySize === 3 ? 'トリオ' : myPartySize === 4 ? 'フル' : myPartyLabel}
                         </div>
                         <div className="rounded bg-white/5 px-3 py-2 text-sm">人数: {myPartySize} 人</div>
                         <div className="rounded bg-white/5 px-3 py-2 text-sm">
-                          {isPartyLeader ? "あなたはLeaderです" : "参加メンバーです"}
+                          {isPartyLeader ? "あなたはリーダーです" : "参加メンバーです"}
                         </div>
                       </div>
 
@@ -1042,7 +1042,7 @@ export default function MatchPage() {
                           {myPartyMembers.map((m) => (
                             <div key={m.id}>
                               {m.profiles?.display_name ?? m.user_id}
-                              {m.user_id === myParty.leader_user_id ? " (Leader)" : ""}
+                              {m.user_id === myParty.leader_user_id ? "（リーダー）" : ""}
                             </div>
                           ))}
                         </div>
@@ -1112,9 +1112,9 @@ export default function MatchPage() {
                           <div className="space-y-2 text-sm text-white/80">
                             {myPartyInvites.map((inv) => (
                               <div key={inv.id} className="rounded bg-black/30 px-3 py-2">
-                                <div>invitee: {inv.invitee_user_id}</div>
+                                <div>招待先: {inv.invitee_user_id}</div>
                                 <div className="mt-1 text-xs text-white/50">
-                                  status: {inv.status} / {new Date(inv.created_at).toLocaleString()}
+                                  状態: {inv.status === 'pending' ? '承認待ち' : inv.status === 'accepted' ? '承認済み' : inv.status === 'rejected' ? '拒否' : inv.status === 'cancelled' ? 'キャンセル' : inv.status} / {new Date(inv.created_at).toLocaleString()}
                                 </div>
                               </div>
                             ))}
@@ -1194,7 +1194,7 @@ export default function MatchPage() {
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
                   <div className="rounded bg-black/20 p-3">
                     <div className="text-xs text-white/50">待機状態</div>
-                    <div className="mt-1 text-sm font-medium">{myWaitingEntry ? "waiting" : "待機なし"}</div>
+                    <div className="mt-1 text-sm font-medium">{myWaitingEntry ? "待機中" : "待機なし"}</div>
                   </div>
 
                   <div className="rounded bg-black/20 p-3">
@@ -1215,23 +1215,9 @@ export default function MatchPage() {
                   </div>
                 </div>
 
-                {myWaitingEntry && (
-                  <div className="rounded border border-white/10 bg-black/20 p-4 text-sm text-white/80">
-                    <div>queue_entry_id: {myWaitingEntry.id}</div>
-                    <div className="mt-1">queue_type: {myWaitingEntry.queue_type}</div>
-                    <div className="mt-1">avg_rating: {myWaitingEntry.avg_rating}</div>
-                    <div className="mt-1">party_size: {myWaitingEntry.party_size}</div>
-                    <div className="mt-1">party_size_bonus: +{myWaitingEntry.party_size_bonus}</div>
-                    <div className="mt-1">created_at: {new Date(myWaitingEntry.created_at).toLocaleString()}</div>
-                  </div>
-                )}
-
                 {myActiveMatch && (
                   <div className="rounded border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm">
-                    <div className="font-semibold">成立済み試合</div>
-                    <div className="mt-1">match_id: {myActiveMatch.id}</div>
-                    <div className="mt-1">status: {myActiveMatch.status}</div>
-                    <div className="mt-1">matched_at: {new Date(myActiveMatch.matched_at).toLocaleString()}</div>
+                    <div className="font-semibold">成立済み試合があります</div>
                   </div>
                 )}
               </div>
@@ -1243,7 +1229,7 @@ export default function MatchPage() {
               <h2 className="mb-3 text-lg font-semibold">自分宛の招待</h2>
 
               {myPendingInvites.length === 0 ? (
-                <div className="text-sm text-white/50">現在 pending 招待はありません。</div>
+                <div className="text-sm text-white/50">現在受け取っている招待はありません。</div>
               ) : (
                 <div className="space-y-3">
                   {myPendingInvites.map((inv) => (
@@ -1251,7 +1237,7 @@ export default function MatchPage() {
                       <div className="text-sm">
                         招待者: <span className="font-semibold">{inv.inviter_display_name}</span>
                       </div>
-                      <div className="mt-1 text-xs text-white/50">party_id: {inv.party_id}</div>
+                      <div className="mt-1 text-xs text-white/50">パーティ: {inv.party_id.slice(0, 8)}...</div>
                       <div className="mt-1 text-xs text-white/50">
                         {new Date(inv.created_at).toLocaleString()}
                       </div>
