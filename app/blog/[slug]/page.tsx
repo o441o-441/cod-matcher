@@ -21,6 +21,7 @@ type PostRow = {
   published_at: string | null
   created_at: string
   updated_at: string
+  view_count: number
 }
 
 type CommentRow = {
@@ -51,6 +52,9 @@ export default function BlogPostPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [commentBody, setCommentBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [likeCount, setLikeCount] = useState(0)
+  const [liked, setLiked] = useState(false)
+  const [commentCount, setCommentCount] = useState(0)
 
   useEffect(() => {
     if (!slug) return
@@ -69,7 +73,7 @@ export default function BlogPostPage() {
       const { data: postRow, error: postErr } = await supabase
         .from('posts')
         .select(
-          'id, slug, title, body, excerpt, status, author_user_id, tags, published_at, created_at, updated_at'
+          'id, slug, title, body, excerpt, status, author_user_id, tags, published_at, created_at, updated_at, view_count'
         )
         .eq('slug', slug)
         .maybeSingle<PostRow>()
@@ -83,6 +87,26 @@ export default function BlogPostPage() {
         return
       }
       setPost(postRow)
+
+      // increment view count
+      void supabase.from('posts').update({ view_count: postRow.view_count + 1 }).eq('id', postRow.id)
+
+      // fetch likes
+      const { count: lc } = await supabase
+        .from('post_likes')
+        .select('id', { count: 'exact', head: true })
+        .eq('post_id', postRow.id)
+      setLikeCount(lc ?? 0)
+
+      if (session?.user) {
+        const { data: myLike } = await supabase
+          .from('post_likes')
+          .select('id')
+          .eq('post_id', postRow.id)
+          .eq('user_id', session.user.id)
+          .maybeSingle()
+        setLiked(!!myLike)
+      }
 
       const { data: authorRow } = await supabase
         .from('profiles')
@@ -112,6 +136,7 @@ export default function BlogPostPage() {
 
     const rows = (data ?? []) as CommentRow[]
     setComments(rows)
+    setCommentCount(rows.length)
 
     const authorIds = Array.from(new Set(rows.map((r) => r.author_user_id)))
     if (authorIds.length > 0) {
@@ -172,6 +197,26 @@ export default function BlogPostPage() {
     await loadComments(post.id)
   }
 
+  const handleToggleLike = async () => {
+    if (!post || !currentUserProfileId) {
+      showToast('ログインが必要です', 'error')
+      return
+    }
+    if (liked) {
+      await supabase.from('post_likes').delete().eq('post_id', post.id).eq('user_id', currentUserProfileId)
+      setLiked(false)
+      setLikeCount((c) => Math.max(0, c - 1))
+    } else {
+      const { error } = await supabase.from('post_likes').insert({ post_id: post.id, user_id: currentUserProfileId })
+      if (error && error.code !== '23505') {
+        showToast('いいねに失敗しました', 'error')
+        return
+      }
+      setLiked(true)
+      setLikeCount((c) => c + 1)
+    }
+  }
+
   const handleDeletePost = async () => {
     if (!post) return
     if (!confirm('この記事を削除しますか?')) return
@@ -230,8 +275,14 @@ export default function BlogPostPage() {
           {post.tags.length > 0 && (
             <p className="muted">タグ: {post.tags.join(', ')}</p>
           )}
+          <p className="muted">
+            閲覧 {post.view_count} / いいね {likeCount} / コメント {commentCount}
+          </p>
         </div>
         <div className="row">
+          <button onClick={handleToggleLike}>
+            {liked ? 'いいね済み' : 'いいね'}
+          </button>
           <button onClick={() => router.push('/blog')}>ブログ一覧</button>
           {canEdit && (
             <>

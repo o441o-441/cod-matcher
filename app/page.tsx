@@ -18,6 +18,9 @@ type PopularPostRow = {
   title: string
   excerpt: string | null
   published_at: string | null
+  view_count: number
+  score: number
+  like_count: number
   comment_count: number
 }
 
@@ -52,49 +55,48 @@ export default function Home() {
 
   const fetchPopularPosts = async () => {
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    const { data: commentRows, error: cErr } = await supabase
-      .from('post_comments')
-      .select('post_id, created_at')
-      .gte('created_at', since)
-    if (cErr) {
-      console.error('fetchPopularPosts comments error:', cErr)
-      return
-    }
 
-    const counts = new Map<string, number>()
-    ;((commentRows ?? []) as { post_id: string }[]).forEach((r) => {
-      counts.set(r.post_id, (counts.get(r.post_id) ?? 0) + 1)
-    })
-
-    const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
-    if (top.length === 0) {
-      setPopularPosts([])
-      return
-    }
-
-    const ids = top.map(([id]) => id)
     const { data: posts, error: pErr } = await supabase
       .from('posts')
-      .select('id, slug, title, excerpt, published_at, status')
-      .in('id', ids)
+      .select('id, slug, title, excerpt, published_at, view_count')
       .eq('status', 'published')
-
     if (pErr) {
-      console.error('fetchPopularPosts posts error:', pErr)
+      console.error('fetchPopularPosts error:', pErr)
       return
     }
+    const postList = (posts ?? []) as { id: string; slug: string; title: string; excerpt: string | null; published_at: string | null; view_count: number }[]
+    if (postList.length === 0) { setPopularPosts([]); return }
 
-    const byId = new Map(
-      ((posts ?? []) as Omit<PopularPostRow, 'comment_count'>[]).map((p) => [p.id, p])
-    )
-    const ordered: PopularPostRow[] = top
-      .map(([id, c]) => {
-        const p = byId.get(id)
-        return p ? { ...p, comment_count: c } : null
-      })
-      .filter((x): x is PopularPostRow => x !== null)
+    const postIds = postList.map((p) => p.id)
 
-    setPopularPosts(ordered)
+    const [{ data: commentRows }, { data: likeRows }] = await Promise.all([
+      supabase.from('post_comments').select('post_id').gte('created_at', since).in('post_id', postIds),
+      supabase.from('post_likes').select('post_id').gte('created_at', since).in('post_id', postIds),
+    ])
+
+    const commentCounts = new Map<string, number>()
+    ;((commentRows ?? []) as { post_id: string }[]).forEach((r) => {
+      commentCounts.set(r.post_id, (commentCounts.get(r.post_id) ?? 0) + 1)
+    })
+
+    const likeCounts = new Map<string, number>()
+    ;((likeRows ?? []) as { post_id: string }[]).forEach((r) => {
+      likeCounts.set(r.post_id, (likeCounts.get(r.post_id) ?? 0) + 1)
+    })
+
+    const scored: PopularPostRow[] = postList.map((p) => {
+      const cc = commentCounts.get(p.id) ?? 0
+      const lc = likeCounts.get(p.id) ?? 0
+      return {
+        ...p,
+        comment_count: cc,
+        like_count: lc,
+        score: p.view_count + lc * 3 + cc * 5,
+      }
+    })
+
+    scored.sort((a, b) => b.score - a.score)
+    setPopularPosts(scored.slice(0, 5).filter((p) => p.score > 0))
   }
 
   const fetchRecentPosts = async () => {
@@ -219,7 +221,9 @@ export default function Home() {
                   <Link href={`/blog/${p.slug}`}>{p.title}</Link>
                 </h3>
                 {p.excerpt && <p>{p.excerpt}</p>}
-                <p className="muted">コメント {p.comment_count} 件 / 直近7日</p>
+                <p className="muted">
+                  閲覧 {p.view_count} / いいね {p.like_count} / コメント {p.comment_count}
+                </p>
               </div>
             ))}
           </div>
