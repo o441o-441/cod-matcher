@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Tutorial } from "@/components/Tutorial";
+import { playMatchFound } from "@/lib/sounds";
 
 const RULES_KEY = "rules_accepted_v1";
 
@@ -619,7 +620,8 @@ export default function MatchPage() {
       const row = (data as RpcCreateMatchResult[] | null)?.[0];
       if (row?.match_id) {
         routePushedRef.current = true;
-        setInfoText("マッチが成立しました。");
+        setInfoText("マッチが成立しま��た。");
+        playMatchFound();
         await loadMyState({ silent: true });
         router.push(`/match/${row.match_id}/banpick`);
       } else {
@@ -637,6 +639,7 @@ export default function MatchPage() {
     if (myActiveMatch.status === "banpick") {
       routePushedRef.current = true;
       setInfoText("マッチが成立しました。バンピック画面へ移動します。");
+      playMatchFound();
       router.push(`/match/${myActiveMatch.id}/banpick`);
     }
   }, [myActiveMatch?.id, myActiveMatch?.status, router]);
@@ -942,6 +945,7 @@ export default function MatchPage() {
       if (row?.match_id) {
         routePushedRef.current = true;
         setInfoText("マッチが成立しました。");
+        playMatchFound();
         await loadMyState();
         router.push(`/match/${row.match_id}/banpick`);
         return;
