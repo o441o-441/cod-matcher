@@ -5,15 +5,6 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LoadingCard, EmptyCard } from '@/components/UIState'
 
-type ProfileRow = {
-  id: string
-  display_name: string | null
-  current_rating: number | null
-  wins: number | null
-  losses: number | null
-  rating_games_played: number | null
-}
-
 type SeasonRow = {
   user_id: string
   display_name: string | null
@@ -24,18 +15,14 @@ type SeasonRow = {
   end_rating: number | null
 }
 
-type Tab = 'overall' | 'season'
-
 export default function RankingPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<Tab>('overall')
 
   const now = new Date()
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
 
-  const [players, setPlayers] = useState<ProfileRow[]>([])
-  const [seasonPlayers, setSeasonPlayers] = useState<SeasonRow[]>([])
+  const [players, setPlayers] = useState<SeasonRow[]>([])
   const [teamNames, setTeamNames] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
 
@@ -68,27 +55,6 @@ export default function RankingPage() {
     }
   }
 
-  const fetchOverall = async () => {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, display_name, current_rating, wins, losses, rating_games_played')
-      .gt('rating_games_played', 0)
-      .order('current_rating', { ascending: false })
-      .limit(100)
-
-    if (error) {
-      console.error('ranking error:', error)
-      setLoading(false)
-      return
-    }
-
-    const profileList = (data || []) as ProfileRow[]
-    setPlayers(profileList)
-    await fetchTeamNames(profileList.map((p) => p.id))
-    setLoading(false)
-  }
-
   const fetchSeason = async (year: number, month: number) => {
     setLoading(true)
     const { data, error } = await supabase.rpc('rpc_get_season_ranking', {
@@ -103,22 +69,18 @@ export default function RankingPage() {
     }
 
     const rows = (data || []) as SeasonRow[]
-    setSeasonPlayers(rows)
+    setPlayers(rows)
     await fetchTeamNames(rows.map((r) => r.user_id))
     setLoading(false)
   }
 
   useEffect(() => {
-    if (tab === 'overall') {
-      void fetchOverall()
-    } else {
-      void fetchSeason(selectedYear, selectedMonth)
-    }
+    void fetchSeason(selectedYear, selectedMonth)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, selectedYear, selectedMonth])
+  }, [selectedYear, selectedMonth])
 
   const monthOptions: { year: number; month: number; label: string }[] = []
-  const start = new Date(2026, 3, 1) // April 2026
+  const start = new Date(2026, 3, 1)
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
   const cursor = new Date(end.getFullYear(), end.getMonth(), 1)
   while (cursor >= start) {
@@ -135,29 +97,9 @@ export default function RankingPage() {
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
           <h1>ランキング</h1>
-          <p className="muted">
-            {tab === 'overall' ? '通算個人レート順位' : `${selectedYear}年${selectedMonth}月のシーズンランキング`}
-          </p>
+          <p className="muted">{selectedYear}年{selectedMonth}月 シーズンランキング</p>
         </div>
         <div className="row">
-          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
-        </div>
-      </div>
-
-      <div className="section row">
-        <button
-          onClick={() => setTab('overall')}
-          style={{ fontWeight: tab === 'overall' ? 'bold' : 'normal' }}
-        >
-          通算
-        </button>
-        <button
-          onClick={() => setTab('season')}
-          style={{ fontWeight: tab === 'season' ? 'bold' : 'normal' }}
-        >
-          シーズン
-        </button>
-        {tab === 'season' && (
           <select
             value={`${selectedYear}-${selectedMonth}`}
             onChange={(e) => {
@@ -172,100 +114,63 @@ export default function RankingPage() {
               </option>
             ))}
           </select>
-        )}
+          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
+        </div>
       </div>
 
       <div className="section card-strong">
         {loading ? (
           <LoadingCard message="ランキングを読み込み中..." />
-        ) : tab === 'overall' ? (
-          players.length === 0 ? (
-            <EmptyCard title="まだランキングデータがありません" message="試合を行うとランキングに反映されます。" />
-          ) : (
-            <div className="stack">
-              {players.map((p, index) => {
-                const wins = p.wins ?? 0
-                const losses = p.losses ?? 0
-                const total = wins + losses
-                const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : '0.0'
-
-                return (
-                  <div key={p.id} className="card">
-                    <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <p className="muted">#{index + 1}</p>
-                        <h3 style={{ marginTop: 0 }}>{p.display_name || '(名前未設定)'}</h3>
-                        {teamNames[p.id] && (
-                          <p className="muted" style={{ marginTop: 2 }}>{teamNames[p.id]}</p>
-                        )}
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <h3 style={{ marginTop: 0 }}>{p.current_rating ?? '-'}</h3>
-                        <p className="muted">{wins}勝 {losses}敗 / 勝率 {winRate}%</p>
-                      </div>
-                    </div>
-                    <div className="row" style={{ marginTop: 8 }}>
-                      <button onClick={() => router.push(`/users/${p.id}`)}>
-                        プロフィール
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )
+        ) : players.length === 0 ? (
+          <EmptyCard
+            title={`${selectedYear}年${selectedMonth}月のデータがありません`}
+            message="この期間に完了した試合がありません。"
+          />
         ) : (
-          seasonPlayers.length === 0 ? (
-            <EmptyCard
-              title={`${selectedYear}年${selectedMonth}月のデータがありません`}
-              message="この期間に完了した試合がありません。"
-            />
-          ) : (
-            <div className="stack">
-              {seasonPlayers.map((p, index) => {
-                const total = p.wins + p.losses
-                const winRate = total > 0 ? ((p.wins / total) * 100).toFixed(1) : '0.0'
-                const changeSign = p.rating_change > 0 ? '+' : ''
+          <div className="stack">
+            {players.map((p, index) => {
+              const total = p.wins + p.losses
+              const winRate = total > 0 ? ((p.wins / total) * 100).toFixed(1) : '0.0'
+              const changeSign = p.rating_change > 0 ? '+' : ''
 
-                return (
-                  <div key={p.user_id} className="card">
-                    <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <p className="muted">#{index + 1}</p>
-                        <h3 style={{ marginTop: 0 }}>{p.display_name || '(名前未設定)'}</h3>
-                        {teamNames[p.user_id] && (
-                          <p className="muted" style={{ marginTop: 2 }}>{teamNames[p.user_id]}</p>
-                        )}
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <h3 style={{ marginTop: 0 }}>
-                          {p.end_rating ?? '-'}
-                          <span
-                            className="muted"
-                            style={{
-                              fontSize: '0.75rem',
-                              marginLeft: 6,
-                              color: p.rating_change > 0 ? 'var(--success)' : p.rating_change < 0 ? 'var(--danger)' : undefined,
-                            }}
-                          >
-                            ({changeSign}{p.rating_change})
-                          </span>
-                        </h3>
-                        <p className="muted">
-                          {p.wins}勝 {p.losses}敗 / 勝率 {winRate}% / {p.games_played}試合
-                        </p>
-                      </div>
+              return (
+                <div key={p.user_id} className="card">
+                  <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <p className="muted">#{index + 1}</p>
+                      <h3 style={{ marginTop: 0 }}>{p.display_name || '(名前未設定)'}</h3>
+                      {teamNames[p.user_id] && (
+                        <p className="muted" style={{ marginTop: 2 }}>{teamNames[p.user_id]}</p>
+                      )}
                     </div>
-                    <div className="row" style={{ marginTop: 8 }}>
-                      <button onClick={() => router.push(`/users/${p.user_id}`)}>
-                        プロフィール
-                      </button>
+                    <div style={{ textAlign: 'right' }}>
+                      <h3 style={{ marginTop: 0 }}>
+                        {p.end_rating ?? '-'}
+                        <span
+                          className="muted"
+                          style={{
+                            fontSize: '0.75rem',
+                            marginLeft: 6,
+                            color: p.rating_change > 0 ? 'var(--success)' : p.rating_change < 0 ? 'var(--danger)' : undefined,
+                          }}
+                        >
+                          ({changeSign}{p.rating_change})
+                        </span>
+                      </h3>
+                      <p className="muted">
+                        {p.wins}勝 {p.losses}敗 / 勝率 {winRate}% / {p.games_played}試合
+                      </p>
                     </div>
                   </div>
-                )
-              })}
-            </div>
-          )
+                  <div className="row" style={{ marginTop: 8 }}>
+                    <button onClick={() => router.push(`/users/${p.user_id}`)}>
+                      プロフィール
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
     </main>
