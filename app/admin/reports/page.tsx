@@ -122,6 +122,48 @@ export default function AdminReportsPage() {
     await fetchReports(filter)
   }
 
+  const handleBanUser = async (userId: string, displayName: string | null) => {
+    const name = displayName || userId.slice(0, 8)
+    if (!confirm(`${name} を BAN しますか？BANされたユーザーはマッチに参加できなくなります。`)) return
+
+    setBusyId(userId)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ is_banned: true })
+      .eq('id', userId)
+    setBusyId(null)
+
+    if (error) {
+      console.error('ban error:', error)
+      showToast(error.message || 'BAN に失敗しました', 'error')
+      return
+    }
+
+    showToast(`${name} を BAN しました`, 'success')
+    await fetchReports(filter)
+  }
+
+  const handleUnbanUser = async (userId: string, displayName: string | null) => {
+    const name = displayName || userId.slice(0, 8)
+    if (!confirm(`${name} の BAN を解除しますか？`)) return
+
+    setBusyId(userId)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ is_banned: false })
+      .eq('id', userId)
+    setBusyId(null)
+
+    if (error) {
+      console.error('unban error:', error)
+      showToast(error.message || 'BAN 解除に失敗しました', 'error')
+      return
+    }
+
+    showToast(`${name} の BAN を解除しました`, 'success')
+    await fetchReports(filter)
+  }
+
   if (loading) {
     return (
       <main>
@@ -240,6 +282,19 @@ export default function AdminReportsPage() {
                     onClick={() => router.push(`/users/${r.reported_user_id}`)}
                   >
                     対象プロフィール
+                  </button>
+                  <button
+                    disabled={busyId === r.reported_user_id}
+                    onClick={() => handleBanUser(r.reported_user_id, r.reported_display_name)}
+                    style={{ color: 'var(--danger)' }}
+                  >
+                    BAN する
+                  </button>
+                  <button
+                    disabled={busyId === r.reported_user_id}
+                    onClick={() => handleUnbanUser(r.reported_user_id, r.reported_display_name)}
+                  >
+                    BAN 解除
                   </button>
                 </div>
               </div>
