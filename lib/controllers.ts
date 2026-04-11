@@ -105,6 +105,32 @@ export const CONTROLLER_GROUPS: ControllerGroup[] = [
     ],
   },
   {
+    manufacturer: 'GuliKit',
+    options: [
+      'GuliKit KingKong 2 Pro',
+      'GuliKit KingKong 3 Max',
+      'GuliKit KingKong 3 Pro',
+      'GuliKit KK2 T',
+      'GuliKit TT Pro',
+      'GuliKit TT Max',
+      'GuliKit ES Pro',
+    ],
+  },
+  {
+    manufacturer: 'EasySMX',
+    options: [
+      'EasySMX D10',
+      'EasySMX X20',
+    ],
+  },
+  {
+    manufacturer: 'Machenike',
+    options: [
+      'Machenike G5 Pro',
+      'Machenike G5 Pro V2',
+    ],
+  },
+  {
     manufacturer: 'LeadJoy',
     options: [
       'LeadJoy Xeno Plus',
@@ -115,6 +141,18 @@ export const CONTROLLER_GROUPS: ControllerGroup[] = [
     options: [
       'PXN P5',
       'PXN P5 8K',
+    ],
+  },
+  {
+    manufacturer: 'Void Gaming',
+    options: [
+      'Void INTUITION PRO (ボタンタイプ)',
+      'Void INTUITION PRO (パドルタイプ)',
+      'Void INTUITION SHIRO',
+      'Void エリートモデル',
+      'Void クリティカルモデル',
+      'Void FPS推奨モデル',
+      'Void スターターモデル',
     ],
   },
   {
