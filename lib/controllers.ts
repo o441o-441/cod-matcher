@@ -158,6 +158,16 @@ export const CONTROLLER_GROUPS: ControllerGroup[] = [
     ],
   },
   {
+    manufacturer: 'MERKA.G',
+    options: [
+      'MERKA.G FusionX',
+      'MERKA.G REACTA',
+      'MERKA.G ボタンタイプ (PS5)',
+      'MERKA.G パドルタイプ (PS5)',
+      'MERKA.G ボタンタイプ (PS4)',
+    ],
+  },
+  {
     manufacturer: '8BitDo',
     options: [
       '8BitDo Ultimate Controller',
