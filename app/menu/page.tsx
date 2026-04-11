@@ -205,7 +205,7 @@ export default function MenuPage() {
         <h2>コミュニティ</h2>
         <div className="row">
           <button onClick={() => router.push('/friends')}>フレンド管理</button>
-          <button onClick={() => router.push('/blog')}>ブログ</button>
+          <button onClick={() => router.push('/blog')}>レビュー</button>
           <button onClick={() => router.push('/ranking')}>ランキング</button>
           <button onClick={() => router.push('/history')}>マッチ履歴</button>
         </div>

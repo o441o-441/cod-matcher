@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { CONTROLLER_GROUPS } from '@/lib/controllers'
 import { useToast } from '@/components/ToastProvider'
 import { LoadingCard } from '@/components/UIState'
 
@@ -25,11 +26,10 @@ export default function NewBlogPostPage() {
   const [authUserId, setAuthUserId] = useState<string | null>(null)
 
   const [title, setTitle] = useState('')
-  const [slug, setSlug] = useState('')
-  const [slugTouched, setSlugTouched] = useState(false)
+  const [controllerName, setControllerName] = useState('')
+  const [ratingValue, setRatingValue] = useState<number>(0)
   const [excerpt, setExcerpt] = useState('')
   const [body, setBody] = useState('')
-  const [tagsText, setTagsText] = useState('')
   const [status] = useState<'draft' | 'published'>('published')
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -62,11 +62,6 @@ export default function NewBlogPostPage() {
     void Promise.resolve().then(init)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const handleTitleChange = (v: string) => {
-    setTitle(v)
-    if (!slugTouched) setSlug(slugify(v))
-  }
 
   const handleUploadImage = async (file: File) => {
     if (!authUserId) return
@@ -114,16 +109,19 @@ export default function NewBlogPostPage() {
       showToast('タイトルを入力してください', 'error')
       return
     }
+    if (!controllerName) {
+      showToast('コントローラーを選択してください', 'error')
+      return
+    }
+    if (ratingValue < 1 || ratingValue > 5) {
+      showToast('評価を選択してください（1〜5）', 'error')
+      return
+    }
     if (!body.trim()) {
       showToast('本文を入力してください', 'error')
       return
     }
-    const finalSlug = (slug.trim() || slugify(title)).slice(0, 80)
-
-    const tags = tagsText
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean)
+    const finalSlug = slugify(title)
 
     setSubmitting(true)
 
@@ -149,7 +147,9 @@ export default function NewBlogPostPage() {
         excerpt: excerpt.trim() || null,
         status,
         author_user_id: profileId,
-        tags,
+        tags: [controllerName],
+        controller_name: controllerName,
+        rating: ratingValue,
         published_at: status === 'published' ? new Date().toISOString() : null,
       })
       .select('slug')
@@ -173,7 +173,7 @@ export default function NewBlogPostPage() {
   if (loading) {
     return (
       <main>
-        <h1>記事を書く</h1>
+        <h1>レビューを書く</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -183,7 +183,7 @@ export default function NewBlogPostPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>記事を書く</h1>
+          <h1>レビューを書く</h1>
           <p className="muted">Markdown 形式で記述できます</p>
         </div>
         <div className="row">
@@ -197,25 +197,55 @@ export default function NewBlogPostPage() {
           <input
             type="text"
             value={title}
-            onChange={(e) => handleTitleChange(e.target.value)}
-            placeholder="記事タイトル"
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="コントローラーレビューのタイトル"
           />
         </div>
       </div>
 
       <div className="section card-strong">
-        <h2>スラッグ (URL)</h2>
+        <h2>コントローラー</h2>
         <div className="card">
-          <input
-            type="text"
-            value={slug}
-            onChange={(e) => {
-              setSlugTouched(true)
-              setSlug(e.target.value)
-            }}
-            placeholder="my-first-post"
-          />
-          <p className="muted">/blog/{slug || '...'}</p>
+          <select
+            value={controllerName}
+            onChange={(e) => setControllerName(e.target.value)}
+          >
+            <option value="">選択してください</option>
+            {CONTROLLER_GROUPS.map((g) => (
+              <optgroup key={g.manufacturer} label={g.manufacturer}>
+                {g.options.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="section card-strong">
+        <h2>評価</h2>
+        <div className="card">
+          <div className="row" style={{ gap: 4 }}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setRatingValue(n)}
+                style={{
+                  fontSize: '1.5rem',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  color: n <= ratingValue ? 'var(--accent-cyan, #00e5ff)' : 'var(--text-muted, #888)',
+                }}
+              >
+                {n <= ratingValue ? '★' : '☆'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -259,18 +289,6 @@ export default function NewBlogPostPage() {
             </label>
             {uploading && <span className="muted">アップロード中...</span>}
           </div>
-        </div>
-      </div>
-
-      <div className="section card-strong">
-        <h2>タグ（カンマ区切り）</h2>
-        <div className="card">
-          <input
-            type="text"
-            value={tagsText}
-            onChange={(e) => setTagsText(e.target.value)}
-            placeholder="bo7, tips, ranked"
-          />
         </div>
       </div>
 

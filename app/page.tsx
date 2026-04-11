@@ -22,6 +22,8 @@ type PopularPostRow = {
   score: number
   like_count: number
   comment_count: number
+  controller_name: string | null
+  rating: number | null
 }
 
 type RecentPostRow = {
@@ -30,6 +32,8 @@ type RecentPostRow = {
   title: string
   excerpt: string | null
   published_at: string | null
+  controller_name: string | null
+  rating: number | null
 }
 
 export default function Home() {
@@ -58,13 +62,13 @@ export default function Home() {
 
     const { data: posts, error: pErr } = await supabase
       .from('posts')
-      .select('id, slug, title, excerpt, published_at, view_count')
+      .select('id, slug, title, excerpt, published_at, view_count, controller_name, rating')
       .eq('status', 'published')
     if (pErr) {
       console.error('fetchPopularPosts error:', pErr)
       return
     }
-    const postList = (posts ?? []) as { id: string; slug: string; title: string; excerpt: string | null; published_at: string | null; view_count: number }[]
+    const postList = (posts ?? []) as { id: string; slug: string; title: string; excerpt: string | null; published_at: string | null; view_count: number; controller_name: string | null; rating: number | null }[]
     if (postList.length === 0) { setPopularPosts([]); return }
 
     const postIds = postList.map((p) => p.id)
@@ -102,7 +106,7 @@ export default function Home() {
   const fetchRecentPosts = async () => {
     const { data, error } = await supabase
       .from('posts')
-      .select('id, slug, title, excerpt, published_at')
+      .select('id, slug, title, excerpt, published_at, controller_name, rating')
       .eq('status', 'published')
       .order('published_at', { ascending: false, nullsFirst: false })
       .limit(5)
@@ -158,7 +162,7 @@ export default function Home() {
               <button onClick={() => router.push('/login')}>ログイン</button>
             )}
             <button onClick={() => router.push('/ranking')}>ランキング</button>
-            <button onClick={() => router.push('/blog')}>ブログ</button>
+            <button onClick={() => router.push('/blog')}>レビュー</button>
           </div>
         </div>
       </div>
@@ -182,8 +186,8 @@ export default function Home() {
 
       <div className="section card-strong">
         <div className="row" style={{ justifyContent: 'space-between' }}>
-          <h2 style={{ margin: 0 }}>新着ブログ</h2>
-          <button onClick={() => router.push('/blog')}>ブログ一覧</button>
+          <h2 style={{ margin: 0 }}>新着レビュー</h2>
+          <button onClick={() => router.push('/blog')}>レビュー一覧</button>
         </div>
         {recentPosts.length === 0 ? (
           <p className="muted">まだ記事がありません</p>
@@ -194,6 +198,16 @@ export default function Home() {
                 <h3 style={{ marginTop: 0 }}>
                   <Link href={`/blog/${p.slug}`}>{p.title}</Link>
                 </h3>
+                {p.controller_name && (
+                  <p className="muted">
+                    {p.controller_name}
+                    {p.rating != null && (
+                      <span style={{ marginLeft: 8 }}>
+                        {'★'.repeat(p.rating)}{'☆'.repeat(5 - p.rating)}
+                      </span>
+                    )}
+                  </p>
+                )}
                 {p.excerpt && <p>{p.excerpt}</p>}
                 <p className="muted">
                   {p.published_at
@@ -208,8 +222,8 @@ export default function Home() {
 
       <div className="section card-strong">
         <div className="row" style={{ justifyContent: 'space-between' }}>
-          <h2 style={{ margin: 0 }}>週間人気ブログ</h2>
-          <button onClick={() => router.push('/blog')}>ブログ一覧</button>
+          <h2 style={{ margin: 0 }}>週間人気レビュー</h2>
+          <button onClick={() => router.push('/blog')}>レビュー一覧</button>
         </div>
         {popularPosts.length === 0 ? (
           <p className="muted">直近7日間で盛り上がっている記事はまだありません</p>
@@ -220,6 +234,16 @@ export default function Home() {
                 <h3 style={{ marginTop: 0 }}>
                   <Link href={`/blog/${p.slug}`}>{p.title}</Link>
                 </h3>
+                {p.controller_name && (
+                  <p className="muted">
+                    {p.controller_name}
+                    {p.rating != null && (
+                      <span style={{ marginLeft: 8 }}>
+                        {'★'.repeat(p.rating)}{'☆'.repeat(5 - p.rating)}
+                      </span>
+                    )}
+                  </p>
+                )}
                 {p.excerpt && <p>{p.excerpt}</p>}
                 <p className="muted">
                   閲覧 {p.view_count} / いいね {p.like_count} / コメント {p.comment_count}

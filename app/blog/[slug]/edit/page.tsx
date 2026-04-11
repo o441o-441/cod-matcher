@@ -3,8 +3,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { CONTROLLER_GROUPS } from '@/lib/controllers'
 import { useToast } from '@/components/ToastProvider'
 import { LoadingCard, EmptyCard } from '@/components/UIState'
+
+const slugify = (s: string): string =>
+  s
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 80) || `post-${Date.now()}`
 
 export default function EditBlogPostPage() {
   const router = useRouter()
@@ -19,10 +29,10 @@ export default function EditBlogPostPage() {
   const [authUserId, setAuthUserId] = useState<string | null>(null)
 
   const [title, setTitle] = useState('')
-  const [slug, setSlug] = useState('')
+  const [controllerName, setControllerName] = useState('')
+  const [ratingValue, setRatingValue] = useState<number>(0)
   const [excerpt, setExcerpt] = useState('')
   const [body, setBody] = useState('')
-  const [tagsText, setTagsText] = useState('')
   const [status] = useState<'draft' | 'published'>('published')
   const [origStatus, setOrigStatus] = useState<'draft' | 'published'>('published')
   const [submitting, setSubmitting] = useState(false)
@@ -42,7 +52,7 @@ export default function EditBlogPostPage() {
 
       const { data, error } = await supabase
         .from('posts')
-        .select('id, slug, title, body, excerpt, tags, status')
+        .select('id, slug, title, body, excerpt, tags, status, controller_name, rating')
         .eq('slug', originalSlug)
         .maybeSingle<{
           id: string
@@ -52,6 +62,8 @@ export default function EditBlogPostPage() {
           excerpt: string | null
           tags: string[]
           status: 'draft' | 'published'
+          controller_name: string | null
+          rating: number | null
         }>()
 
       if (error) console.error('post fetch error:', error)
@@ -64,10 +76,10 @@ export default function EditBlogPostPage() {
 
       setPostId(data.id)
       setTitle(data.title)
-      setSlug(data.slug)
+      setControllerName(data.controller_name ?? '')
+      setRatingValue(data.rating ?? 0)
       setExcerpt(data.excerpt ?? '')
       setBody(data.body)
-      setTagsText(data.tags.join(', '))
       setOrigStatus(data.status)
       setLoading(false)
     }
@@ -121,23 +133,30 @@ export default function EditBlogPostPage() {
       showToast('タイトルを入力してください', 'error')
       return
     }
+    if (!controllerName) {
+      showToast('コントローラーを選択してください', 'error')
+      return
+    }
+    if (ratingValue < 1 || ratingValue > 5) {
+      showToast('評価を選択してください（1〜5）', 'error')
+      return
+    }
     if (!body.trim()) {
       showToast('本文を入力してください', 'error')
       return
     }
 
-    const tags = tagsText
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean)
+    const finalSlug = slugify(title)
 
     const patch: Record<string, unknown> = {
-      slug: slug.trim(),
+      slug: finalSlug,
       title: title.trim(),
       body,
       excerpt: excerpt.trim() || null,
       status,
-      tags,
+      tags: [controllerName],
+      controller_name: controllerName,
+      rating: ratingValue,
       updated_at: new Date().toISOString(),
     }
 
@@ -167,7 +186,7 @@ export default function EditBlogPostPage() {
   if (loading) {
     return (
       <main>
-        <h1>記事を編集</h1>
+        <h1>レビューを編集</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -176,10 +195,10 @@ export default function EditBlogPostPage() {
   if (notFound) {
     return (
       <main>
-        <h1>記事を編集</h1>
-        <EmptyCard title="記事が見つかりません" message="" />
+        <h1>レビューを編集</h1>
+        <EmptyCard title="レビューが見つかりません" message="" />
         <div className="section row">
-          <button onClick={() => router.push('/blog')}>ブログ一覧へ</button>
+          <button onClick={() => router.push('/blog')}>レビュー一覧へ</button>
         </div>
       </main>
     )
@@ -189,7 +208,7 @@ export default function EditBlogPostPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>記事を編集</h1>
+          <h1>レビューを編集</h1>
           <p className="muted">Markdown 形式で記述できます</p>
         </div>
         <div className="row">
@@ -206,19 +225,54 @@ export default function EditBlogPostPage() {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            placeholder="コントローラーレビューのタイトル"
           />
         </div>
       </div>
 
       <div className="section card-strong">
-        <h2>スラッグ (URL)</h2>
+        <h2>コントローラー</h2>
         <div className="card">
-          <input
-            type="text"
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-          />
-          <p className="muted">/blog/{slug || '...'}</p>
+          <select
+            value={controllerName}
+            onChange={(e) => setControllerName(e.target.value)}
+          >
+            <option value="">選択してください</option>
+            {CONTROLLER_GROUPS.map((g) => (
+              <optgroup key={g.manufacturer} label={g.manufacturer}>
+                {g.options.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="section card-strong">
+        <h2>評価</h2>
+        <div className="card">
+          <div className="row" style={{ gap: 4 }}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setRatingValue(n)}
+                style={{
+                  fontSize: '1.5rem',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  color: n <= ratingValue ? 'var(--accent-cyan, #00e5ff)' : 'var(--text-muted, #888)',
+                }}
+              >
+                {n <= ratingValue ? '★' : '☆'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -260,17 +314,6 @@ export default function EditBlogPostPage() {
             </label>
             {uploading && <span className="muted">アップロード中...</span>}
           </div>
-        </div>
-      </div>
-
-      <div className="section card-strong">
-        <h2>タグ（カンマ区切り）</h2>
-        <div className="card">
-          <input
-            type="text"
-            value={tagsText}
-            onChange={(e) => setTagsText(e.target.value)}
-          />
         </div>
       </div>
 

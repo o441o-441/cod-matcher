@@ -119,8 +119,13 @@ export default function ControllerRankingPage() {
                     </p>
                   </div>
                 </div>
-                {affiliateUrls[row.controller] && (
-                  <div style={{ marginTop: 8 }}>
+                <div className="row" style={{ marginTop: 8, gap: 8 }}>
+                  <button
+                    onClick={() => router.push(`/blog?controller=${encodeURIComponent(row.controller)}`)}
+                  >
+                    レビューを見る
+                  </button>
+                  {affiliateUrls[row.controller] && (
                     <button
                       onClick={() => handleClickLink(row.controller, affiliateUrls[row.controller])}
                       style={{
@@ -132,8 +137,8 @@ export default function ControllerRankingPage() {
                     >
                       購入リンク
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             ))}
           </div>

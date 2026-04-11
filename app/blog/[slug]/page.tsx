@@ -18,6 +18,8 @@ type PostRow = {
   status: string
   author_user_id: string
   tags: string[]
+  controller_name: string | null
+  rating: number | null
   published_at: string | null
   created_at: string
   updated_at: string
@@ -73,7 +75,7 @@ export default function BlogPostPage() {
       const { data: postRow, error: postErr } = await supabase
         .from('posts')
         .select(
-          'id, slug, title, body, excerpt, status, author_user_id, tags, published_at, created_at, updated_at, view_count'
+          'id, slug, title, body, excerpt, status, author_user_id, tags, controller_name, rating, published_at, created_at, updated_at, view_count'
         )
         .eq('slug', slug)
         .maybeSingle<PostRow>()
@@ -244,11 +246,11 @@ export default function BlogPostPage() {
       <main>
         <h1>記事</h1>
         <EmptyCard
-          title="記事が見つかりません"
+          title="レビューが見つかりません"
           message="削除されたか、非公開の可能性があります"
         />
         <div className="section row">
-          <button onClick={() => router.push('/blog')}>ブログ一覧へ</button>
+          <button onClick={() => router.push('/blog')}>レビュー一覧へ</button>
         </div>
       </main>
     )
@@ -272,8 +274,15 @@ export default function BlogPostPage() {
               : new Date(post.created_at).toLocaleString('ja-JP')}
             {post.status !== 'published' && '（下書き）'}
           </p>
-          {post.tags.length > 0 && (
-            <p className="muted">タグ: {post.tags.join(', ')}</p>
+          {post.controller_name && (
+            <p style={{ fontSize: '1.1rem' }}>
+              {post.controller_name}
+              {post.rating != null && (
+                <span style={{ marginLeft: 8 }}>
+                  {'★'.repeat(post.rating)}{'☆'.repeat(5 - post.rating)}
+                </span>
+              )}
+            </p>
           )}
           <p className="muted">
             閲覧 {post.view_count} / いいね {likeCount} / コメント {commentCount}
@@ -295,7 +304,7 @@ export default function BlogPostPage() {
           >
             {liked ? `いいね済み ${likeCount}` : `いいね ${likeCount}`}
           </button>
-          <button onClick={() => router.push('/blog')}>ブログ一覧</button>
+          <button onClick={() => router.push('/blog')}>レビュー一覧</button>
           {canEdit && (
             <>
               <button onClick={() => router.push(`/blog/${post.slug}/edit`)}>
