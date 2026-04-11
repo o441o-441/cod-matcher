@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { playBanpickAction } from "@/lib/sounds";
+import { playBanpickAction, playChatReceive, playHostNotify } from "@/lib/sounds";
 import { Tutorial } from "@/components/Tutorial";
 
 const BANPICK_TUTORIAL = [
@@ -418,6 +418,7 @@ export default function BanpickPage() {
         { event: "*", schema: "public", table: "matches", filter: `id=eq.${matchId}` },
         (payload) => {
           console.log("banpick realtime event:", payload.table, payload.eventType);
+          playHostNotify();
           void loadAll({ silent: true });
         }
       )
@@ -444,6 +445,7 @@ export default function BanpickPage() {
         { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${matchId}` },
         (payload) => {
           console.log("banpick realtime event:", payload.table, payload.eventType);
+          playChatReceive();
           void loadAll({ silent: true });
         }
       )

@@ -45,3 +45,14 @@ export function playReportNotify() {
   setTimeout(() => playTone(550, 0.12, 'sine', 0.25), 120)
   setTimeout(() => playTone(660, 0.25, 'sine', 0.25), 240)
 }
+
+/** チャット受信 — 軽いポップ音 */
+export function playChatReceive() {
+  playTone(600, 0.08, 'sine', 0.15)
+}
+
+/** ホスト決定 / ロビーコード — 確認チャイム */
+export function playHostNotify() {
+  playTone(500, 0.1, 'triangle', 0.25)
+  setTimeout(() => playTone(700, 0.2, 'triangle', 0.25), 100)
+}

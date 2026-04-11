@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { playReportNotify } from "@/lib/sounds";
+import { playReportNotify, playChatReceive } from "@/lib/sounds";
 import { Tutorial } from "@/components/Tutorial";
 
 const REPORT_TUTORIAL = [
@@ -367,6 +367,7 @@ export default function ReportPage() {
         { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${matchId}` },
         (payload) => {
           console.log("report realtime:", payload.table, payload.eventType);
+          playChatReceive();
           void loadAll({ silent: true });
         }
       )
