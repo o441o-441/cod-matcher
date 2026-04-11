@@ -1281,11 +1281,11 @@ export default function MatchPage() {
             <section className="rounded border border-white/10 bg-white/5 p-4">
               <h2 className="mb-3 text-lg font-semibold">使い方</h2>
               <div className="space-y-2 text-sm text-white/75">
-                <div>1. Leader がパーティを作成します。</div>
-                <div>2. 招待を送り、相手が承認します。</div>
-                <div>3. 完成したパーティを queue に入れます。</div>
-                <div>4. waiting 中は自動でマッチ生成を試します。</div>
-                <div>5. 成立したら banpick に自動遷移します。</div>
+                <div>1. パーティを作成します（ソロでもOK）</div>
+                <div>2. チームメンバーやフレンドを招待して参加してもらいます</div>
+                <div>3. 「既存パーティで待機開始」を押してキューに入ります</div>
+                <div>4. 待機中は自動でマッチングを試みます（3秒間隔）</div>
+                <div>5. マッチが成立したらバンピック画面に自動で移動します</div>
               </div>
             </section>
 
