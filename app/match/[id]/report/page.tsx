@@ -107,6 +107,7 @@ const MESSAGE_JA: Record<string, string> = {
   "auto-confirmed as dispute (2nd reject)": "却下が連続したため申請通りの結果で自動確定しました。",
   "report auto-approved after timeout": "承認期限を超過したため自動承認されました。レートが更新されました。",
   "match created": "マッチが成立しました。バンピックを開始してください。",
+  "all players on report page, deadline shortened to 5 min": "全員が結果報告画面を開きました。承認期限が5分に短縮されました。",
 };
 
 function translateBody(body: string): string {
@@ -138,6 +139,7 @@ export default function ReportPage() {
   const [reportGames, setReportGames] = useState<MatchReportGameRow[]>([]);
   const [messages, setMessages] = useState<MatchMessageRow[]>([]);
   const [priorRejectCount, setPriorRejectCount] = useState(0);
+  const [visitInfo, setVisitInfo] = useState<{ all_visited: boolean; total: number; visited: number } | null>(null);
 
   const [winnerMatchTeamId, setWinnerMatchTeamId] = useState("");
   const [scoreSummary, setScoreSummary] = useState("2-0");
@@ -326,6 +328,18 @@ export default function ReportPage() {
 
   useEffect(() => {
     if (!matchId) return;
+    void (async () => {
+      try {
+        const { data } = await supabase.rpc("rpc_mark_report_visited", { p_match_id: matchId });
+        if (data) setVisitInfo(data as { all_visited: boolean; total: number; visited: number });
+      } catch (e) {
+        console.error("mark visit error:", e);
+      }
+    })();
+  }, [matchId]);
+
+  useEffect(() => {
+    if (!matchId) return;
 
     const channel = supabase
       .channel(`report-room-${matchId}`)
@@ -365,7 +379,12 @@ export default function ReportPage() {
 
   useEffect(() => {
     if (!matchId) return;
-    const interval = setInterval(() => void loadAll({ silent: true }), 5000);
+    const interval = setInterval(() => {
+      void loadAll({ silent: true });
+      void supabase.rpc("rpc_mark_report_visited", { p_match_id: matchId }).then(({ data }) => {
+        if (data) setVisitInfo(data as { all_visited: boolean; total: number; visited: number });
+      });
+    }, 5000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
@@ -691,6 +710,14 @@ export default function ReportPage() {
                       )}
                     </div>
 
+                    {visitInfo && (
+                      <div className="mb-3 text-xs text-white/60">
+                        {visitInfo.all_visited
+                          ? `全員がこの画面を開いています（${visitInfo.visited}/${visitInfo.total}人）— 制限時間5分`
+                          : `まだ全員が画面を開いていません（${visitInfo.visited}/${visitInfo.total}人）— 制限時間1時間`}
+                      </div>
+                    )}
+
                     {priorRejectCount >= 1 && (
                       <div className="mb-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
                         ⚠ 既に1回却下されています。次の却下で<strong>申請通りの結果で自動確定</strong>され、相手プレイヤーへの通報が必要になります。
@@ -720,6 +747,13 @@ export default function ReportPage() {
                 {isMyOwnReport && report.status === "pending" && (
                   <div className="mt-4 rounded border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
                     <div>相手チームの承認待ちです。</div>
+                    {visitInfo && (
+                      <div className="mt-2">
+                        {visitInfo.all_visited
+                          ? `全員がこの画面を開いています（${visitInfo.visited}/${visitInfo.total}人）— 制限時間5分`
+                          : `まだ全員が画面を開いていません（${visitInfo.visited}/${visitInfo.total}人）— 制限時間1時間`}
+                      </div>
+                    )}
                     {reportRemainingSec !== null && (
                       <div className="mt-2">
                         承認期限まで残り:{" "}

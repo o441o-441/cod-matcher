@@ -170,6 +170,7 @@ const MESSAGE_JA: Record<string, string> = {
   "auto-confirmed as dispute (2nd reject)": "却下が連続したため申請通りの結果で自動確定しました。異議がある場合は相手を通報してください。",
   "report auto-approved after timeout": "承認期限を超過したため自動承認されました。レートが更新されました。",
   "match created": "マッチが成立しました。バンピックを開始してください。",
+  "all players on report page, deadline shortened to 5 min": "全員が結果報告画面を開きました。承認期限が5分に短縮されました。",
 };
 
 function translateBody(body: string): string {
