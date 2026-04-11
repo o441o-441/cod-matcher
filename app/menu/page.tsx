@@ -231,6 +231,11 @@ export default function MenuPage() {
               ロール管理
             </button>
           )}
+          {isAdmin && (
+            <button onClick={() => router.push('/admin/dashboard')}>
+              ダッシュボード
+            </button>
+          )}
         </div>
       </div>
     </main>

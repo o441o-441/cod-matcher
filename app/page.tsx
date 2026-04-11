@@ -329,6 +329,7 @@ export default function Home() {
       <div className="section row" style={{ justifyContent: 'center', gap: 16 }}>
         <a href="/terms">利用規約</a>
         <a href="/privacy">プライバシーポリシー</a>
+        <a href="/sponsor">スポンサー募集</a>
       </div>
     </main>
   )
