@@ -1,9 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { playReportNotify, playChatReceive } from "@/lib/sounds";
+
+function useSoundOnChange<T>(value: T, soundFn: () => void) {
+  const prevRef = useRef<T>(value);
+  const initialRef = useRef(true);
+  useEffect(() => {
+    if (initialRef.current) {
+      initialRef.current = false;
+      prevRef.current = value;
+      return;
+    }
+    if (value !== prevRef.current) {
+      soundFn();
+      prevRef.current = value;
+    }
+  }, [value, soundFn]);
+}
 import { Tutorial } from "@/components/Tutorial";
 
 const REPORT_TUTORIAL = [
@@ -148,6 +164,10 @@ export default function ReportPage() {
   const [notes, setNotes] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [chatInput, setChatInput] = useState("");
+
+  useSoundOnChange(report?.id ?? null, playReportNotify);
+  useSoundOnChange(report?.status ?? null, playReportNotify);
+  useSoundOnChange(messages.length, playChatReceive);
 
   const [games, setGames] = useState<ReportFormGame[]>([
     { game_number: 1, mode: "hp", map_name: "", winner_match_team_id: "", was_played: true },
@@ -356,20 +376,12 @@ export default function ReportPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "match_reports", filter: `match_id=eq.${matchId}` },
-        (payload) => {
-          console.log("report realtime:", payload.table, payload.eventType);
-          playReportNotify();
-          void loadAll({ silent: true });
-        }
+        () => void loadAll({ silent: true })
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${matchId}` },
-        (payload) => {
-          console.log("report realtime:", payload.table, payload.eventType);
-          playChatReceive();
-          void loadAll({ silent: true });
-        }
+        () => void loadAll({ silent: true })
       )
       .subscribe((status) => {
         console.log("report realtime status:", status);

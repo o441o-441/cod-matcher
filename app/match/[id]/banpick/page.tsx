@@ -4,6 +4,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { playBanpickAction, playChatReceive, playHostNotify } from "@/lib/sounds";
+
+function useSoundOnChange<T>(value: T, soundFn: () => void) {
+  const prevRef = useRef<T>(value);
+  const initialRef = useRef(true);
+  useEffect(() => {
+    if (initialRef.current) {
+      initialRef.current = false;
+      prevRef.current = value;
+      return;
+    }
+    if (value !== prevRef.current) {
+      soundFn();
+      prevRef.current = value;
+    }
+  }, [value, soundFn]);
+}
 import { Tutorial } from "@/components/Tutorial";
 
 const BANPICK_TUTORIAL = [
@@ -228,6 +244,12 @@ export default function BanpickPage() {
 
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
 
+  // State 変化で音を鳴らす（realtime でもポーリングでも動作）
+  useSoundOnChange(session?.turn_number ?? 0, playBanpickAction);
+  useSoundOnChange(messages.length, playChatReceive);
+  useSoundOnChange(match?.host_user_id ?? null, playHostNotify);
+  useSoundOnChange(match?.lobby_code ?? null, playHostNotify);
+
   const myMember = useMemo(
     () => members.find((m) => m.user_id === myUserId) ?? null,
     [members, myUserId]
@@ -416,38 +438,22 @@ export default function BanpickPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "matches", filter: `id=eq.${matchId}` },
-        (payload) => {
-          console.log("banpick realtime event:", payload.table, payload.eventType);
-          playHostNotify();
-          void loadAll({ silent: true });
-        }
+        () => void loadAll({ silent: true })
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "banpick_sessions", filter: `match_id=eq.${matchId}` },
-        (payload) => {
-          console.log("banpick realtime event:", payload.table, payload.eventType);
-          playBanpickAction();
-          void loadAll({ silent: true });
-        }
+        () => void loadAll({ silent: true })
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "banpick_actions", filter: `match_id=eq.${matchId}` },
-        (payload) => {
-          console.log("banpick realtime event:", payload.table, payload.eventType);
-          playBanpickAction();
-          void loadAll({ silent: true });
-        }
+        () => void loadAll({ silent: true })
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${matchId}` },
-        (payload) => {
-          console.log("banpick realtime event:", payload.table, payload.eventType);
-          playChatReceive();
-          void loadAll({ silent: true });
-        }
+        () => void loadAll({ silent: true })
       )
       .subscribe((status) => {
         console.log("banpick realtime status:", status);
