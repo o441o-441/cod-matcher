@@ -127,10 +127,10 @@ export default function AdminReportsPage() {
     if (!confirm(`${name} を BAN しますか？BANされたユーザーはマッチに参加できなくなります。`)) return
 
     setBusyId(userId)
-    const { error } = await supabase
-      .from('profiles')
-      .update({ is_banned: true })
-      .eq('id', userId)
+    const { error } = await supabase.rpc('rpc_admin_ban_user', {
+      p_user_id: userId,
+      p_ban: true,
+    })
     setBusyId(null)
 
     if (error) {
@@ -148,10 +148,10 @@ export default function AdminReportsPage() {
     if (!confirm(`${name} の BAN を解除しますか？`)) return
 
     setBusyId(userId)
-    const { error } = await supabase
-      .from('profiles')
-      .update({ is_banned: false })
-      .eq('id', userId)
+    const { error } = await supabase.rpc('rpc_admin_ban_user', {
+      p_user_id: userId,
+      p_ban: false,
+    })
     setBusyId(null)
 
     if (error) {
