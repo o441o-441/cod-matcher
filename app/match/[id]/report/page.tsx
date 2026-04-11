@@ -524,7 +524,7 @@ export default function ReportPage() {
           </div>
         )}
 
-        {infoText && (
+        {infoText && match?.status !== 'completed' && (
           <div className="mb-4 rounded border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
             {infoText}
           </div>
