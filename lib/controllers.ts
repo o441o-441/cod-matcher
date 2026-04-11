@@ -153,6 +153,7 @@ export const CONTROLLER_GROUPS: ControllerGroup[] = [
       'Void クリティカルモデル',
       'Void FPS推奨モデル',
       'Void スターターモデル',
+      'Void GENESIS',
     ],
   },
   {
