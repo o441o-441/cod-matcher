@@ -3,6 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { Tutorial } from "@/components/Tutorial";
+
+const MATCH_TUTORIAL = [
+  { title: "マッチング画面", body: "ここで対戦相手を探します。パーティを作成してキューに参加すると、自動でマッチングが行われます。" },
+  { title: "ソロ参加", body: "「ソロで参加」を選ぶと1人でキューに入ります。チームメンバーがいなくてもOKです。" },
+  { title: "パーティ参加", body: "チームメンバーやフレンドを招待してパーティを組むこともできます。パーティリーダーがキューに入れます。" },
+  { title: "自動マッチング", body: "キューに入ると3秒ごとに自動でマッチングを試みます。マッチが成立するとバンピック画面に自動遷移します。" },
+];
 
 type ProfileRow = {
   id: string;
@@ -910,13 +918,16 @@ export default function MatchPage() {
             <h1 className="text-3xl font-bold">ASCENT マッチング</h1>
             <p className="mt-2 text-sm text-white/60">招待制パーティ + 自動マッチ生成</p>
           </div>
-          <button
-            type="button"
-            onClick={() => router.push("/menu")}
-            className="rounded border border-white/20 bg-white/5 px-3 py-2 text-sm hover:bg-white/10"
-          >
-            メニューに戻る
-          </button>
+          <div className="flex gap-2">
+            <Tutorial pageKey="match" steps={MATCH_TUTORIAL} />
+            <button
+              type="button"
+              onClick={() => router.push("/menu")}
+              className="rounded border border-white/20 bg-white/5 px-3 py-2 text-sm hover:bg-white/10"
+            >
+              メニューに戻る
+            </button>
+          </div>
         </div>
 
         {errorText && (

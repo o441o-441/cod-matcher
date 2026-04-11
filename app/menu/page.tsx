@@ -3,6 +3,14 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { Tutorial } from '@/components/Tutorial'
+
+const MENU_TUTORIAL = [
+  { title: 'メニュー画面', body: 'ここがメインメニューです。対戦開始やフレンド管理など、すべての機能にここからアクセスできます。' },
+  { title: '対戦を始める', body: '「対戦開始」ボタンを押すとマッチング画面に移動します。ソロでもチームでも参加できます。' },
+  { title: 'レートと戦績', body: '対戦開始ボタンの横にあなたの個人レートと戦績が表示されます。試合結果が承認されるとレートが変動します。' },
+  { title: 'マイページ', body: '右上の「マイページ」からプロフィール編集や自己紹介の設定ができます。' },
+]
 
 export default function MenuPage() {
   const router = useRouter()
@@ -132,6 +140,7 @@ export default function MenuPage() {
           <p className="muted">対戦・コミュニティ機能はここから</p>
         </div>
         <div className="row">
+          <Tutorial pageKey="menu" steps={MENU_TUTORIAL} />
           <button onClick={() => router.push('/mypage')}>マイページ</button>
           <button onClick={() => router.push('/')}>トップページに戻る</button>
         </div>

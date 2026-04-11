@@ -3,6 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { Tutorial } from "@/components/Tutorial";
+
+const REPORT_TUTORIAL = [
+  { title: "試合結果報告", body: "試合が終わったら、勝者チームのボタンを押して結果を報告します。" },
+  { title: "承認と却下", body: "相手チームがあなたの報告を確認します。正しければ「承認」、間違いなら「却下」を押します。" },
+  { title: "自動承認", body: "報告から1時間以内に相手が操作しない場合、自動で承認されます。" },
+  { title: "dispute", body: "2回連続で却下されると、報告通りの結果で自動確定します（dispute）。異議がある場合は相手を通報できます。" },
+];
 
 type MatchRow = {
   id: string;
@@ -492,6 +500,7 @@ export default function ReportPage() {
             <p className="mt-1 text-sm text-white/60">Match ID: {matchId}</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Tutorial pageKey="report" steps={REPORT_TUTORIAL} />
             <button
               type="button"
               onClick={() => router.push("/menu")}

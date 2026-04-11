@@ -3,6 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { Tutorial } from "@/components/Tutorial";
+
+const BANPICK_TUTORIAL = [
+  { title: "バンピックとは", body: "試合で使うマップとサイドを交互に選ぶフェーズです。3つのモード（HP / SND / OVL）それぞれでBAN → PICK → サイド選択を行います。" },
+  { title: "BAN", body: "マップを1つ選んで除外します。BANされたマップは赤く表示され、PICKできなくなります。" },
+  { title: "PICK", body: "残りのマップから試合で使うマップを選びます。選ばれたマップは緑で表示されます。" },
+  { title: "サイド選択", body: "マップが決まったら、JSOC / ギルド のどちらのサイドでプレイするか選びます。" },
+  { title: "制限時間", body: "各ステップには5分の制限時間があります。時間切れの場合、操作すべきだった側の敗北になります。" },
+];
 
 type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
@@ -597,6 +606,7 @@ export default function BanpickPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <Tutorial pageKey="banpick" steps={BANPICK_TUTORIAL} />
             <button
               type="button"
               onClick={() => router.push("/rules")}
