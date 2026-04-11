@@ -280,8 +280,20 @@ export default function BlogPostPage() {
           </p>
         </div>
         <div className="row">
-          <button onClick={handleToggleLike}>
-            {liked ? 'いいね済み' : 'いいね'}
+          <button
+            onClick={handleToggleLike}
+            style={{
+              fontSize: '1.1rem',
+              padding: '10px 24px',
+              background: liked
+                ? 'linear-gradient(180deg, var(--accent-magenta, #ff2bd6), #c020a8)'
+                : 'linear-gradient(180deg, var(--accent-cyan, #00e5ff), var(--accent-strong, #00b3ff))',
+              color: '#fff',
+              boxShadow: liked ? 'var(--glow-violet)' : 'var(--glow-cyan)',
+              fontWeight: 'bold',
+            }}
+          >
+            {liked ? `いいね済み ${likeCount}` : `いいね ${likeCount}`}
           </button>
           <button onClick={() => router.push('/blog')}>ブログ一覧</button>
           {canEdit && (
