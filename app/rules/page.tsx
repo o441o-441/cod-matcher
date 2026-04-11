@@ -73,54 +73,6 @@ export default function RulesPage() {
           <p>「CDL ハードポイント」を選択。<strong>ルール設定の変更はありません。</strong></p>
         </div>
 
-        <div className="card">
-          <h3>通常ハードポイント（カスタム）</h3>
-          <p>通常の「ハードポイント」を選択 → ルール設定で以下を変更</p>
-
-          <div className="grid grid-2">
-            <div>
-              <strong>ゲーム</strong>
-              <ul>
-                <li>マッチ開始時間: 30秒</li>
-                <li>入力切替許可: オフ</li>
-                <li>コールアウトピンを許可: オフ</li>
-              </ul>
-            </div>
-            <div>
-              <strong>アドバンス</strong>
-              <ul>
-                <li>初期ゾーン有効化遅延: オフ</li>
-              </ul>
-            </div>
-            <div>
-              <strong>プレイヤー</strong>
-              <ul>
-                <li>武器固定: オフ</li>
-              </ul>
-            </div>
-            <div>
-              <strong>チーム</strong>
-              <ul>
-                <li>キルカメラ: オフ</li>
-                <li>コンパス上の敵: オフ</li>
-                <li>リスポーン遅延: 3秒</li>
-                <li>セルフキルスポーン遅延: 1秒</li>
-                <li>チーム割り当て: オン（シャッフルバグ対策）</li>
-                <li>味方への誤射: オン</li>
-              </ul>
-            </div>
-            <div>
-              <strong>ゲームプレイ</strong>
-              <ul>
-                <li>スコアストリーク遅延: 10秒</li>
-                <li>装備リミット: オフ</li>
-                <li>バトルチャッター: オフ</li>
-                <li>自動ドア: オフ</li>
-                <li>マップのギミック: オフ</li>
-              </ul>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="section card-strong">
