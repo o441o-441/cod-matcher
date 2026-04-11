@@ -507,12 +507,12 @@ export default function MatchPage() {
 
     const channel = supabase
       .channel(`match-page-auto-${myUserId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "parties" }, () => void loadMyState())
-      .on("postgres_changes", { event: "*", schema: "public", table: "party_members" }, () => void loadMyState())
-      .on("postgres_changes", { event: "*", schema: "public", table: "party_invites" }, () => void loadMyState())
-      .on("postgres_changes", { event: "*", schema: "public", table: "queue_entries" }, () => void loadMyState())
-      .on("postgres_changes", { event: "*", schema: "public", table: "match_team_members" }, () => void loadMyState())
-      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => void loadMyState())
+      .on("postgres_changes", { event: "*", schema: "public", table: "parties" }, () => void loadMyState({ silent: true }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "party_members" }, () => void loadMyState({ silent: true }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "party_invites" }, () => void loadMyState({ silent: true }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "queue_entries" }, () => void loadMyState({ silent: true }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_team_members" }, () => void loadMyState({ silent: true }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => void loadMyState({ silent: true }))
       .subscribe();
 
     return () => {
