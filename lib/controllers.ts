@@ -1,6 +1,5 @@
 // 使用デバイス選択肢。メーカーごとにグルーピング。
-// 一覧は monoru.trie-marketing.co.jp の掲載情報、gamepadla.com のテスト済みリスト、
-// および FPS / COD 競技シーンで一般的に使われるモデルを参考に整理。
+// FPS / COD 競技シーンで使われるモデルを中心に整理。
 // 追加・編集はこのファイルだけを更新すれば全画面に反映されます。
 
 export type ControllerGroup = {
@@ -23,16 +22,14 @@ export const CONTROLLER_GROUPS: ControllerGroup[] = [
     ],
   },
   {
-    manufacturer: 'Nintendo',
-    options: ['Nintendo Switch Pro Controller'],
-  },
-  {
     manufacturer: 'SCUF',
     options: [
       'SCUF Reflex',
       'SCUF Reflex Pro',
       'SCUF Reflex FPS',
+      'SCUF Valor Pro Wireless',
       'SCUF Instinct Pro',
+      'SCUF Envision',
       'SCUF Envision Pro',
     ],
   },
@@ -43,17 +40,29 @@ export const CONTROLLER_GROUPS: ControllerGroup[] = [
       'Razer Wolverine V2 Pro',
       'Razer Wolverine V2 Chroma',
       'Razer Wolverine V3 Pro',
+      'Razer Wolverine V3 Pro 8K',
       'Razer Wolverine V3 Tournament Edition',
       'Razer Kishi V2',
     ],
   },
   {
-    manufacturer: 'BIGBIG WON',
+    manufacturer: 'Victrix / Turtle Beach',
     options: [
-      'BIGBIG WON Rainbow 2 SE',
-      'BIGBIG WON Rainbow 2 Pro',
-      'BIGBIG WON BLITZ2',
-      'BIGBIG WON BLITZ2 TMR',
+      'Victrix Pro BFG',
+      'Victrix Pro BFG Reloaded',
+      'Victrix Pro BFG Reloaded PC Edition',
+      'Turtle Beach Recon Controller',
+      'Turtle Beach Stealth Ultra',
+    ],
+  },
+  {
+    manufacturer: 'Nacon',
+    options: [
+      'Nacon Revolution X',
+      'Nacon Revolution X Pro',
+      'Nacon Revolution X Unlimited',
+      'Nacon Revolution 5 Pro',
+      'Nacon Revolution Unlimited Pro',
     ],
   },
   {
@@ -87,6 +96,28 @@ export const CONTROLLER_GROUPS: ControllerGroup[] = [
     ],
   },
   {
+    manufacturer: 'BIGBIG WON',
+    options: [
+      'BIGBIG WON Rainbow 2 SE',
+      'BIGBIG WON Rainbow 2 Pro',
+      'BIGBIG WON BLITZ2',
+      'BIGBIG WON BLITZ2 TMR',
+    ],
+  },
+  {
+    manufacturer: 'LeadJoy',
+    options: [
+      'LeadJoy Xeno Plus',
+    ],
+  },
+  {
+    manufacturer: 'PXN',
+    options: [
+      'PXN P5',
+      'PXN P5 8K',
+    ],
+  },
+  {
     manufacturer: '8BitDo',
     options: [
       '8BitDo Ultimate Controller',
@@ -95,15 +126,6 @@ export const CONTROLLER_GROUPS: ControllerGroup[] = [
       '8BitDo Pro 2',
       '8BitDo SN30 Pro',
       '8BitDo Lite SE',
-    ],
-  },
-  {
-    manufacturer: 'Nacon',
-    options: [
-      'Nacon Revolution X',
-      'Nacon Revolution X Pro',
-      'Nacon Revolution 5 Pro',
-      'Nacon Revolution Unlimited Pro',
     ],
   },
   {
@@ -127,12 +149,12 @@ export const CONTROLLER_GROUPS: ControllerGroup[] = [
     ],
   },
   {
-    manufacturer: 'Turtle Beach',
-    options: ['Turtle Beach Recon Controller', 'Turtle Beach Stealth Ultra'],
-  },
-  {
     manufacturer: 'Mad Catz',
     options: ['Mad Catz C.A.T. 9'],
+  },
+  {
+    manufacturer: 'Nintendo',
+    options: ['Nintendo Switch Pro Controller'],
   },
   {
     manufacturer: 'マウス',
