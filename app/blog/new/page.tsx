@@ -126,6 +126,20 @@ export default function NewBlogPostPage() {
       .filter(Boolean)
 
     setSubmitting(true)
+
+    // 1日1件チェック
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const { count: todayCount } = await supabase
+      .from('posts')
+      .select('id', { count: 'exact', head: true })
+      .eq('author_user_id', profileId)
+      .gte('created_at', todayStart.toISOString())
+    if (todayCount && todayCount >= 1) {
+      showToast('1日に投稿できるのは1件までです。明日また投稿してください。', 'error')
+      setSubmitting(false)
+      return
+    }
     const { data, error } = await supabase
       .from('posts')
       .insert({
