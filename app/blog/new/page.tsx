@@ -30,7 +30,7 @@ export default function NewBlogPostPage() {
   const [excerpt, setExcerpt] = useState('')
   const [body, setBody] = useState('')
   const [tagsText, setTagsText] = useState('')
-  const [status, setStatus] = useState<'draft' | 'published'>('draft')
+  const [status] = useState<'draft' | 'published'>('published')
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
 
@@ -271,19 +271,6 @@ export default function NewBlogPostPage() {
             onChange={(e) => setTagsText(e.target.value)}
             placeholder="bo7, tips, ranked"
           />
-        </div>
-      </div>
-
-      <div className="section card-strong">
-        <h2>公開設定</h2>
-        <div className="card">
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as 'draft' | 'published')}
-          >
-            <option value="draft">下書き</option>
-            <option value="published">公開</option>
-          </select>
         </div>
       </div>
 
