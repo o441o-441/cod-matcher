@@ -16,6 +16,8 @@ declare
   v_anchor_created_at timestamptz;
   v_anchor_level integer;
   v_max_diff numeric;
+  v_min_party_size integer;
+  v_wait_seconds integer;
   v_locked_count integer;
   v_updated_count integer;
   v_alpha_base_avg numeric(10,2);
@@ -74,14 +76,25 @@ begin
     raise exception 'anchor waiting queue entry not found';
   end if;
 
-  -- compute wait level: 0 = strict, 1 = moderate, 2 = relaxed
-  v_anchor_level := case
-    when now() - v_anchor_created_at < interval '2 minutes' then 0
-    when now() - v_anchor_created_at < interval '4 minutes' then 1
-    else 2
+  -- compute 12-level wait tier (30s intervals)
+  -- levels 0-3: rating +-100, levels 4-7: +-200, levels 8-11: +-300
+  -- within each rating band: 0=full only, 1=trio+, 2=duo+, 3=any
+  v_wait_seconds := extract(epoch from (now() - v_anchor_created_at))::integer;
+  v_anchor_level := least(v_wait_seconds / 30, 11);
+
+  v_max_diff := case
+    when v_anchor_level <= 3 then 100
+    when v_anchor_level <= 7 then 200
+    else 300
   end;
 
-  v_max_diff := case v_anchor_level when 0 then 100 when 1 then 200 else 300 end;
+  -- min party size allowed in candidates: 4=full only, 3=trio+, 2=duo+, 1=any
+  v_min_party_size := case (v_anchor_level % 4)
+    when 0 then 4
+    when 1 then 3
+    when 2 then 2
+    else 1
+  end;
 
   -- 2) gather candidates
   insert into tmp_candidate_entries (queue_entry_id, party_id, party_size, avg_rating, party_size_bonus, created_at)
@@ -96,6 +109,7 @@ begin
     from public.queue_entries qe
     where qe.status = 'waiting' and qe.queue_type = p_queue_type and qe.id <> p_anchor_queue_entry_id
       and abs(qe.avg_rating - v_anchor_avg) <= v_max_diff
+      and qe.party_size >= v_min_party_size
     order by abs(qe.avg_rating - v_anchor_avg) asc, qe.created_at asc
     limit 7
     for update skip locked
@@ -123,11 +137,6 @@ begin
   valid_combos as (
     select ids from combos
     where total_players = 8 and p_anchor_queue_entry_id = any(ids)
-      and (
-        v_anchor_level > 0
-        or not exists (select 1 from tmp_candidate_entries ce where ce.queue_entry_id = any(ids) and ce.party_size = 4)
-        or (select count(*) from tmp_candidate_entries ce where ce.queue_entry_id = any(ids) and ce.party_size = 4) = 2
-      )
   ),
   scored as (
     select vc.ids,
@@ -224,7 +233,7 @@ begin
   from tmp_selected_entries se
   cross join (
     select alpha_ids from final_scored
-    where (v_anchor_level >= 2 or full_vs_allsolo_penalty = 0)
+    where (v_anchor_level >= 11 or full_vs_allsolo_penalty = 0)
     order by full_vs_allsolo_penalty asc, recent_rematch_penalty asc, composition_mismatch_penalty asc, avg_diff asc, bonus_diff asc
     limit 1
   ) best;
