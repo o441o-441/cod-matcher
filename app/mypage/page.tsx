@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import { usePageView } from '@/lib/usePageView'
+import RatingChart from '@/components/RatingChart'
 
 type UserRow = {
   id: string
@@ -45,6 +46,7 @@ export default function MyPage() {
   const [rating, setRating] = useState<number | null>(null)
   const [wins, setWins] = useState<number | null>(null)
   const [losses, setLosses] = useState<number | null>(null)
+  const [ratingHistory, setRatingHistory] = useState<{ matchIndex: number; rating: number }[]>([])
 
   usePageView('/mypage')
 
@@ -223,6 +225,20 @@ export default function MyPage() {
     setRating(profileRow?.current_rating ?? null)
     setWins(profileRow?.wins ?? null)
     setLosses(profileRow?.losses ?? null)
+
+    // Fetch rating history for chart
+    const { data: rhData } = await supabase
+      .from('rating_history')
+      .select('rating_after, created_at')
+      .eq('user_id', authUser.id)
+      .order('created_at', { ascending: true })
+    if (rhData && rhData.length > 0) {
+      const points = (rhData as { rating_after: number; created_at: string }[]).map((r, i) => ({
+        matchIndex: i + 1,
+        rating: r.rating_after,
+      }))
+      setRatingHistory(points)
+    }
 
     const { data: memberRow, error: memberError } = await supabase
       .from('team_members')
@@ -404,6 +420,13 @@ export default function MyPage() {
               </h3>
             </div>
           </div>
+
+          {ratingHistory.length > 1 && (
+            <div className="section card">
+              <p className="muted" style={{ marginBottom: 8 }}>レート推移</p>
+              <RatingChart data={ratingHistory} />
+            </div>
+          )}
 
           <div className="section card">
             <p className="muted">自己紹介</p>
