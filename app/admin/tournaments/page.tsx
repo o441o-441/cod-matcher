@@ -11,6 +11,7 @@ type TournamentRow = {
   title: string
   body: string
   event_date: string | null
+  entry_deadline: string | null
   is_active: boolean
   created_at: string
 }
@@ -27,17 +28,19 @@ export default function AdminTournamentsPage() {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [eventDate, setEventDate] = useState('')
+  const [entryDeadline, setEntryDeadline] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editBody, setEditBody] = useState('')
   const [editEventDate, setEditEventDate] = useState('')
+  const [editEntryDeadline, setEditEntryDeadline] = useState('')
 
   const fetchItems = async () => {
     const { data, error } = await supabase
       .from('tournaments')
-      .select('id, title, body, event_date, is_active, created_at')
+      .select('id, title, body, event_date, entry_deadline, is_active, created_at')
       .order('created_at', { ascending: false })
     if (error) {
       console.error('fetchItems error:', error)
@@ -85,6 +88,7 @@ export default function AdminTournamentsPage() {
       title: title.trim(),
       body: body.trim(),
       event_date: eventDate || null,
+      entry_deadline: entryDeadline || null,
       is_active: true,
       author_user_id: authUserId,
     })
@@ -96,6 +100,7 @@ export default function AdminTournamentsPage() {
     setTitle('')
     setBody('')
     setEventDate('')
+    setEntryDeadline('')
     showToast('作成しました', 'success')
     await fetchItems()
   }
@@ -120,6 +125,7 @@ export default function AdminTournamentsPage() {
     setEditTitle(row.title)
     setEditBody(row.body)
     setEditEventDate(row.event_date ? row.event_date.slice(0, 16) : '')
+    setEditEntryDeadline(row.entry_deadline ? row.entry_deadline.slice(0, 16) : '')
   }
 
   const cancelEdit = () => {
@@ -137,6 +143,7 @@ export default function AdminTournamentsPage() {
         title: editTitle.trim(),
         body: editBody.trim(),
         event_date: editEventDate || null,
+        entry_deadline: editEntryDeadline || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', editingId)
@@ -182,6 +189,14 @@ export default function AdminTournamentsPage() {
             rows={6}
           />
           <div>
+            <p className="muted">応募締切</p>
+            <input
+              type="datetime-local"
+              value={entryDeadline}
+              onChange={(e) => setEntryDeadline(e.target.value)}
+            />
+          </div>
+          <div>
             <p className="muted">開催日時</p>
             <input
               type="datetime-local"
@@ -218,6 +233,14 @@ export default function AdminTournamentsPage() {
                       rows={6}
                     />
                     <div>
+                      <p className="muted">応募締切</p>
+                      <input
+                        type="datetime-local"
+                        value={editEntryDeadline}
+                        onChange={(e) => setEditEntryDeadline(e.target.value)}
+                      />
+                    </div>
+                    <div>
                       <p className="muted">開催日時</p>
                       <input
                         type="datetime-local"
@@ -237,6 +260,11 @@ export default function AdminTournamentsPage() {
                       {!row.is_active && <span className="muted">（非表示）</span>}
                     </h3>
                     <p style={{ whiteSpace: 'pre-wrap' }}>{row.body}</p>
+                    {row.entry_deadline && (
+                      <p style={{ color: 'var(--accent-cyan, #00e5ff)', fontWeight: 'bold' }}>
+                        応募締切: {new Date(row.entry_deadline).toLocaleString('ja-JP')}
+                      </p>
+                    )}
                     {row.event_date && (
                       <p style={{ color: 'var(--accent-violet, #8b5cf6)', fontWeight: 'bold' }}>
                         開催日時: {new Date(row.event_date).toLocaleString('ja-JP')}

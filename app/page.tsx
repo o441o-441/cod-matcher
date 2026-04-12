@@ -18,6 +18,7 @@ type TournamentRow = {
   title: string
   body: string
   event_date: string | null
+  entry_deadline: string | null
   created_at: string
 }
 
@@ -56,9 +57,9 @@ export default function Home() {
   const fetchTournaments = async () => {
     const { data, error } = await supabase
       .from('tournaments')
-      .select('id, title, body, event_date, created_at')
+      .select('id, title, body, event_date, entry_deadline, created_at')
       .eq('is_active', true)
-      .order('event_date', { ascending: true, nullsFirst: false })
+      .order('entry_deadline', { ascending: true, nullsFirst: false })
       .limit(5)
     if (error) {
       console.error('fetchTournaments error:', error)
@@ -219,14 +220,32 @@ export default function Home() {
               <div key={t.id} className="card">
                 <h3 style={{ marginTop: 0 }}>{t.title}</h3>
                 <p style={{ whiteSpace: 'pre-wrap' }}>{t.body}</p>
+                {t.entry_deadline && (() => {
+                  const remaining = Math.floor((new Date(t.entry_deadline).getTime() - Date.now()) / 1000)
+                  const closed = remaining <= 0
+                  const days = Math.floor(remaining / 86400)
+                  const hours = Math.floor((remaining % 86400) / 3600)
+                  const mins = Math.floor((remaining % 3600) / 60)
+                  const label = closed ? '締切済み' : days > 0 ? `残り ${days}日 ${hours}時間` : hours > 0 ? `残り ${hours}時間 ${mins}分` : `残り ${mins}分`
+                  return (
+                    <p style={{
+                      fontSize: '1.1rem',
+                      fontWeight: 'bold',
+                      color: closed ? 'var(--danger, #ff4d6d)' : remaining < 86400 ? 'var(--danger, #ff4d6d)' : 'var(--accent-cyan, #00e5ff)',
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      background: closed ? 'rgba(255,77,109,0.1)' : remaining < 86400 ? 'rgba(255,77,109,0.1)' : 'rgba(0,229,255,0.1)',
+                      display: 'inline-block',
+                    }}>
+                      応募締切: {new Date(t.entry_deadline).toLocaleString('ja-JP')} ({label})
+                    </p>
+                  )
+                })()}
                 {t.event_date && (
                   <p style={{ color: 'var(--accent-violet, #8b5cf6)', fontWeight: 'bold' }}>
                     開催日時: {new Date(t.event_date).toLocaleString('ja-JP')}
                   </p>
                 )}
-                <p className="muted">
-                  {new Date(t.created_at).toLocaleString('ja-JP')}
-                </p>
               </div>
             ))}
           </div>
