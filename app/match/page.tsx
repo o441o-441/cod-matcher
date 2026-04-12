@@ -620,7 +620,7 @@ export default function MatchPage() {
       const row = (data as RpcCreateMatchResult[] | null)?.[0];
       if (row?.match_id) {
         routePushedRef.current = true;
-        setInfoText("マッチが成立しま��た。");
+        setInfoText("マッチが成立しました。");
         playMatchFound();
         await loadMyState({ silent: true });
         router.push(`/match/${row.match_id}/banpick`);
