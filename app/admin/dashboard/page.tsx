@@ -45,6 +45,12 @@ type ClickStat = {
   thisMonth: number
 }
 
+type PageViewStat = {
+  page: string
+  total: number
+  thisMonth: number
+}
+
 export default function AdminDashboardPage() {
   const router = useRouter()
   const { showToast } = useToast()
@@ -73,6 +79,9 @@ export default function AdminDashboardPage() {
   const [voidedCount, setVoidedCount] = useState(0)
   const [clickStats, setClickStats] = useState<ClickStat[]>([])
   const [totalClicksThisMonth, setTotalClicksThisMonth] = useState(0)
+  const [pageViewStats, setPageViewStats] = useState<PageViewStat[]>([])
+  const [totalViewsThisMonth, setTotalViewsThisMonth] = useState(0)
+  const [totalViewsAllTime, setTotalViewsAllTime] = useState(0)
 
   useEffect(() => {
     const init = async () => {
@@ -235,6 +244,29 @@ export default function AdminDashboardPage() {
           .map(([controller, s]) => ({ controller, ...s }))
       )
       setTotalClicksThisMonth(monthClicks)
+
+      // Page view stats
+      const { data: allViews } = await supabase.from('page_views').select('page_path, created_at')
+      const pvMap = new Map<string, { total: number; thisMonth: number }>()
+      let mvTotal = 0
+      let mvMonth = 0
+      for (const v of (allViews ?? []) as { page_path: string; created_at: string }[]) {
+        const prev = pvMap.get(v.page_path) ?? { total: 0, thisMonth: 0 }
+        prev.total++
+        mvTotal++
+        if (v.created_at >= monthStart) {
+          prev.thisMonth++
+          mvMonth++
+        }
+        pvMap.set(v.page_path, prev)
+      }
+      setPageViewStats(
+        [...pvMap.entries()]
+          .sort((a, b) => b[1].total - a[1].total)
+          .map(([page, s]) => ({ page, ...s }))
+      )
+      setTotalViewsAllTime(mvTotal)
+      setTotalViewsThisMonth(mvMonth)
 
       setLoading(false)
     }
@@ -484,6 +516,34 @@ export default function AdminDashboardPage() {
                   <span className="muted">
                     今月 {c.thisMonth} / 累計 {c.total}
                   </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="section card-strong">
+        <h2>ページ閲覧数</h2>
+        <div className="grid grid-2" style={{ marginBottom: 12 }}>
+          <div className="card" style={{ textAlign: 'center' }}>
+            <p className="muted">総閲覧数（全期間）</p>
+            <h3 style={{ fontSize: '1.5rem' }}>{totalViewsAllTime}</h3>
+          </div>
+          <div className="card" style={{ textAlign: 'center' }}>
+            <p className="muted">{ml} の閲覧数</p>
+            <h3 style={{ fontSize: '1.5rem' }}>{totalViewsThisMonth}</h3>
+          </div>
+        </div>
+        {pageViewStats.length === 0 ? (
+          <p className="muted">閲覧データなし</p>
+        ) : (
+          <div className="stack">
+            {pageViewStats.map((pv) => (
+              <div key={pv.page} className="card">
+                <div className="row" style={{ justifyContent: 'space-between' }}>
+                  <span>{pv.page}</span>
+                  <span className="muted">今月 {pv.thisMonth} / 累計 {pv.total}</span>
                 </div>
               </div>
             ))}
