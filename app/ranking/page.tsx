@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LoadingCard, EmptyCard } from '@/components/UIState'
+import { usePageView } from '@/lib/usePageView'
 
 type SeasonRow = {
   user_id: string
@@ -26,6 +27,8 @@ export default function RankingPage() {
   const [teamNames, setTeamNames] = useState<Record<string, string>>({})
   const [controllers, setControllers] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
+
+  usePageView('/ranking')
 
   const fetchTeamNames = async (userIds: string[]) => {
     if (userIds.length === 0) return

@@ -5,6 +5,7 @@ import type { RealtimeChannel, User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
+import { usePageView } from '@/lib/usePageView'
 
 type UserRow = {
   id: string
@@ -44,6 +45,8 @@ export default function MyPage() {
   const [rating, setRating] = useState<number | null>(null)
   const [wins, setWins] = useState<number | null>(null)
   const [losses, setLosses] = useState<number | null>(null)
+
+  usePageView('/mypage')
 
   const realtimeRef = useRef<RealtimeChannel | null>(null)
 

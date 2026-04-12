@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LoadingCard, EmptyCard } from '@/components/UIState'
+import { usePageView } from '@/lib/usePageView'
 
 type ControllerRow = {
   controller: string
@@ -25,6 +26,8 @@ export default function ControllerRankingPage() {
   const [affiliateUrls, setAffiliateUrls] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [minGames, setMinGames] = useState(5)
+
+  usePageView('/ranking/controllers')
 
   const fetchRanking = async (min: number) => {
     setLoading(true)

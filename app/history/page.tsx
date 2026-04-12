@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { LoadingCard, EmptyCard } from '@/components/UIState'
+import { usePageView } from '@/lib/usePageView'
 
 type MatchRow = {
   id: string
@@ -36,6 +37,8 @@ export default function HistoryPage() {
   const [matchTeams, setMatchTeams] = useState<MatchTeamRow[]>([])
   const [members, setMembers] = useState<MatchTeamMemberRow[]>([])
   const [loading, setLoading] = useState(true)
+
+  usePageView('/history')
 
   const fetchHistory = async () => {
     const { data, error } = await supabase

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Tutorial } from '@/components/Tutorial'
+import { usePageView } from '@/lib/usePageView'
 
 const MENU_TUTORIAL = [
   { title: 'メニュー画面', body: 'ここがメインメニューです。対戦開始やフレンド管理など、すべての機能にここからアクセスできます。' },
@@ -21,6 +22,8 @@ export default function MenuPage() {
   const [rating, setRating] = useState<number | null>(null)
   const [wins, setWins] = useState<number | null>(null)
   const [losses, setLosses] = useState<number | null>(null)
+
+  usePageView('/menu')
 
   useEffect(() => {
     const init = async () => {

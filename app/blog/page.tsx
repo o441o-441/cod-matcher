@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { CONTROLLER_GROUPS } from '@/lib/controllers'
 import { LoadingCard, EmptyCard } from '@/components/UIState'
+import { usePageView } from '@/lib/usePageView'
 
 type PostRow = {
   id: string
@@ -28,6 +29,8 @@ function BlogIndexContent() {
   const [posts, setPosts] = useState<PostRow[]>([])
   const [signedIn, setSignedIn] = useState(false)
   const [filterController, setFilterController] = useState(initialController)
+
+  usePageView('/blog')
 
   useEffect(() => {
     const init = async () => {

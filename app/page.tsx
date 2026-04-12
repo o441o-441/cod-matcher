@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { usePageView } from '@/lib/usePageView'
 
 type AnnouncementRow = {
   id: string
@@ -42,6 +43,8 @@ export default function Home() {
   const [popularPosts, setPopularPosts] = useState<PopularPostRow[]>([])
   const [recentPosts, setRecentPosts] = useState<RecentPostRow[]>([])
   const [signedIn, setSignedIn] = useState(false)
+
+  usePageView('/')
 
   const fetchAnnouncements = async () => {
     const { data, error } = await supabase

@@ -1,9 +1,12 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { usePageView } from '@/lib/usePageView'
 
 export default function RulesPage() {
   const router = useRouter()
+
+  usePageView('/rules')
 
   return (
     <main>

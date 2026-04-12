@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Tutorial } from "@/components/Tutorial";
 import { playMatchFound } from "@/lib/sounds";
+import { usePageView } from "@/lib/usePageView";
 
 const RULES_KEY = "rules_accepted_v1";
 
@@ -203,6 +204,8 @@ export default function MatchPage() {
   const [myActiveMatch, setMyActiveMatch] = useState<MatchRow | null>(null);
 
   const [waitingSeconds, setWaitingSeconds] = useState(0);
+
+  usePageView('/match');
 
   const autoMatchBusyRef = useRef(false);
   const routePushedRef = useRef(false);
