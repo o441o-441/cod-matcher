@@ -33,6 +33,7 @@ export default function NewBlogPostPage() {
   const [status] = useState<'draft' | 'published'>('published')
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -57,6 +58,10 @@ export default function NewBlogPostPage() {
         return
       }
       setProfileId(me.id)
+
+      const { data: adminFlag } = await supabase.rpc('is_admin')
+      setIsAdmin(!!adminFlag)
+
       setLoading(false)
     }
     void Promise.resolve().then(init)
@@ -125,18 +130,20 @@ export default function NewBlogPostPage() {
 
     setSubmitting(true)
 
-    // 1日1件チェック
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-    const { count: todayCount } = await supabase
-      .from('posts')
-      .select('id', { count: 'exact', head: true })
-      .eq('author_user_id', profileId)
-      .gte('created_at', todayStart.toISOString())
-    if (todayCount && todayCount >= 1) {
-      showToast('1日に投稿できるのは1件までです。明日また投稿してください。', 'error')
-      setSubmitting(false)
-      return
+    // 1日1件チェック（管理者はスキップ）
+    if (!isAdmin) {
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const { count: todayCount } = await supabase
+        .from('posts')
+        .select('id', { count: 'exact', head: true })
+        .eq('author_user_id', profileId)
+        .gte('created_at', todayStart.toISOString())
+      if (todayCount && todayCount >= 1) {
+        showToast('1日に投稿できるのは1件までです。明日また投稿してください。', 'error')
+        setSubmitting(false)
+        return
+      }
     }
     const { data, error } = await supabase
       .from('posts')
