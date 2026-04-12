@@ -385,3 +385,136 @@ a:hover {
     max-width: 100%;
   }
 }
+
+/* ── Markdown body ── */
+.markdown-body {
+  line-height: 1.9;
+  font-size: 1rem;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.markdown-body h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 2rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.markdown-body h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 1.8rem 0 0.8rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.markdown-body h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 1.4rem 0 0.6rem;
+}
+
+.markdown-body p {
+  margin: 0.8rem 0;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.8rem 0;
+  padding-left: 1.6rem;
+}
+
+.markdown-body li {
+  margin: 0.3rem 0;
+}
+
+.markdown-body li > ul,
+.markdown-body li > ol {
+  margin: 0.2rem 0;
+}
+
+.markdown-body blockquote {
+  margin: 1rem 0;
+  padding: 0.6rem 1rem;
+  border-left: 4px solid var(--accent-cyan);
+  background: rgba(0, 229, 255, 0.06);
+  border-radius: 0 8px 8px 0;
+  color: var(--text-soft);
+}
+
+.markdown-body code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.88em;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  background: rgba(140, 160, 220, 0.12);
+  color: var(--accent-cyan);
+}
+
+.markdown-body pre {
+  margin: 1rem 0;
+  padding: 1rem;
+  border-radius: 8px;
+  background: rgba(10, 13, 26, 0.9);
+  border: 1px solid var(--line);
+  overflow-x: auto;
+}
+
+.markdown-body pre code {
+  padding: 0;
+  background: none;
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.markdown-body a {
+  color: var(--accent-cyan);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+
+.markdown-body a:hover {
+  color: #fff;
+}
+
+.markdown-body img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 2rem 0;
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+.markdown-body th {
+  background: rgba(140, 160, 220, 0.08);
+  font-weight: 600;
+}
+
+.markdown-body strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+.markdown-body em {
+  color: var(--text-soft);
+}
