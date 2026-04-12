@@ -18,6 +18,7 @@ type TournamentRow = {
   title: string
   body: string
   event_date: string | null
+  event_date_end: string | null
   entry_deadline: string | null
   created_at: string
 }
@@ -57,7 +58,7 @@ export default function Home() {
   const fetchTournaments = async () => {
     const { data, error } = await supabase
       .from('tournaments')
-      .select('id, title, body, event_date, entry_deadline, created_at')
+      .select('id, title, body, event_date, event_date_end, entry_deadline, created_at')
       .eq('is_active', true)
       .order('entry_deadline', { ascending: true, nullsFirst: false })
       .limit(5)
@@ -243,7 +244,8 @@ export default function Home() {
                 })()}
                 {t.event_date && (
                   <p style={{ color: 'var(--accent-violet, #8b5cf6)', fontWeight: 'bold' }}>
-                    開催日時: {new Date(t.event_date).toLocaleString('ja-JP')}
+                    開催: {new Date(t.event_date).toLocaleString('ja-JP')}
+                    {t.event_date_end && ` 〜 ${new Date(t.event_date_end).toLocaleString('ja-JP')}`}
                   </p>
                 )}
               </div>
