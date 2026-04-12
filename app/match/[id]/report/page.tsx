@@ -393,6 +393,17 @@ export default function ReportPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
 
+  useEffect(() => {
+    if (!matchId) return;
+    const interval = setInterval(() => {
+      void loadAll({ silent: true });
+      void supabase.rpc("rpc_mark_report_visited", { p_match_id: matchId }).then(({ data }) => {
+        if (data) setVisitInfo(data as { all_visited: boolean; total: number; visited: number });
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId]);
 
   const handleGameChange = <K extends keyof ReportFormGame>(
     index: number,

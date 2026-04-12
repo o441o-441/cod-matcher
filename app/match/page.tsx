@@ -585,6 +585,12 @@ export default function MatchPage() {
     };
   }, [myUserId, loadMyState, supabase]);
 
+  useEffect(() => {
+    const interval = setInterval(() => void loadMyState({ silent: true }), 5000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const attemptAutoMatch = useCallback(async () => {
     if (!myWaitingEntry?.id) return;
     if (!isPartyLeader) return;
