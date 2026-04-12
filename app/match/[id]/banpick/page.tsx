@@ -59,6 +59,7 @@ type MatchTeamRow = {
   synergy_bonus: number;
   effective_avg_rating: number;
   is_full_party: boolean;
+  trophy_users: string[];
 };
 
 type MatchTeamMemberRow = {
@@ -364,7 +365,7 @@ export default function BanpickPage() {
             .maybeSingle<MatchRow>(),
           supabase
             .from("match_teams")
-            .select("id,match_id,side,display_name,captain_user_id,party_composition,base_avg_rating,synergy_bonus,effective_avg_rating,is_full_party")
+            .select("id,match_id,side,display_name,captain_user_id,party_composition,base_avg_rating,synergy_bonus,effective_avg_rating,is_full_party,trophy_users")
             .eq("match_id", matchId)
             .returns<MatchTeamRow[]>(),
           supabase
@@ -518,6 +519,29 @@ export default function BanpickPage() {
     } catch (e) {
       const message = e instanceof Error ? e.message : "バンピック送信に失敗しました。";
       setErrorText(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleToggleTrophy = async (userId: string) => {
+    if (!matchId) return;
+    clearMessages();
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc("rpc_toggle_trophy_user", {
+        p_match_id: matchId,
+        p_user_id: userId,
+      });
+      if (error) throw error;
+      await loadAll({ silent: true });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "トロフィー設定に失敗しました。";
+      if (msg.includes("trophy users limit")) {
+        setErrorText("トロフィー使用者は各チーム2人までです。");
+      } else {
+        setErrorText(msg);
+      }
     } finally {
       setBusy(false);
     }
@@ -957,6 +981,62 @@ export default function BanpickPage() {
           </div>
 
           <div className="space-y-4">
+            {isBanpickCompleted && (
+              <section className="rounded border border-white/10 bg-white/5 p-4">
+                <h2 className="mb-3 text-lg font-semibold">トロフィー使用者（各チーム2人）</h2>
+                <p className="mb-3 text-xs text-white/60">
+                  各チームから2人がトロフィーを持ちます。自分のチームのメンバーをクリックして選択してください。
+                </p>
+
+                {(["alpha", "bravo"] as const).map((side) => {
+                  const team = side === "alpha" ? alphaTeam : bravoTeam;
+                  const teamMembers = groupedMembers[side];
+                  const trophyList: string[] = Array.isArray(team?.trophy_users) ? team.trophy_users : [];
+                  const isMyTeam = !!myMatchTeamId && team?.id === myMatchTeamId;
+
+                  return (
+                    <div key={side} className="mb-3 rounded border border-white/10 bg-black/20 p-3">
+                      <div className="mb-2 font-semibold">{side.toUpperCase()}</div>
+                      <div className="space-y-1">
+                        {teamMembers.map((m) => {
+                          const isTrophy = trophyList.includes(m.user_id);
+                          return (
+                            <div key={m.id} className="flex items-center justify-between rounded bg-white/5 px-3 py-2 text-sm">
+                              <span>
+                                {m.profiles?.display_name ?? m.user_id}
+                                {isTrophy && (
+                                  <span style={{ marginLeft: 8, color: "var(--accent-cyan, #0ff)" }}>
+                                    [トロフィー]
+                                  </span>
+                                )}
+                              </span>
+                              {isMyTeam && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleTrophy(m.user_id)}
+                                  disabled={busy}
+                                  className={`rounded px-3 py-1 text-xs ${
+                                    isTrophy
+                                      ? "bg-red-500/20 text-red-300"
+                                      : "bg-emerald-500/20 text-emerald-300"
+                                  }`}
+                                >
+                                  {isTrophy ? "解除" : "選択"}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-2 text-xs text-white/50">
+                        選択済み: {trophyList.length} / 2
+                      </div>
+                    </div>
+                  );
+                })}
+              </section>
+            )}
+
             <section className="rounded border border-white/10 bg-white/5 p-4">
               <h2 className="mb-3 text-lg font-semibold">ホスト / ロビー</h2>
 
