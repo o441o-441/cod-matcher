@@ -230,6 +230,11 @@ export default function MenuPage() {
             </button>
           )}
           {isAdmin && (
+            <button onClick={() => router.push('/admin/tournaments')}>
+              大会告知管理
+            </button>
+          )}
+          {isAdmin && (
             <button onClick={() => router.push('/admin/roles')}>
               ロール管理
             </button>

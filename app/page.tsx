@@ -13,6 +13,14 @@ type AnnouncementRow = {
   created_at: string
 }
 
+type TournamentRow = {
+  id: string
+  title: string
+  body: string
+  event_date: string | null
+  created_at: string
+}
+
 type PopularPostRow = {
   id: string
   slug: string
@@ -43,6 +51,21 @@ export default function Home() {
   const [popularPosts, setPopularPosts] = useState<PopularPostRow[]>([])
   const [recentPosts, setRecentPosts] = useState<RecentPostRow[]>([])
   const [signedIn, setSignedIn] = useState(false)
+  const [tournaments, setTournaments] = useState<TournamentRow[]>([])
+
+  const fetchTournaments = async () => {
+    const { data, error } = await supabase
+      .from('tournaments')
+      .select('id, title, body, event_date, created_at')
+      .eq('is_active', true)
+      .order('event_date', { ascending: true, nullsFirst: false })
+      .limit(5)
+    if (error) {
+      console.error('fetchTournaments error:', error)
+      return
+    }
+    setTournaments((data ?? []) as TournamentRow[])
+  }
 
   usePageView('/')
 
@@ -124,6 +147,7 @@ export default function Home() {
     void fetchAnnouncements()
     void fetchPopularPosts()
     void fetchRecentPosts()
+    void fetchTournaments()
     void supabase.auth.getSession().then(({ data }) => {
       setSignedIn(!!data.session?.user)
     })
@@ -180,6 +204,28 @@ export default function Home() {
                 <p style={{ whiteSpace: 'pre-wrap' }}>{a.body}</p>
                 <p className="muted">
                   {new Date(a.created_at).toLocaleString('ja-JP')}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tournaments.length > 0 && (
+        <div className="section card-strong" style={{ borderColor: 'var(--accent-violet, #8b5cf6)' }}>
+          <h2>大会告知</h2>
+          <div className="stack">
+            {tournaments.map((t) => (
+              <div key={t.id} className="card">
+                <h3 style={{ marginTop: 0 }}>{t.title}</h3>
+                <p style={{ whiteSpace: 'pre-wrap' }}>{t.body}</p>
+                {t.event_date && (
+                  <p style={{ color: 'var(--accent-violet, #8b5cf6)', fontWeight: 'bold' }}>
+                    開催日時: {new Date(t.event_date).toLocaleString('ja-JP')}
+                  </p>
+                )}
+                <p className="muted">
+                  {new Date(t.created_at).toLocaleString('ja-JP')}
                 </p>
               </div>
             ))}
