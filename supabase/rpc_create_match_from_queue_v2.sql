@@ -15,6 +15,7 @@ declare
   v_anchor_status text;
   v_anchor_created_at timestamptz;
   v_anchor_level integer;
+  v_max_diff numeric;
   v_locked_count integer;
   v_updated_count integer;
   v_alpha_base_avg numeric(10,2);
@@ -80,6 +81,8 @@ begin
     else 2
   end;
 
+  v_max_diff := case v_anchor_level when 0 then 100 when 1 then 200 else 300 end;
+
   -- 2) gather candidates
   insert into tmp_candidate_entries (queue_entry_id, party_id, party_size, avg_rating, party_size_bonus, created_at)
   select qe.id, qe.party_id, qe.party_size, qe.avg_rating, qe.party_size_bonus, qe.created_at
@@ -92,6 +95,7 @@ begin
     select qe.id as queue_entry_id, qe.party_id, qe.party_size, qe.avg_rating, qe.party_size_bonus, qe.created_at
     from public.queue_entries qe
     where qe.status = 'waiting' and qe.queue_type = p_queue_type and qe.id <> p_anchor_queue_entry_id
+      and abs(qe.avg_rating - v_anchor_avg) <= v_max_diff
     order by abs(qe.avg_rating - v_anchor_avg) asc, qe.created_at asc
     limit 7
     for update skip locked
