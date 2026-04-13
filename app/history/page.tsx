@@ -113,7 +113,7 @@ export default function HistoryPage() {
   if (loading) {
     return (
       <main>
-        <h1>マッチ履歴</h1>
+        <h1>ASCENT マッチ履歴</h1>
         <LoadingCard message="履歴を読み込み中です..." />
       </main>
     )
@@ -123,7 +123,7 @@ export default function HistoryPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>マッチ履歴</h1>
+          <h1>ASCENT マッチ履歴</h1>
           <p className="muted">完了した試合の履歴です</p>
         </div>
         <div className="row">

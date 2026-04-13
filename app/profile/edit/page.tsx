@@ -142,7 +142,7 @@ export default function ProfileEditPage() {
   if (loading) {
     return (
       <main>
-        <h1>プロフィール編集</h1>
+        <h1>ASCENT プロフィール編集</h1>
         <div className="card">
           <p>読み込み中...</p>
         </div>
@@ -154,7 +154,7 @@ export default function ProfileEditPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>プロフィール編集</h1>
+          <h1>ASCENT プロフィール編集</h1>
           <p className="muted">表示名と Activision ID を編集できます</p>
         </div>
 

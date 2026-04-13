@@ -168,7 +168,7 @@ export default function FriendsPage() {
   if (loading) {
     return (
       <main>
-        <h1>フレンド</h1>
+        <h1>ASCENT フレンド</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -178,7 +178,7 @@ export default function FriendsPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>フレンド</h1>
+          <h1>ASCENT フレンド</h1>
           <p className="muted">フレンドの追加・管理ができます</p>
         </div>
         <div className="row">

@@ -67,7 +67,7 @@ export default function MyReportsPage() {
   if (loading) {
     return (
       <main>
-        <h1>通報履歴</h1>
+        <h1>ASCENT 通報履歴</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -77,7 +77,7 @@ export default function MyReportsPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>通報履歴</h1>
+          <h1>ASCENT 通報履歴</h1>
           <p className="muted">自分が送信した通報の一覧</p>
         </div>
         <div className="row">

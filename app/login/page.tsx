@@ -22,7 +22,7 @@ export default function LoginPage() {
   return (
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
-        <h1>ログイン</h1>
+        <h1>ASCENT ログイン</h1>
         <button onClick={() => router.push('/')}>トップページに戻る</button>
       </div>
       <div className="section">

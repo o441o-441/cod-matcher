@@ -12,7 +12,7 @@ export default function RulesPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>ルール一覧</h1>
+          <h1>ASCENT ルール一覧</h1>
           <p className="muted">Black Ops 7 GA（ジェントルマンズアグリーメント）</p>
         </div>
         <div className="row">

@@ -106,7 +106,7 @@ export default function TeamJoinPage() {
   if (loading) {
     return (
       <main>
-        <h1>チーム参加</h1>
+        <h1>ASCENT チーム参加</h1>
         <div className="card">
           <p>読み込み中...</p>
         </div>
@@ -118,7 +118,7 @@ export default function TeamJoinPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>チーム参加</h1>
+          <h1>ASCENT チーム参加</h1>
           <p className="muted">チームIDを入力して参加します</p>
         </div>
 

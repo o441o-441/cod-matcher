@@ -156,7 +156,7 @@ export default function MenuPage() {
   if (loading) {
     return (
       <main>
-        <h1>メニュー</h1>
+        <h1>ASCENT メニュー</h1>
         <p>読み込み中...</p>
       </main>
     )
@@ -166,7 +166,7 @@ export default function MenuPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>メニュー</h1>
+          <h1>ASCENT メニュー</h1>
           <p className="muted">対戦・コミュニティ機能はここから</p>
         </div>
         <div className="row">

@@ -162,7 +162,7 @@ export default function AdminTournamentsPage() {
   if (loading || !authorized) {
     return (
       <main>
-        <h1>大会告知管理</h1>
+        <h1>ASCENT 大会告知管理</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -172,7 +172,7 @@ export default function AdminTournamentsPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>大会告知管理</h1>
+          <h1>ASCENT 大会告知管理</h1>
           <p className="muted">トップページに表示される大会情報</p>
         </div>
         <div className="row">

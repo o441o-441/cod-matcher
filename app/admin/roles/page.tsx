@@ -104,7 +104,7 @@ export default function AdminRolesPage() {
   if (loading) {
     return (
       <main>
-        <h1>ロール管理</h1>
+        <h1>ASCENT ロール管理</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -118,7 +118,7 @@ export default function AdminRolesPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>ロール管理</h1>
+          <h1>ASCENT ロール管理</h1>
           <p className="muted">ユーザーの承認・監視ロールを管理します</p>
         </div>
         <div className="row">

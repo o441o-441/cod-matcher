@@ -117,7 +117,7 @@ export default function RankingPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>ランキング</h1>
+          <h1>ASCENT ランキング</h1>
           <p className="muted">{selectedYear}年{selectedMonth}月 シーズンランキング</p>
         </div>
         <div className="row">

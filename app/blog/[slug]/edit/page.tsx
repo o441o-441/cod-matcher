@@ -186,7 +186,7 @@ export default function EditBlogPostPage() {
   if (loading) {
     return (
       <main>
-        <h1>レビューを編集</h1>
+        <h1>ASCENT レビューを編集</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -195,7 +195,7 @@ export default function EditBlogPostPage() {
   if (notFound) {
     return (
       <main>
-        <h1>レビューを編集</h1>
+        <h1>ASCENT レビューを編集</h1>
         <EmptyCard title="レビューが見つかりません" message="" />
         <div className="section row">
           <button onClick={() => router.push('/blog')}>レビュー一覧へ</button>
@@ -208,7 +208,7 @@ export default function EditBlogPostPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>レビューを編集</h1>
+          <h1>ASCENT レビューを編集</h1>
           <p className="muted">Markdown 形式で記述できます</p>
         </div>
         <div className="row">

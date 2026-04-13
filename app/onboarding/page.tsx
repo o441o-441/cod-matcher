@@ -68,7 +68,7 @@ export default function OnboardingPage() {
 
   return (
     <main style={{ padding: '40px' }}>
-      <h1>プロフィール登録</h1>
+      <h1>ASCENT プロフィール登録</h1>
 
       <div style={{ marginTop: '20px' }}>
         <p>表示名</p>

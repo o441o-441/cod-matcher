@@ -180,7 +180,7 @@ export default function NewBlogPostPage() {
   if (loading) {
     return (
       <main>
-        <h1>レビューを書く</h1>
+        <h1>ASCENT レビューを書く</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -190,7 +190,7 @@ export default function NewBlogPostPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>レビューを書く</h1>
+          <h1>ASCENT レビューを書く</h1>
           <p className="muted">Markdown 形式で記述できます</p>
         </div>
         <div className="row">

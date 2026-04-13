@@ -132,7 +132,7 @@ function ReportNewContent() {
   if (loading) {
     return (
       <main>
-        <h1>通報</h1>
+        <h1>ASCENT 通報</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -143,7 +143,7 @@ function ReportNewContent() {
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
           <h1>
-            通報
+            ASCENT 通報
             {isMonitor && (
               <span
                 style={{
@@ -250,7 +250,7 @@ export default function ReportNewPage() {
     <Suspense
       fallback={
         <main>
-          <h1>通報</h1>
+          <h1>ASCENT 通報</h1>
           <LoadingCard message="読み込み中..." />
         </main>
       }

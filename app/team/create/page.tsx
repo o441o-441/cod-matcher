@@ -86,7 +86,7 @@ export default function CreateTeamPage() {
   if (checking) {
     return (
       <main style={{ padding: '40px' }}>
-        <h1>チーム作成</h1>
+        <h1>ASCENT チーム作成</h1>
         <p>確認中...</p>
       </main>
     )
@@ -95,7 +95,7 @@ export default function CreateTeamPage() {
   if (!canCreate) {
     return (
       <main style={{ padding: '40px' }}>
-        <h1>チーム作成</h1>
+        <h1>ASCENT チーム作成</h1>
         <p>チームを作成できません。</p>
       </main>
     )

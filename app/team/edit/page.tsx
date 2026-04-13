@@ -124,7 +124,7 @@ export default function TeamEditPage() {
   if (loading) {
     return (
       <main>
-        <h1>チーム編集</h1>
+        <h1>ASCENT チーム編集</h1>
         <div className="card">
           <p>読み込み中...</p>
         </div>
@@ -135,7 +135,7 @@ export default function TeamEditPage() {
   return (
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
-        <h1>チーム編集</h1>
+        <h1>ASCENT チーム編集</h1>
         <button onClick={() => router.push('/menu')}>
           戻る
         </button>

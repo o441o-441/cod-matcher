@@ -324,7 +324,7 @@ export default function MyPage() {
   if (loading) {
     return (
       <main>
-        <h1>マイページ</h1>
+        <h1>ASCENT マイページ</h1>
         <p>読み込み中...</p>
       </main>
     )
@@ -335,7 +335,7 @@ export default function MyPage() {
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
           <h1>
-            マイページ
+            ASCENT マイページ
             {isMonitor && (
               <span style={{ fontSize: '0.7rem', marginLeft: 8, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan, #0ff)', color: '#000', verticalAlign: 'middle' }}>
                 監視ユーザー

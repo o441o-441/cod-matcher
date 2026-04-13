@@ -180,7 +180,7 @@ export default function AdminReportsPage() {
   if (loading) {
     return (
       <main>
-        <h1>通報管理</h1>
+        <h1>ASCENT 通報管理</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -194,7 +194,7 @@ export default function AdminReportsPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>通報管理</h1>
+          <h1>ASCENT 通報管理</h1>
           <p className="muted">運営者向けの通報対応画面</p>
         </div>
         <div className="row">

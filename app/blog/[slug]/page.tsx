@@ -241,7 +241,7 @@ export default function BlogPostPage() {
   if (loading) {
     return (
       <main>
-        <h1>記事</h1>
+        <h1>ASCENT レビュー</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -250,7 +250,7 @@ export default function BlogPostPage() {
   if (!post) {
     return (
       <main>
-        <h1>記事</h1>
+        <h1>ASCENT レビュー</h1>
         <EmptyCard
           title="レビューが見つかりません"
           message="削除されたか、非公開の可能性があります"

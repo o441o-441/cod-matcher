@@ -139,7 +139,7 @@ export default function DmConversationPage() {
   if (loading) {
     return (
       <main>
-        <h1>DM</h1>
+        <h1>ASCENT DM</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )

@@ -69,7 +69,7 @@ function BlogIndexContent() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>コントローラーレビュー</h1>
+          <h1>ASCENT コントローラーレビュー</h1>
           <p className="muted">コミュニティのレビュー一覧</p>
         </div>
         <div className="row">
@@ -138,7 +138,7 @@ function BlogIndexContent() {
 
 export default function BlogIndexPage() {
   return (
-    <Suspense fallback={<main><h1>コントローラーレビュー</h1><LoadingCard message="読み込み中..." /></main>}>
+    <Suspense fallback={<main><h1>ASCENT コントローラーレビュー</h1><LoadingCard message="読み込み中..." /></main>}>
       <BlogIndexContent />
     </Suspense>
   )

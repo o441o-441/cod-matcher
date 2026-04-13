@@ -85,7 +85,7 @@ export default function DmListPage() {
   if (loading) {
     return (
       <main>
-        <h1>ダイレクトメッセージ</h1>
+        <h1>ASCENT DM</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -95,7 +95,7 @@ export default function DmListPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>ダイレクトメッセージ</h1>
+          <h1>ASCENT DM</h1>
           <p className="muted">やりとりの一覧</p>
         </div>
         <div className="row">

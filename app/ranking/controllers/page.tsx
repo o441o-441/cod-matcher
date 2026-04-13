@@ -73,7 +73,7 @@ export default function ControllerRankingPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>コントローラーランキング</h1>
+          <h1>ASCENT コントローラーランキング</h1>
           <p className="muted">使用者の平均レートが高い順</p>
         </div>
         <div className="row">
