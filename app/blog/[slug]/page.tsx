@@ -256,6 +256,7 @@ export default function BlogPostPage() {
           message="削除されたか、非公開の可能性があります"
         />
         <div className="section row">
+          <button onClick={() => router.push('/menu')}>メニュー</button>
           <button onClick={() => router.push('/blog')}>レビュー一覧へ</button>
         </div>
       </main>
@@ -310,6 +311,7 @@ export default function BlogPostPage() {
           >
             {liked ? `いいね済み ${likeCount}` : `いいね ${likeCount}`}
           </button>
+          <button onClick={() => router.push('/menu')}>メニュー</button>
           <button onClick={() => router.push('/blog')}>レビュー一覧</button>
           {canEdit && (
             <>
