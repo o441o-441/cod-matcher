@@ -1361,6 +1361,39 @@ export default function MatchPage() {
             </section>
 
             <section className="rounded border border-white/10 bg-white/5 p-4">
+              <h2 className="mb-3 text-lg font-semibold">マッチングの仕組み</h2>
+              <div className="space-y-3 text-sm text-white/75">
+                <div className="rounded bg-black/20 p-3">
+                  <p style={{ fontWeight: 600, marginBottom: 4 }}>パーティ人数によるレート補正</p>
+                  <p>パーティの人数が多いほど「強い」と見なされ、レート計算で補正がかかります。ソロで参加した場合、パーティに勝つとより多くのレートを獲得でき、負けても失うレートは少なくなります。</p>
+                </div>
+                <div className="rounded bg-black/20 p-3">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ textAlign: 'center', flex: 1 }}>
+                      <div className="text-xs text-white/50">ソロ</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--accent-cyan, #00e5ff)' }}>補正なし</div>
+                    </div>
+                    <div style={{ textAlign: 'center', flex: 1 }}>
+                      <div className="text-xs text-white/50">デュオ</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>やや不利</div>
+                    </div>
+                    <div style={{ textAlign: 'center', flex: 1 }}>
+                      <div className="text-xs text-white/50">トリオ</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>不利</div>
+                    </div>
+                    <div style={{ textAlign: 'center', flex: 1 }}>
+                      <div className="text-xs text-white/50">フルパ</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--danger, #ff4d6d)' }}>最も不利</div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-white/40">
+                  ソロプレイヤーが不利にならないよう、パーティ側にレートハンデが設定されています。フルパーティ同士なら補正は相殺されます。
+                </p>
+              </div>
+            </section>
+
+            <section className="rounded border border-white/10 bg-white/5 p-4">
               <h2 className="mb-3 text-lg font-semibold">使い方</h2>
               <div className="space-y-2 text-sm text-white/75">
                 <div>1. パーティを作成します（ソロでもOK）</div>
