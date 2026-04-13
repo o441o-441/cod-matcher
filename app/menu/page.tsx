@@ -194,6 +194,8 @@ export default function MenuPage() {
                   <p>
                     {n.type === 'blog_comment'
                       ? n.body.replace('commented on your post', 'があなたの記事にコメントしました')
+                      : n.type === 'comment_reply'
+                      ? n.body.replace('replied to your comment', 'があなたのコメントに返信しました')
                       : n.body}
                   </p>
                   <span className="muted" style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>

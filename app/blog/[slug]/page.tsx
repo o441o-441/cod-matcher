@@ -32,6 +32,8 @@ type CommentRow = {
   author_user_id: string
   body: string
   created_at: string
+  reply_to_comment_id: string | null
+  reply_to_user_id: string | null
 }
 
 type ProfileRow = {
@@ -54,6 +56,7 @@ export default function BlogPostPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [commentBody, setCommentBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [replyTo, setReplyTo] = useState<{ commentId: string; userId: string; name: string } | null>(null)
   const [likeCount, setLikeCount] = useState(0)
   const [liked, setLiked] = useState(false)
   const [commentCount, setCommentCount] = useState(0)
@@ -127,7 +130,7 @@ export default function BlogPostPage() {
   const loadComments = async (postId: string) => {
     const { data, error } = await supabase
       .from('post_comments')
-      .select('id, post_id, author_user_id, body, created_at')
+      .select('id, post_id, author_user_id, body, created_at, reply_to_comment_id, reply_to_user_id')
       .eq('post_id', postId)
       .order('created_at', { ascending: true })
 
@@ -172,6 +175,8 @@ export default function BlogPostPage() {
       post_id: post.id,
       author_user_id: currentUserProfileId,
       body: trimmed,
+      reply_to_comment_id: replyTo?.commentId ?? null,
+      reply_to_user_id: replyTo?.userId ?? null,
     })
     setSubmitting(false)
 
@@ -182,6 +187,7 @@ export default function BlogPostPage() {
     }
 
     setCommentBody('')
+    setReplyTo(null)
     showToast('コメントを投稿しました', 'success')
     await loadComments(post.id)
   }
@@ -333,21 +339,46 @@ export default function BlogPostPage() {
               const canDelete =
                 isAdmin ||
                 (currentUserProfileId && currentUserProfileId === c.author_user_id)
+              const isReply = !!c.reply_to_comment_id
+              const replyTargetName = c.reply_to_user_id ? commentAuthors[c.reply_to_user_id] || null : null
               return (
-                <div key={c.id} className="card">
+                <div
+                  key={c.id}
+                  className="card"
+                  style={isReply ? { marginLeft: 24, borderLeft: '3px solid var(--accent-cyan, #00e5ff)' } : undefined}
+                >
                   <p>
                     <strong>
                       {commentAuthors[c.author_user_id] || c.author_user_id}
                     </strong>
+                    {replyTargetName && (
+                      <span className="muted" style={{ marginLeft: 8 }}>
+                        @{replyTargetName} への返信
+                      </span>
+                    )}
                   </p>
                   <p style={{ whiteSpace: 'pre-wrap' }}>{c.body}</p>
                   <div
                     className="row"
                     style={{ justifyContent: 'space-between', alignItems: 'center' }}
                   >
-                    <span className="muted">
-                      {new Date(c.created_at).toLocaleString('ja-JP')}
-                    </span>
+                    <div className="row" style={{ gap: 8 }}>
+                      <span className="muted">
+                        {new Date(c.created_at).toLocaleString('ja-JP')}
+                      </span>
+                      {currentUserProfileId && (
+                        <button
+                          onClick={() => setReplyTo({
+                            commentId: c.id,
+                            userId: c.author_user_id,
+                            name: commentAuthors[c.author_user_id] || c.author_user_id,
+                          })}
+                          style={{ fontSize: '0.8rem' }}
+                        >
+                          返信
+                        </button>
+                      )}
+                    </div>
                     {canDelete && (
                       <button onClick={() => handleDeleteComment(c.id)}>削除</button>
                     )}
@@ -361,15 +392,28 @@ export default function BlogPostPage() {
         <div className="section card">
           {currentUserProfileId ? (
             <>
-              <h3>コメントを投稿</h3>
+              <h3>{replyTo ? `@${replyTo.name} に返信` : 'コメントを投稿'}</h3>
+              {replyTo && (
+                <div className="row" style={{ marginBottom: 8, alignItems: 'center' }}>
+                  <span className="muted" style={{ fontSize: '0.85rem' }}>
+                    @{replyTo.name} への返信
+                  </span>
+                  <button
+                    onClick={() => setReplyTo(null)}
+                    style={{ fontSize: '0.75rem', marginLeft: 8 }}
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              )}
               <textarea
                 value={commentBody}
                 onChange={(e) => setCommentBody(e.target.value)}
-                placeholder="コメントを入力..."
+                placeholder={replyTo ? `@${replyTo.name} への返信を入力...` : 'コメントを入力...'}
               />
               <div className="section row" style={{ justifyContent: 'flex-end' }}>
                 <button onClick={handleSubmitComment} disabled={submitting}>
-                  {submitting ? '送信中...' : '投稿'}
+                  {submitting ? '送信中...' : replyTo ? '返信' : '投稿'}
                 </button>
               </div>
             </>
