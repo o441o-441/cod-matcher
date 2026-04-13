@@ -33,6 +33,8 @@ function ReportNewContent() {
   const [reportedName, setReportedName] = useState<string | null>(null)
   const [category, setCategory] = useState('')
   const [description, setDescription] = useState('')
+  const [reportedGameId, setReportedGameId] = useState('')
+  const [evidenceUrl, setEvidenceUrl] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [isMonitor, setIsMonitor] = useState(false)
 
@@ -80,6 +82,16 @@ function ReportNewContent() {
       showToast('違反種別を選択してください', 'error')
       return
     }
+    if (!reportedGameId.trim()) {
+      showToast('通報相手のゲーム内IDを入力してください', 'error')
+      return
+    }
+    if (!evidenceUrl.trim()) {
+      showToast('証拠動画URLを入力してください', 'error')
+      return
+    }
+
+    const fullDescription = `[ゲーム内ID] ${reportedGameId.trim()}\n[証拠動画] ${evidenceUrl.trim()}${description.trim() ? '\n[詳細] ' + description.trim() : ''}`
 
     setSubmitting(true)
 
@@ -100,7 +112,7 @@ function ReportNewContent() {
       const { error } = await supabase.rpc('rpc_create_report', {
         p_reported_user_id: reportedId,
         p_category: category,
-        p_description: description.trim() || null,
+        p_description: fullDescription,
         p_match_id: matchId || null,
       })
       setSubmitting(false)
@@ -185,6 +197,31 @@ function ReportNewContent() {
           </p>
         </div>
       )}
+
+      <div className="section card-strong">
+        <h2>通報相手のゲーム内ID（必須）</h2>
+        <div className="card">
+          <input
+            type="text"
+            value={reportedGameId}
+            onChange={(e) => setReportedGameId(e.target.value)}
+            placeholder="例: Player123#1234567"
+          />
+        </div>
+      </div>
+
+      <div className="section card-strong">
+        <h2>証拠動画URL（必須）</h2>
+        <div className="card">
+          <input
+            type="url"
+            value={evidenceUrl}
+            onChange={(e) => setEvidenceUrl(e.target.value)}
+            placeholder="例: https://youtube.com/watch?v=..."
+          />
+          <p className="muted" style={{ marginTop: 4 }}>YouTube、X（Twitter）、Streamable などの動画URL</p>
+        </div>
+      </div>
 
       <div className="section card-strong">
         <h2>詳細（任意）</h2>
