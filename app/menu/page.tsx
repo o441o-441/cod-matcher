@@ -196,6 +196,8 @@ export default function MenuPage() {
                       ? n.body.replace('commented on your post', 'があなたの記事にコメントしました')
                       : n.type === 'comment_reply'
                       ? n.body.replace('replied to your comment', 'があなたのコメントに返信しました')
+                      : n.type === 'direct_message'
+                      ? n.body.replace('sent you a message', 'からDMが届きました')
                       : n.body}
                   </p>
                   <span className="muted" style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
@@ -267,6 +269,7 @@ export default function MenuPage() {
         <h2>コミュニティ</h2>
         <div className="row">
           <button onClick={() => router.push('/friends')}>フレンド管理</button>
+          <button onClick={() => router.push('/dm')}>DM</button>
           <button onClick={() => router.push('/blog')}>レビュー</button>
           <button onClick={() => router.push('/ranking')}>ランキング</button>
           <button onClick={() => router.push('/history')}>マッチ履歴</button>

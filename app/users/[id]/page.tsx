@@ -210,6 +210,7 @@ export default function UserProfilePage() {
             <button onClick={handleSendFriendRequest} disabled={sendingFriend}>
               {sendingFriend ? '送信中...' : 'フレンド申請を送る'}
             </button>
+            <button onClick={() => router.push(`/dm/${userId}`)}>DMを送る</button>
             <button onClick={() => router.push(reportHref)}>通報する</button>
           </div>
         </div>
