@@ -100,6 +100,7 @@ function ReportNewContent() {
         p_reported_user_id: reportedId,
         p_category: category,
         p_match_id: matchId || null,
+        p_description: fullDescription,
       })
       setSubmitting(false)
 
