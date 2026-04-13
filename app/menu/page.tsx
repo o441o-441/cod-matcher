@@ -22,6 +22,31 @@ export default function MenuPage() {
   const [rating, setRating] = useState<number | null>(null)
   const [wins, setWins] = useState<number | null>(null)
   const [losses, setLosses] = useState<number | null>(null)
+  const [notifications, setNotifications] = useState<{ id: string; type: string; body: string; link: string | null; created_at: string }[]>([])
+
+  const fetchNotifications = async (userId: string) => {
+    const { data } = await supabase
+      .from('notifications')
+      .select('id, type, body, link, created_at')
+      .eq('user_id', userId)
+      .eq('is_read', false)
+      .order('created_at', { ascending: false })
+      .limit(10)
+    setNotifications((data ?? []) as { id: string; type: string; body: string; link: string | null; created_at: string }[])
+  }
+
+  const handleNotificationClick = async (notif: { id: string; link: string | null }) => {
+    await supabase.from('notifications').update({ is_read: true }).eq('id', notif.id)
+    setNotifications((prev) => prev.filter((n) => n.id !== notif.id))
+    if (notif.link) router.push(notif.link)
+  }
+
+  const handleDismissAll = async () => {
+    const ids = notifications.map((n) => n.id)
+    if (ids.length === 0) return
+    await supabase.from('notifications').update({ is_read: true }).in('id', ids)
+    setNotifications([])
+  }
 
   usePageView('/menu')
 
@@ -119,6 +144,8 @@ export default function MenuPage() {
       setWins(profileRow?.wins ?? null)
       setLosses(profileRow?.losses ?? null)
 
+      await fetchNotifications(session.user.id)
+
       setLoading(false)
     }
 
@@ -148,6 +175,36 @@ export default function MenuPage() {
           <button onClick={() => router.push('/')}>トップページに戻る</button>
         </div>
       </div>
+
+      {notifications.length > 0 && (
+        <div className="section card-strong" style={{ borderColor: 'var(--accent-cyan, #00e5ff)' }}>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ marginTop: 0 }}>通知（{notifications.length}）</h2>
+            <button onClick={handleDismissAll} style={{ fontSize: '0.8rem' }}>すべて既読</button>
+          </div>
+          <div className="stack">
+            {notifications.map((n) => (
+              <div
+                key={n.id}
+                className="card"
+                style={{ cursor: n.link ? 'pointer' : undefined }}
+                onClick={() => handleNotificationClick(n)}
+              >
+                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                  <p>
+                    {n.type === 'blog_comment'
+                      ? n.body.replace('commented on your post', 'があなたの記事にコメントしました')
+                      : n.body}
+                  </p>
+                  <span className="muted" style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                    {new Date(n.created_at).toLocaleString('ja-JP')}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="section card-strong">
         <h2 style={{ marginTop: 0, textAlign: 'center' }}>対戦を始める</h2>
