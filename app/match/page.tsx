@@ -1255,29 +1255,61 @@ export default function MatchPage() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-                  <div className="rounded bg-black/20 p-3">
-                    <div className="text-xs text-white/50">待機状態</div>
-                    <div className="mt-1 text-sm font-medium">{myWaitingEntry ? "待機中" : "待機なし"}</div>
-                  </div>
-
-                  <div className="rounded bg-black/20 p-3">
-                    <div className="text-xs text-white/50">待機時間</div>
-                    <div className="mt-1 text-sm font-medium">{isWaiting ? `${waitingSeconds} 秒` : "-"}</div>
-                  </div>
-
-                  <div className="rounded bg-black/20 p-3">
-                    <div className="text-xs text-white/50">許容差レベル</div>
-                    <div className="mt-1 text-sm font-medium">{myWaitingEntry?.wait_expand_level ?? "-"}</div>
-                  </div>
-
-                  <div className="rounded bg-black/20 p-3">
-                    <div className="text-xs text-white/50">自動マッチング</div>
-                    <div className="mt-1 text-sm font-medium">
-                      {isWaiting && isPartyLeader ? (autoMatching ? "探索中..." : "有効") : "無効"}
+                {isWaiting && (() => {
+                  const pct = Math.min(waitingSeconds / 330, 1)
+                  const phase =
+                    waitingSeconds < 90 ? 0
+                    : waitingSeconds < 120 ? 1
+                    : waitingSeconds < 240 ? 2
+                    : 3
+                  const messages = [
+                    "近いレートの同じ構成の相手を探しています...",
+                    "検索範囲を広げています...",
+                    "さらに検索範囲を広げています...",
+                    "幅広い相手を検索中です...",
+                  ]
+                  return (
+                    <div className="rounded border border-white/10 bg-black/20 p-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="text-sm font-semibold">
+                          {autoMatching ? "対戦相手を探しています" : "待機中"}
+                        </div>
+                        <div className="text-xs text-white/50">
+                          {Math.floor(waitingSeconds / 60)}:{String(waitingSeconds % 60).padStart(2, "0")}
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          height: 8,
+                          borderRadius: 4,
+                          background: "rgba(140,160,220,0.15)",
+                          overflow: "hidden",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${Math.max(pct * 100, 5)}%`,
+                            borderRadius: 4,
+                            background: "linear-gradient(90deg, var(--accent-cyan, #00e5ff), var(--accent-violet, #8b5cf6))",
+                            transition: "width 1s ease",
+                          }}
+                        />
+                      </div>
+                      <p className="text-sm text-white/70">{messages[phase]}</p>
+                      <p className="mt-2 text-xs text-white/40">
+                        待ち時間が長いほど検索範囲が広がります。キャンセルすると最初からやり直しになります。
+                      </p>
                     </div>
+                  )
+                })()}
+
+                {!isWaiting && !myActiveMatch && (
+                  <div className="rounded bg-black/20 p-3 text-sm text-white/50">
+                    待機していません。パーティを作成して「既存パーティで待機開始」を押してください。
                   </div>
-                </div>
+                )}
 
                 {myActiveMatch && (
                   <div className="rounded border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm">
