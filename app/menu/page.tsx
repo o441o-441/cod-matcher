@@ -297,6 +297,11 @@ export default function MenuPage() {
             </button>
           )}
           {isAdmin && (
+            <button onClick={() => router.push('/admin/seasons')}>
+              シーズン管理
+            </button>
+          )}
+          {isAdmin && (
             <button onClick={() => router.push('/admin/roles')}>
               ロール管理
             </button>

@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { LoadingCard, EmptyCard } from '@/components/UIState'
 import { usePageView } from '@/lib/usePageView'
 
-type SeasonRow = {
+type PlayerRow = {
   user_id: string
   display_name: string | null
   games_played: number
@@ -16,14 +16,22 @@ type SeasonRow = {
   end_rating: number | null
 }
 
+type SeasonOption = {
+  id: string
+  name: string
+  start_date: string
+  end_date: string
+  is_active: boolean
+}
+
 export default function RankingPage() {
   const router = useRouter()
 
-  const now = new Date()
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear())
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
+  const [seasons, setSeasons] = useState<SeasonOption[]>([])
+  const [selectedSeasonId, setSelectedSeasonId] = useState<string>('')
+  const [selectedSeasonName, setSelectedSeasonName] = useState('')
 
-  const [players, setPlayers] = useState<SeasonRow[]>([])
+  const [players, setPlayers] = useState<PlayerRow[]>([])
   const [teamNames, setTeamNames] = useState<Record<string, string>>({})
   const [controllers, setControllers] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
@@ -75,11 +83,10 @@ export default function RankingPage() {
     }
   }
 
-  const fetchSeason = async (year: number, month: number) => {
+  const fetchSeason = async (seasonId: string) => {
     setLoading(true)
     const { data, error } = await supabase.rpc('rpc_get_season_ranking', {
-      p_year: year,
-      p_month: month,
+      p_season_id: seasonId,
     })
 
     if (error) {
@@ -88,7 +95,7 @@ export default function RankingPage() {
       return
     }
 
-    const rows = (data || []) as SeasonRow[]
+    const rows = (data || []) as PlayerRow[]
     setPlayers(rows)
     const ids = rows.map((r) => r.user_id)
     await Promise.all([fetchTeamNames(ids), fetchControllers(ids)])
@@ -96,21 +103,33 @@ export default function RankingPage() {
   }
 
   useEffect(() => {
-    void fetchSeason(selectedYear, selectedMonth)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedYear, selectedMonth])
+    const init = async () => {
+      const { data: seasonData } = await supabase
+        .from('seasons')
+        .select('id, name, start_date, end_date, is_active')
+        .order('start_date', { ascending: false })
 
-  const monthOptions: { year: number; month: number; label: string }[] = []
-  const start = new Date(2026, 3, 1)
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  const cursor = new Date(end.getFullYear(), end.getMonth(), 1)
-  while (cursor >= start) {
-    monthOptions.push({
-      year: cursor.getFullYear(),
-      month: cursor.getMonth() + 1,
-      label: `${cursor.getFullYear()}年${cursor.getMonth() + 1}月`,
-    })
-    cursor.setMonth(cursor.getMonth() - 1)
+      const seasonList = (seasonData ?? []) as SeasonOption[]
+      setSeasons(seasonList)
+
+      const active = seasonList.find((s) => s.is_active) ?? seasonList[0]
+      if (active) {
+        setSelectedSeasonId(active.id)
+        setSelectedSeasonName(active.name)
+        await fetchSeason(active.id)
+      } else {
+        setLoading(false)
+      }
+    }
+    void Promise.resolve().then(init)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleSeasonChange = async (seasonId: string) => {
+    setSelectedSeasonId(seasonId)
+    const s = seasons.find((s) => s.id === seasonId)
+    setSelectedSeasonName(s?.name ?? '')
+    await fetchSeason(seasonId)
   }
 
   return (
@@ -118,20 +137,18 @@ export default function RankingPage() {
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
           <h1>ASCENT ランキング</h1>
-          <p className="muted">{selectedYear}年{selectedMonth}月 シーズンランキング</p>
+          <p className="muted">
+            {selectedSeasonName || 'シーズンを選択してください'}
+          </p>
         </div>
         <div className="row">
           <select
-            value={`${selectedYear}-${selectedMonth}`}
-            onChange={(e) => {
-              const [y, m] = e.target.value.split('-').map(Number)
-              setSelectedYear(y)
-              setSelectedMonth(m)
-            }}
+            value={selectedSeasonId}
+            onChange={(e) => void handleSeasonChange(e.target.value)}
           >
-            {monthOptions.map((o) => (
-              <option key={`${o.year}-${o.month}`} value={`${o.year}-${o.month}`}>
-                {o.label}
+            {seasons.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.start_date} 〜 {s.end_date}){s.is_active ? ' [現在]' : ''}
               </option>
             ))}
           </select>
@@ -143,9 +160,11 @@ export default function RankingPage() {
       <div className="section card-strong">
         {loading ? (
           <LoadingCard message="ランキングを読み込み中..." />
+        ) : seasons.length === 0 ? (
+          <EmptyCard title="シーズンが未設定です" message="管理者がシーズンを作成してください。" />
         ) : players.length === 0 ? (
           <EmptyCard
-            title={`${selectedYear}年${selectedMonth}月のデータがありません`}
+            title={`${selectedSeasonName} のデータがありません`}
             message="この期間に完了した試合がありません。"
           />
         ) : (
