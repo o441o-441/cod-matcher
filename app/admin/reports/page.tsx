@@ -245,12 +245,51 @@ export default function AdminReportsPage() {
                   </div>
                 </div>
 
-                {r.description && (
-                  <div style={{ marginTop: 12 }}>
-                    <p className="muted">詳細</p>
-                    <p>{r.description}</p>
-                  </div>
-                )}
+                {r.description && (() => {
+                  const gameIdMatch = r.description.match(/\[ゲーム内ID\]\s*(.+)/)
+                  const videoMatch = r.description.match(/\[証拠動画\]\s*(https?:\/\/\S+)/)
+                  const detailMatch = r.description.match(/\[詳細\]\s*([\s\S]+)/)
+                  const hasStructured = gameIdMatch || videoMatch
+
+                  if (!hasStructured) {
+                    return (
+                      <div style={{ marginTop: 12 }}>
+                        <p className="muted">詳細</p>
+                        <p>{r.description}</p>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div style={{ marginTop: 12 }} className="stack">
+                      {gameIdMatch && (
+                        <div className="card">
+                          <p className="muted">通報相手のゲーム内ID</p>
+                          <h3 style={{ marginTop: 4 }}>{gameIdMatch[1].trim()}</h3>
+                        </div>
+                      )}
+                      {videoMatch && (
+                        <div className="card">
+                          <p className="muted">証拠動画</p>
+                          <a
+                            href={videoMatch[1].trim()}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: 'var(--accent-cyan)', wordBreak: 'break-all' }}
+                          >
+                            {videoMatch[1].trim()}
+                          </a>
+                        </div>
+                      )}
+                      {detailMatch && (
+                        <div className="card">
+                          <p className="muted">詳細</p>
+                          <p>{detailMatch[1].trim()}</p>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 {r.match_id && (
                   <p className="muted" style={{ marginTop: 8 }}>
