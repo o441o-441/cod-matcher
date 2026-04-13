@@ -122,14 +122,19 @@ export default function AdminReportsPage() {
     await fetchReports(filter)
   }
 
-  const handleBanUser = async (userId: string, displayName: string | null) => {
+  const handleSmartBan = async (reportId: string, userId: string, displayName: string | null, category: string) => {
     const name = displayName || userId.slice(0, 8)
-    if (!confirm(`${name} を BAN しますか？BANされたユーザーはマッチに参加できなくなります。`)) return
+    const isPermanentCategory = ['cheat', 'converter'].includes(category)
+    const msg = isPermanentCategory
+      ? `${name} を永久BANしますか？（チート/コンバーター）`
+      : `${name} をBANしますか？（初回: 1ヶ月、2回目: 3ヶ月、3回目: 永久）`
+    if (!confirm(msg)) return
 
-    setBusyId(userId)
-    const { error } = await supabase.rpc('rpc_admin_ban_user', {
+    setBusyId(reportId)
+    const { data, error } = await supabase.rpc('rpc_admin_ban_by_report', {
       p_user_id: userId,
-      p_ban: true,
+      p_category: category,
+      p_report_id: reportId,
     })
     setBusyId(null)
 
@@ -139,7 +144,15 @@ export default function AdminReportsPage() {
       return
     }
 
-    showToast(`${name} を BAN しました`, 'success')
+    const result = data as { is_permanent: boolean; ban_until: string | null; prior_count: number }
+    if (result.is_permanent) {
+      showToast(`${name} を永久BANしました`, 'success')
+    } else {
+      const until = result.ban_until ? new Date(result.ban_until).toLocaleString('ja-JP') : ''
+      showToast(`${name} を ${until} まで停止しました（${result.prior_count + 1}回目）`, 'success')
+    }
+
+    await handleStatusUpdate(reportId, 'resolved')
     await fetchReports(filter)
   }
 
@@ -286,11 +299,11 @@ export default function AdminReportsPage() {
                     対象プロフィール
                   </button>
                   <button
-                    disabled={busyId === r.reported_user_id}
-                    onClick={() => handleBanUser(r.reported_user_id, r.reported_display_name)}
+                    disabled={busyId === r.id}
+                    onClick={() => handleSmartBan(r.id, r.reported_user_id, r.reported_display_name, r.category)}
                     style={{ color: 'var(--danger)' }}
                   >
-                    BAN する
+                    {['cheat', 'converter'].includes(r.category) ? '永久BAN' : 'BAN（段階制）'}
                   </button>
                   <button
                     disabled={busyId === r.reported_user_id}
