@@ -1241,14 +1241,6 @@ export default function MatchPage() {
                       >
                         待機解除
                       </button>
-
-                      <button
-                        onClick={handleTryCreateMatch}
-                        disabled={busy}
-                        className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      >
-                        手動でマッチ生成を試す
-                      </button>
                     </>
                   )}
 
