@@ -48,6 +48,14 @@ export default function MyPage() {
   const [losses, setLosses] = useState<number | null>(null)
   const [ratingHistory, setRatingHistory] = useState<{ matchIndex: number; rating: number }[]>([])
 
+  type SeasonOption = { id: string; name: string; start_date: string; end_date: string; is_active: boolean }
+  const [seasons, setSeasons] = useState<SeasonOption[]>([])
+  const [selectedSeasonId, setSelectedSeasonId] = useState<string>('')
+  const [seasonWins, setSeasonWins] = useState<number | null>(null)
+  const [seasonLosses, setSeasonLosses] = useState<number | null>(null)
+  const [seasonRatingHistory, setSeasonRatingHistory] = useState<{ matchIndex: number; rating: number }[]>([])
+  const [seasonLoading, setSeasonLoading] = useState(false)
+
   usePageView('/mypage')
 
   const realtimeRef = useRef<RealtimeChannel | null>(null)
@@ -270,7 +278,64 @@ export default function MyPage() {
       setTeam(null)
     }
 
+    // Fetch seasons list
+    const { data: seasonData } = await supabase
+      .from('seasons')
+      .select('id, name, start_date, end_date, is_active')
+      .order('start_date', { ascending: false })
+    const seasonList = (seasonData ?? []) as SeasonOption[]
+    setSeasons(seasonList)
+    const activeSeason = seasonList.find((s) => s.is_active) ?? seasonList[0]
+    if (activeSeason) {
+      setSelectedSeasonId(activeSeason.id)
+      await fetchSeasonStats(authUser.id, activeSeason)
+    }
+
     setLoading(false)
+  }
+
+  async function fetchSeasonStats(userId: string, season: SeasonOption) {
+    setSeasonLoading(true)
+    try {
+      // Season rating history
+      const { data: rhData } = await supabase
+        .from('rating_history')
+        .select('rating_after, created_at')
+        .eq('user_id', userId)
+        .gte('created_at', season.start_date)
+        .lte('created_at', season.end_date + 'T23:59:59.999Z')
+        .order('created_at', { ascending: true })
+
+      if (rhData && rhData.length > 0) {
+        const points = (rhData as { rating_after: number; created_at: string }[]).map((r, i) => ({
+          matchIndex: i + 1,
+          rating: r.rating_after,
+        }))
+        setSeasonRatingHistory(points)
+      } else {
+        setSeasonRatingHistory([])
+      }
+
+      // Season wins/losses via rpc
+      const { data: rankingData } = await supabase.rpc('rpc_get_season_ranking', {
+        p_season_id: season.id,
+      })
+      const rows = (rankingData ?? []) as { user_id: string; wins: number; losses: number }[]
+      const myRow = rows.find((r) => r.user_id === userId)
+      setSeasonWins(myRow?.wins ?? 0)
+      setSeasonLosses(myRow?.losses ?? 0)
+    } catch (e) {
+      console.error('fetchSeasonStats error:', e)
+    } finally {
+      setSeasonLoading(false)
+    }
+  }
+
+  const handleSeasonChange = async (seasonId: string) => {
+    setSelectedSeasonId(seasonId)
+    const season = seasons.find((s) => s.id === seasonId)
+    if (!season || !profile) return
+    await fetchSeasonStats(profile.auth_user_id, season)
   }
 
   useEffect(() => {
@@ -410,11 +475,11 @@ export default function MyPage() {
 
           <div className="section grid grid-2">
             <div className="card">
-              <p className="muted">レート</p>
+              <p className="muted">現在のレート</p>
               <h3>{rating ?? '-'}</h3>
             </div>
             <div className="card">
-              <p className="muted">個人戦績</p>
+              <p className="muted">通算戦績</p>
               <h3>
                 {wins ?? 0}勝 {losses ?? 0}敗
               </h3>
@@ -423,8 +488,58 @@ export default function MyPage() {
 
           {ratingHistory.length > 1 && (
             <div className="section card">
-              <p className="muted" style={{ marginBottom: 8 }}>レート推移</p>
+              <p className="muted" style={{ marginBottom: 8 }}>通算レート推移</p>
               <RatingChart data={ratingHistory} />
+            </div>
+          )}
+
+          {seasons.length > 0 && (
+            <div className="section card-strong">
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h2 style={{ marginTop: 0 }}>シーズン別 戦績 / レート推移</h2>
+                <select
+                  value={selectedSeasonId}
+                  onChange={(e) => void handleSeasonChange(e.target.value)}
+                >
+                  {seasons.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.start_date} 〜 {s.end_date}){s.is_active ? ' [現在]' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {seasonLoading ? (
+                <p className="muted">読み込み中...</p>
+              ) : (
+                <>
+                  <div className="grid grid-2">
+                    <div className="card">
+                      <p className="muted">シーズン戦績</p>
+                      <h3>{seasonWins ?? 0}勝 {seasonLosses ?? 0}敗</h3>
+                    </div>
+                    <div className="card">
+                      <p className="muted">シーズン勝率</p>
+                      <h3>
+                        {(seasonWins ?? 0) + (seasonLosses ?? 0) > 0
+                          ? (((seasonWins ?? 0) / ((seasonWins ?? 0) + (seasonLosses ?? 0))) * 100).toFixed(1)
+                          : '0.0'}%
+                      </h3>
+                    </div>
+                  </div>
+
+                  {seasonRatingHistory.length > 1 ? (
+                    <div className="card" style={{ marginTop: 12 }}>
+                      <p className="muted" style={{ marginBottom: 8 }}>シーズン レート推移</p>
+                      <RatingChart data={seasonRatingHistory} />
+                    </div>
+                  ) : (
+                    <p className="muted" style={{ marginTop: 8 }}>
+                      このシーズンのレート推移データはまだありません。
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           )}
 
