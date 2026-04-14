@@ -273,6 +273,7 @@ export default function RulesPage() {
             <li>アンダーバレルの M335-X 系統は禁止</li>
             <li>プレステージアタッチメント禁止</li>
             <li>AR はマズル禁止</li>
+            <li>VAS 収束フォアグリップ禁止</li>
             <li>HG はサイト以外禁止</li>
           </ul>
         </div>
