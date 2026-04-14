@@ -28,11 +28,12 @@ export default function RulesPage() {
           <div className="card">
             <h3>サーチ&デストロイ</h3>
             <ul>
-              <li>コロッサス</li>
+              <li>プラザ</li>
               <li>デン</li>
-              <li>エクスポージャー</li>
+              <li>グリッドロック</li>
               <li>レイド</li>
               <li>スカー</li>
+              <li>フリンジ</li>
             </ul>
           </div>
 
@@ -48,11 +49,12 @@ export default function RulesPage() {
           <div className="card">
             <h3>ハードポイント</h3>
             <ul>
-              <li>ブラックハート</li>
+              <li>酒</li>
               <li>コロッサス</li>
               <li>デン</li>
-              <li>エクスポージャー</li>
+              <li>クリフタウン</li>
               <li>スカー</li>
+              <li>グリッドロック</li>
             </ul>
           </div>
         </div>
