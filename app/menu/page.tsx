@@ -156,22 +156,15 @@ export default function MenuPage() {
   }, [])
 
   useEffect(() => {
-    console.log('menu realtime useEffect, myUserId:', myUserId)
     if (!myUserId) return
-    console.log('menu realtime subscribing for:', myUserId)
     const channel = supabase
       .channel(`menu-notifications-${myUserId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'notifications' },
-        (payload) => {
-          console.log('notifications realtime:', payload)
-          void fetchNotifications(myUserId)
-        }
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${myUserId}` },
+        () => void fetchNotifications(myUserId)
       )
-      .subscribe((status) => {
-        console.log('menu notifications realtime status:', status)
-      })
+      .subscribe()
     return () => { void supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myUserId])
