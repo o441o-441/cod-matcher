@@ -545,10 +545,10 @@ export default function ReportPage() {
             </button>
             <button
               type="button"
-              onClick={() => router.push(`/match/${matchId}/banpick`)}
+              onClick={() => router.push(`/match/${matchId}/confirm`)}
               className="rounded border border-white/20 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
             >
-              バンピック画面へ
+              試合条件最終確認へ戻る
             </button>
           </div>
         </div>

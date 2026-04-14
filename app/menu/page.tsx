@@ -22,6 +22,7 @@ export default function MenuPage() {
   const [rating, setRating] = useState<number | null>(null)
   const [wins, setWins] = useState<number | null>(null)
   const [losses, setLosses] = useState<number | null>(null)
+  const [myUserId, setMyUserId] = useState<string | null>(null)
   const [notifications, setNotifications] = useState<{ id: string; type: string; body: string; link: string | null; created_at: string }[]>([])
 
   const fetchNotifications = async (userId: string) => {
@@ -144,6 +145,7 @@ export default function MenuPage() {
       setWins(profileRow?.wins ?? null)
       setLosses(profileRow?.losses ?? null)
 
+      setMyUserId(session.user.id)
       await fetchNotifications(session.user.id)
 
       setLoading(false)
@@ -152,6 +154,27 @@ export default function MenuPage() {
     void Promise.resolve().then(init)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    console.log('menu realtime useEffect, myUserId:', myUserId)
+    if (!myUserId) return
+    console.log('menu realtime subscribing for:', myUserId)
+    const channel = supabase
+      .channel(`menu-notifications-${myUserId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications' },
+        (payload) => {
+          console.log('notifications realtime:', payload)
+          void fetchNotifications(myUserId)
+        }
+      )
+      .subscribe((status) => {
+        console.log('menu notifications realtime status:', status)
+      })
+    return () => { void supabase.removeChannel(channel) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myUserId])
 
   if (loading) {
     return (

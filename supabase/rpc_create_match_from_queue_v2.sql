@@ -123,16 +123,65 @@ begin
     select row_number() over (order by created_at asc, queue_entry_id) as rn, * from tmp_candidate_entries
   ),
   combos as (
-    select array[c1.queue_entry_id]::uuid[] as ids, c1.party_size as total_players from candidates c1
+    select array[c1.queue_entry_id]::uuid[] as ids,
+      c1.party_size as total_players
+    from candidates c1
     union all
-    select array[c1.queue_entry_id, c2.queue_entry_id], c1.party_size + c2.party_size
-    from candidates c1 join candidates c2 on c2.rn > c1.rn
+    select array[c1.queue_entry_id, c2.queue_entry_id],
+      c1.party_size + c2.party_size
+    from candidates c1
+    join candidates c2 on c2.rn > c1.rn
     union all
-    select array[c1.queue_entry_id, c2.queue_entry_id, c3.queue_entry_id], c1.party_size + c2.party_size + c3.party_size
-    from candidates c1 join candidates c2 on c2.rn > c1.rn join candidates c3 on c3.rn > c2.rn
+    select array[c1.queue_entry_id, c2.queue_entry_id, c3.queue_entry_id],
+      c1.party_size + c2.party_size + c3.party_size
+    from candidates c1
+    join candidates c2 on c2.rn > c1.rn
+    join candidates c3 on c3.rn > c2.rn
     union all
-    select array[c1.queue_entry_id, c2.queue_entry_id, c3.queue_entry_id, c4.queue_entry_id], c1.party_size + c2.party_size + c3.party_size + c4.party_size
-    from candidates c1 join candidates c2 on c2.rn > c1.rn join candidates c3 on c3.rn > c2.rn join candidates c4 on c4.rn > c3.rn
+    select array[c1.queue_entry_id, c2.queue_entry_id, c3.queue_entry_id, c4.queue_entry_id],
+      c1.party_size + c2.party_size + c3.party_size + c4.party_size
+    from candidates c1
+    join candidates c2 on c2.rn > c1.rn
+    join candidates c3 on c3.rn > c2.rn
+    join candidates c4 on c4.rn > c3.rn
+    union all
+    select array[c1.queue_entry_id, c2.queue_entry_id, c3.queue_entry_id, c4.queue_entry_id, c5.queue_entry_id],
+      c1.party_size + c2.party_size + c3.party_size + c4.party_size + c5.party_size
+    from candidates c1
+    join candidates c2 on c2.rn > c1.rn
+    join candidates c3 on c3.rn > c2.rn
+    join candidates c4 on c4.rn > c3.rn
+    join candidates c5 on c5.rn > c4.rn
+    union all
+    select array[c1.queue_entry_id, c2.queue_entry_id, c3.queue_entry_id, c4.queue_entry_id, c5.queue_entry_id, c6.queue_entry_id],
+      c1.party_size + c2.party_size + c3.party_size + c4.party_size + c5.party_size + c6.party_size
+    from candidates c1
+    join candidates c2 on c2.rn > c1.rn
+    join candidates c3 on c3.rn > c2.rn
+    join candidates c4 on c4.rn > c3.rn
+    join candidates c5 on c5.rn > c4.rn
+    join candidates c6 on c6.rn > c5.rn
+    union all
+    select array[c1.queue_entry_id, c2.queue_entry_id, c3.queue_entry_id, c4.queue_entry_id, c5.queue_entry_id, c6.queue_entry_id, c7.queue_entry_id],
+      c1.party_size + c2.party_size + c3.party_size + c4.party_size + c5.party_size + c6.party_size + c7.party_size
+    from candidates c1
+    join candidates c2 on c2.rn > c1.rn
+    join candidates c3 on c3.rn > c2.rn
+    join candidates c4 on c4.rn > c3.rn
+    join candidates c5 on c5.rn > c4.rn
+    join candidates c6 on c6.rn > c5.rn
+    join candidates c7 on c7.rn > c6.rn
+    union all
+    select array[c1.queue_entry_id, c2.queue_entry_id, c3.queue_entry_id, c4.queue_entry_id, c5.queue_entry_id, c6.queue_entry_id, c7.queue_entry_id, c8.queue_entry_id],
+      c1.party_size + c2.party_size + c3.party_size + c4.party_size + c5.party_size + c6.party_size + c7.party_size + c8.party_size
+    from candidates c1
+    join candidates c2 on c2.rn > c1.rn
+    join candidates c3 on c3.rn > c2.rn
+    join candidates c4 on c4.rn > c3.rn
+    join candidates c5 on c5.rn > c4.rn
+    join candidates c6 on c6.rn > c5.rn
+    join candidates c7 on c7.rn > c6.rn
+    join candidates c8 on c8.rn > c7.rn
   ),
   valid_combos as (
     select ids from combos
@@ -233,7 +282,7 @@ begin
   from tmp_selected_entries se
   cross join (
     select alpha_ids from final_scored
-    where (v_anchor_level >= 11 or full_vs_allsolo_penalty = 0)
+    where (v_anchor_level >= 3 or full_vs_allsolo_penalty = 0)
     order by full_vs_allsolo_penalty asc, recent_rematch_penalty asc, composition_mismatch_penalty asc, avg_diff asc, bonus_diff asc
     limit 1
   ) best;

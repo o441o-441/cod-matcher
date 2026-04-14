@@ -456,6 +456,11 @@ export default function BanpickPage() {
         { event: "*", schema: "public", table: "match_messages", filter: `match_id=eq.${matchId}` },
         () => void loadAll({ silent: true })
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "match_teams", filter: `match_id=eq.${matchId}` },
+        () => void loadAll({ silent: true })
+      )
       .subscribe((status) => {
         console.log("banpick realtime status:", status);
       });
@@ -677,10 +682,10 @@ export default function BanpickPage() {
 
             {isBanpickCompleted && (
               <button
-                onClick={() => router.push(`/match/${matchId}/report`)}
+                onClick={() => router.push(`/match/${matchId}/confirm`)}
                 className="rounded bg-cyan-500 px-4 py-2 text-sm font-semibold text-white"
               >
-                試合結果を報告する
+                試合条件最終確認へ
               </button>
             )}
 

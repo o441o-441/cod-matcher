@@ -209,6 +209,7 @@ export default function MatchPage() {
 
   const autoMatchBusyRef = useRef(false);
   const routePushedRef = useRef(false);
+  const loadBusyRef = useRef(false);
 
   const clearMessages = () => {
     setErrorText(null);
@@ -241,21 +242,27 @@ export default function MatchPage() {
     return true;
   }, [myParty, isPartyLeader, busy, isWaiting, isMatched, myPartySize]);
 
+  const cachedUidRef = useRef<string | null>(null);
+
   const loadMyState = useCallback(async (opts?: { silent?: boolean }) => {
+    if (opts?.silent && loadBusyRef.current) return;
+    loadBusyRef.current = true;
     if (!opts?.silent) {
       setLoading(true);
     }
     setErrorText(null);
 
     try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError) throw userError;
-
-      const uid = user?.id ?? null;
+      let uid = cachedUidRef.current;
+      if (!uid) {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+        if (userError) throw userError;
+        uid = user?.id ?? null;
+        cachedUidRef.current = uid;
+      }
       setMyUserId(uid);
 
       if (!uid) {
@@ -536,6 +543,7 @@ export default function MatchPage() {
       }
       setErrorText(message);
     } finally {
+      loadBusyRef.current = false;
       if (!opts?.silent) setLoading(false);
     }
   }, [supabase]);
