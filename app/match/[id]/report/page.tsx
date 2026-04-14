@@ -248,13 +248,14 @@ export default function ReportPage() {
     setErrorText(null);
 
     try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      setMyUserId(authSession?.user?.id ?? null);
 
-      if (userError) throw userError;
-      setMyUserId(user?.id ?? null);
+      const { data: teamsForIds } = await supabase
+        .from("match_teams")
+        .select("id")
+        .eq("match_id", matchId);
+      const teamIds = (teamsForIds ?? []).map((t: { id: string }) => t.id);
 
       const [
         { data: matchData, error: matchError },
@@ -277,14 +278,7 @@ export default function ReportPage() {
           supabase
             .from("match_team_members")
             .select("id,match_team_id,user_id,profiles!match_team_members_user_id_fkey(id,display_name)")
-            .in(
-              "match_team_id",
-              (
-                (await supabase.from("match_teams").select("id").eq("match_id", matchId)) as {
-                  data: { id: string }[] | null;
-                }
-              ).data?.map((t) => t.id) ?? ["00000000-0000-0000-0000-000000000000"]
-            )
+            .in("match_team_id", teamIds.length > 0 ? teamIds : ["00000000-0000-0000-0000-000000000000"])
             .returns<MatchTeamMemberRow[]>(),
           supabase
             .from("match_reports")

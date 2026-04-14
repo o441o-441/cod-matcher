@@ -255,12 +255,8 @@ export default function MatchPage() {
     try {
       let uid = cachedUidRef.current;
       if (!uid) {
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-        if (userError) throw userError;
-        uid = user?.id ?? null;
+        const { data: { session: authSession } } = await supabase.auth.getSession();
+        uid = authSession?.user?.id ?? null;
         cachedUidRef.current = uid;
       }
       setMyUserId(uid);
