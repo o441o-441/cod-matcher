@@ -601,8 +601,15 @@ export default function ReportPage() {
 
                   <div className="space-y-2">
                     {groupedMembers.alpha.map((m) => (
-                      <div key={m.id} className="rounded bg-white/5 px-3 py-2 text-sm">
-                        {m.profiles?.display_name ?? m.user_id}
+                      <div key={m.id} className="flex items-center justify-between rounded bg-white/5 px-3 py-2 text-sm">
+                        <span>{m.profiles?.display_name ?? m.user_id}</span>
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/users/${m.user_id}`)}
+                          className="rounded border border-white/20 bg-white/5 px-2 py-0.5 text-xs hover:bg-white/10"
+                        >
+                          プロフィール
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -617,8 +624,15 @@ export default function ReportPage() {
 
                   <div className="space-y-2">
                     {groupedMembers.bravo.map((m) => (
-                      <div key={m.id} className="rounded bg-white/5 px-3 py-2 text-sm">
-                        {m.profiles?.display_name ?? m.user_id}
+                      <div key={m.id} className="flex items-center justify-between rounded bg-white/5 px-3 py-2 text-sm">
+                        <span>{m.profiles?.display_name ?? m.user_id}</span>
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/users/${m.user_id}`)}
+                          className="rounded border border-white/20 bg-white/5 px-2 py-0.5 text-xs hover:bg-white/10"
+                        >
+                          プロフィール
+                        </button>
                       </div>
                     ))}
                   </div>

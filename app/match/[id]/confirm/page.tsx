@@ -78,6 +78,16 @@ function parsePhaseState(selected: Json, phase: "hp" | "snd" | "ovl"): PhaseStat
   return { bans, map, side };
 }
 
+function parseTeamAssignment(selected: Json): { teamA: string | null; teamB: string | null } {
+  if (!selected || typeof selected !== "object" || Array.isArray(selected)) {
+    return { teamA: null, teamB: null };
+  }
+  const obj = selected as Record<string, Json>;
+  const teamA = typeof obj.team_a === "string" ? obj.team_a : null;
+  const teamB = typeof obj.team_b === "string" ? obj.team_b : null;
+  return { teamA, teamB };
+}
+
 const MESSAGE_JA: Record<string, string> = {
   "banpick completed": "バンピックが完了しました。ホストを決定してください。",
   "banpick timeout: action side lost": "バンピック制限時間を超過したため、操作側の敗北として処理されました。",
@@ -254,6 +264,11 @@ export default function MatchConfirmPage() {
     };
   }, [session?.selected_maps]);
 
+  const teamAssignment = useMemo(
+    () => parseTeamAssignment(session?.selected_maps ?? null),
+    [session?.selected_maps]
+  );
+
   const handleSendChat = async () => {
     if (!matchId) return;
     clearMessages();
@@ -286,12 +301,6 @@ export default function MatchConfirmPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => router.push(`/match/${matchId}/banpick`)}
-              className="rounded border border-white/20 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
-            >
-              バンピック画面へ戻る
-            </button>
             <button
               onClick={() => router.push(`/match/${matchId}/report`)}
               className="rounded bg-cyan-500 px-4 py-2 text-sm font-semibold text-white"
@@ -384,9 +393,20 @@ export default function MatchConfirmPage() {
                         <div>
                           マップ: <span className="text-emerald-300 font-medium">{state.map ?? "-"}</span>
                         </div>
-                        <div>
-                          サイド: <span className="text-cyan-300 font-medium">{state.side ?? "-"}</span>
-                        </div>
+                        {state.side ? (() => {
+                          const pickerIsTeamA = phaseKey === "snd" || phaseKey === "ovl";
+                          const teamAIsAlpha = teamAssignment.teamA === alphaTeam?.id;
+                          const pickerIsAlpha = pickerIsTeamA ? teamAIsAlpha : !teamAIsAlpha;
+                          const alphaSide = pickerIsAlpha ? state.side : (state.side === "JSOC" ? "ギルド" : "JSOC");
+                          const bravoSide = alphaSide === "JSOC" ? "ギルド" : "JSOC";
+                          return (
+                            <div>
+                              サイド: <span className="text-cyan-300 font-medium">Alpha: {alphaSide} / Bravo: {bravoSide}</span>
+                            </div>
+                          );
+                        })() : (
+                          <div>サイド: <span className="text-cyan-300 font-medium">-</span></div>
+                        )}
                       </div>
                       {state.bans.length > 0 && (
                         <div className="mt-1 text-xs text-white/50">

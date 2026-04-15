@@ -340,6 +340,20 @@ export default function BanpickPage() {
     };
   }, [members, alphaTeam?.id, bravoTeam?.id]);
 
+  const alphaTrophyDone = useMemo(() => {
+    const list = Array.isArray(alphaTeam?.trophy_users) ? alphaTeam.trophy_users : [];
+    const memberCount = groupedMembers.alpha.length;
+    return memberCount <= 2 ? list.length === memberCount : list.length === 2;
+  }, [alphaTeam, groupedMembers.alpha]);
+
+  const bravoTrophyDone = useMemo(() => {
+    const list = Array.isArray(bravoTeam?.trophy_users) ? bravoTeam.trophy_users : [];
+    const memberCount = groupedMembers.bravo.length;
+    return memberCount <= 2 ? list.length === memberCount : list.length === 2;
+  }, [bravoTeam, groupedMembers.bravo]);
+
+  const allTrophyDone = alphaTrophyDone && bravoTrophyDone;
+
   const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
     if (!matchId) return;
     if (!opts?.silent) {
@@ -464,6 +478,74 @@ export default function BanpickPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
 
+  // Auto-select host when banpick completes
+  const autoHostTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (!isBanpickCompleted) return;
+    if (match?.host_user_id) return;
+    if (autoHostTriggeredRef.current) return;
+    if (!myMatchTeamId) return;
+    // Only the alpha captain triggers auto-host to avoid duplicate calls
+    const alphaCaptain = alphaTeam?.captain_user_id;
+    if (myUserId !== alphaCaptain) return;
+    autoHostTriggeredRef.current = true;
+    void (async () => {
+      try {
+        await supabase.rpc("rpc_select_match_host", { p_match_id: matchId });
+        await loadAll({ silent: true });
+      } catch (e) {
+        console.error("auto host select error:", e);
+      }
+    })();
+  }, [isBanpickCompleted, match?.host_user_id, myUserId, alphaTeam?.captain_user_id, myMatchTeamId, matchId, loadAll]);
+
+  // Auto-navigate to confirm page when all trophies are set
+  const autoNavTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (!isBanpickCompleted) return;
+    if (!allTrophyDone) return;
+    if (autoNavTriggeredRef.current) return;
+    autoNavTriggeredRef.current = true;
+    router.push(`/match/${matchId}/confirm`);
+  }, [isBanpickCompleted, allTrophyDone, matchId, router]);
+
+  // Trophy selection timer (3 min from host selection)
+  const [trophyRemainingSec, setTrophyRemainingSec] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isBanpickCompleted || !match?.host_selected_at || allTrophyDone) {
+      setTrophyRemainingSec(null);
+      return;
+    }
+    const deadline = new Date(match.host_selected_at).getTime() + 3 * 60 * 1000;
+    const tick = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, Math.ceil((deadline - now) / 1000));
+      setTrophyRemainingSec(remaining);
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [isBanpickCompleted, match?.host_selected_at, allTrophyDone]);
+
+  // Trophy timeout enforcement
+  const trophyTimeoutTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (trophyRemainingSec !== 0) return;
+    if (allTrophyDone) return;
+    if (trophyTimeoutTriggeredRef.current) return;
+    // Only alpha captain triggers to avoid duplicates
+    if (myUserId !== alphaTeam?.captain_user_id) return;
+    trophyTimeoutTriggeredRef.current = true;
+    void (async () => {
+      try {
+        await supabase.rpc("rpc_check_trophy_timeout", { p_match_id: matchId });
+        await loadAll({ silent: true });
+      } catch (e) {
+        console.error("trophy timeout check error:", e);
+      }
+    })();
+  }, [trophyRemainingSec, allTrophyDone, myUserId, alphaTeam?.captain_user_id, matchId, loadAll]);
 
   const clearMessages = () => {
     setErrorText(null);
@@ -663,17 +745,7 @@ export default function BanpickPage() {
               </button>
             )}
 
-            {isBanpickCompleted && !match?.host_user_id && (
-              <button
-                onClick={handleSelectHost}
-                disabled={busy}
-                className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                ホスト決定
-              </button>
-            )}
-
-            {isBanpickCompleted && (
+            {isBanpickCompleted && allTrophyDone && (
               <button
                 onClick={() => router.push(`/match/${matchId}/confirm`)}
                 className="rounded bg-cyan-500 px-4 py-2 text-sm font-semibold text-white"
@@ -921,9 +993,24 @@ export default function BanpickPage() {
                           <div>
                             マップ: <span className="text-white">{state.map ?? "-"}</span>
                           </div>
-                          <div>
-                            サイド: <span className="text-white">{state.side ?? "-"}</span>
-                          </div>
+                          {state.side ? (() => {
+                            // side picker: HP=team_b, SND=team_a, OVL=team_a
+                            const pickerIsTeamA = phaseKey === "snd" || phaseKey === "ovl";
+                            const teamAIsAlpha = teamAssignment.teamA === alphaTeam?.id;
+                            const pickerIsAlpha = pickerIsTeamA ? teamAIsAlpha : !teamAIsAlpha;
+                            const alphaSide = pickerIsAlpha ? state.side : (state.side === "JSOC" ? "ギルド" : "JSOC");
+                            const bravoSide = alphaSide === "JSOC" ? "ギルド" : "JSOC";
+                            return (
+                              <div>
+                                サイド:
+                                <span className="text-white ml-1">
+                                  Alpha: {alphaSide} / Bravo: {bravoSide}
+                                </span>
+                              </div>
+                            );
+                          })() : (
+                            <div>サイド: <span className="text-white">-</span></div>
+                          )}
                         </div>
 
                         {isCurrent &&
@@ -981,9 +1068,16 @@ export default function BanpickPage() {
           <div className="space-y-4">
             {isBanpickCompleted && (
               <section className="rounded border border-white/10 bg-white/5 p-4">
-                <h2 className="mb-3 text-lg font-semibold">トロフィー使用者（各チーム2人）</h2>
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">トロフィー選択</h2>
+                  {trophyRemainingSec !== null && !allTrophyDone && (
+                    <span className={`rounded px-2 py-0.5 text-xs font-bold ${trophyRemainingSec <= 30 ? "bg-red-500/30 text-red-300" : "bg-cyan-500/30 text-cyan-100"}`}>
+                      残り {Math.floor(trophyRemainingSec / 60)}:{String(trophyRemainingSec % 60).padStart(2, "0")}
+                    </span>
+                  )}
+                </div>
                 <p className="mb-3 text-xs text-white/60">
-                  各チームから2人がトロフィーを持ちます。自分のチームのメンバーをクリックして選択してください。
+                  各チームからトロフィー使用者を選択してください。3分以内に選択しないと強制敗北になります。
                 </p>
 
                 {(["alpha", "bravo"] as const).map((side) => {
@@ -1038,10 +1132,18 @@ export default function BanpickPage() {
             <section className="rounded border border-white/10 bg-white/5 p-4">
               <h2 className="mb-3 text-lg font-semibold">ホスト / ロビー</h2>
 
+              {match?.host_user_id && (
+                <div className="mb-3 rounded border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
+                  <p className="font-semibold">ホストが決定されました。</p>
+                  <p className="mt-1 text-white/80">ホストはロビーを作成してロビーコードを送信してください。</p>
+                  <p className="mt-1 text-white/60 text-xs">何らかの理由でホストになれない場合はチャット欄で他プレイヤーと相談し、ホストを変わってください。</p>
+                </div>
+              )}
+
               <div className="space-y-3">
                 <div className="rounded bg-black/20 p-3">
                   <div className="text-xs text-white/50">現在のホスト</div>
-                  <div className="mt-1 text-sm font-medium">{hostDisplayName ?? "未決定"}</div>
+                  <div className="mt-1 text-sm font-medium">{hostDisplayName ?? "決定中..."}</div>
                 </div>
 
                 <div className="rounded bg-black/20 p-3">
