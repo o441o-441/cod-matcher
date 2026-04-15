@@ -426,19 +426,13 @@ export default function Home() {
           href="https://fuhen.jp/"
           target="_blank"
           rel="noopener noreferrer"
-          style={{
-            display: 'inline-block',
-            padding: '16px 32px',
-            borderRadius: 12,
-            background: 'linear-gradient(135deg, rgba(0,229,255,0.1), rgba(139,92,246,0.1))',
-            border: '1px solid rgba(255,255,255,0.12)',
-            textDecoration: 'none',
-            color: '#eaf0ff',
-            transition: 'opacity 0.2s',
-          }}
+          style={{ display: 'block', borderRadius: 12, overflow: 'hidden' }}
         >
-          <p style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: 0 }}>FUHEN</p>
-          <p className="muted" style={{ margin: '4px 0 0', fontSize: '0.85rem' }}>fuhen.jp</p>
+          <img
+            src="/fuhen-ad.png"
+            alt="FUHEN Laboratory"
+            style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 12 }}
+          />
         </a>
       </div>
 
