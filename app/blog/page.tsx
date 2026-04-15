@@ -73,6 +73,7 @@ function BlogIndexContent() {
           <p className="muted">コミュニティのレビュー一覧</p>
         </div>
         <div className="row">
+          <button onClick={() => router.push('/')}>トップページへ戻る</button>
           <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
           {signedIn && (
             <button onClick={() => router.push('/blog/new')}>レビューを書く</button>
