@@ -94,7 +94,9 @@ export default function BlogPostPage() {
       setPost(postRow)
 
       // increment view count
-      void supabase.from('posts').update({ view_count: postRow.view_count + 1 }).eq('id', postRow.id)
+      supabase.rpc('rpc_increment_view_count', { p_post_id: postRow.id }).then(({ error }) => {
+        if (error) console.error('view count error:', error)
+      })
 
       // fetch likes
       const { count: lc } = await supabase
