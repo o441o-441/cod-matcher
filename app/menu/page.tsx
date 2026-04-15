@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Tutorial } from '@/components/Tutorial'
 import { usePageView } from '@/lib/usePageView'
+import { getCache, setCache } from '@/lib/cache'
 
 const MENU_TUTORIAL = [
   { title: 'メニュー画面', body: 'ここがメインメニューです。対戦開始やフレンド管理など、すべての機能にここからアクセスできます。' },
@@ -16,12 +17,15 @@ const MENU_TUTORIAL = [
 export default function MenuPage() {
   const router = useRouter()
 
-  const [loading, setLoading] = useState(true)
-  const [hasTeam, setHasTeam] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [rating, setRating] = useState<number | null>(null)
-  const [wins, setWins] = useState<number | null>(null)
-  const [losses, setLosses] = useState<number | null>(null)
+  type MenuCache = { hasTeam: boolean; isAdmin: boolean; rating: number | null; wins: number | null; losses: number | null }
+  const cached = typeof window !== 'undefined' ? getCache<MenuCache>('menu_data') : null
+
+  const [loading, setLoading] = useState(!cached)
+  const [hasTeam, setHasTeam] = useState(cached?.hasTeam ?? false)
+  const [isAdmin, setIsAdmin] = useState(cached?.isAdmin ?? false)
+  const [rating, setRating] = useState<number | null>(cached?.rating ?? null)
+  const [wins, setWins] = useState<number | null>(cached?.wins ?? null)
+  const [losses, setLosses] = useState<number | null>(cached?.losses ?? null)
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [notifications, setNotifications] = useState<{ id: string; type: string; body: string; link: string | null; created_at: string }[]>([])
 
@@ -139,6 +143,14 @@ export default function MenuPage() {
 
       setMyUserId(session.user.id)
       setNotifications((notifRes.data ?? []) as { id: string; type: string; body: string; link: string | null; created_at: string }[])
+
+      setCache('menu_data', {
+        hasTeam: !!memberRes.data?.team_id,
+        isAdmin: !!profileRow?.is_admin,
+        rating: profileRow?.current_rating ?? null,
+        wins: profileRow?.wins ?? null,
+        losses: profileRow?.losses ?? null,
+      })
 
       setLoading(false)
     }

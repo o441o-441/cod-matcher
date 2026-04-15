@@ -28,9 +28,8 @@ const BANPICK_TUTORIAL = [
   { title: "PICK", body: "残りのマップから試合で使うマップを選びます。選ばれたマップはハイライト表示されます。" },
   { title: "サイド選択", body: "マップが決まったら、JSOC / ギルド のどちらのサイドでプレイするか選びます。" },
   { title: "制限時間", body: "各ステップには5分の制限時間があります。時間切れの場合、操作すべきだった側の敗北になります。" },
-  { title: "ホスト決定", body: "バンピック完了後、「ホスト決定」ボタンを押すとパーティリーダーの中からランダムでホストが決定されます。何らかの理由でホストを持てない場合は、チャット欄で他のプレイヤーと相談してホストを決めてください。" },
-  { title: "試合開始", body: "ホストがロビーコードを送信したら、各自ロビーに参加してください。全員が集まったら試合を開始します。3モード中、先に2勝した方の勝利となります。" },
-  { title: "試合結果報告", body: "どちらかのチームが2勝したら、右上の「試合結果を報告する」ボタンから試合結果を報告してください。相手チームの承認でレートと戦績が確定します。" },
+  { title: "ホスト決定", body: "バンピック完了後、自動でパーティリーダーの中からランダムにホストが決定されます。何らかの理由でホストを持てない場合は、チャット欄で他のプレイヤーと相談してホストを決めてください。" },
+  { title: "トロフィー選択", body: "ホストが決定したら3分以内にトロフィー使用者を選択してください。制限時間に達した場合、選択していない方の敗北となります。どちらも選択していない場合は無効試合となり、レートが-10されます。" },
 ];
 
 type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
@@ -528,14 +527,13 @@ export default function BanpickPage() {
     return () => window.clearInterval(id);
   }, [isBanpickCompleted, match?.host_selected_at, allTrophyDone]);
 
-  // Trophy timeout enforcement
+  // Trophy timeout enforcement - any player can trigger, RPC is idempotent
   const trophyTimeoutTriggeredRef = useRef(false);
   useEffect(() => {
     if (trophyRemainingSec !== 0) return;
     if (allTrophyDone) return;
     if (trophyTimeoutTriggeredRef.current) return;
-    // Only alpha captain triggers to avoid duplicates
-    if (myUserId !== alphaTeam?.captain_user_id) return;
+    if (!myUserId) return;
     trophyTimeoutTriggeredRef.current = true;
     void (async () => {
       try {
@@ -545,7 +543,20 @@ export default function BanpickPage() {
         console.error("trophy timeout check error:", e);
       }
     })();
-  }, [trophyRemainingSec, allTrophyDone, myUserId, alphaTeam?.captain_user_id, matchId, loadAll]);
+  }, [trophyRemainingSec, allTrophyDone, myUserId, matchId, loadAll]);
+
+  // Auto-navigate to report page when match is completed by trophy timeout
+  const trophyNavRef = useRef(false);
+  useEffect(() => {
+    if (!match) return;
+    if (match.status !== "completed") return;
+    if (!isBanpickCompleted) return;
+    if (trophyNavRef.current) return;
+    // Only navigate if trophy timeout caused the completion (no winner or voided)
+    if (autoNavTriggeredRef.current) return; // already navigating to confirm
+    trophyNavRef.current = true;
+    router.push(`/match/${matchId}/report`);
+  }, [match, isBanpickCompleted, matchId, router]);
 
   const clearMessages = () => {
     setErrorText(null);

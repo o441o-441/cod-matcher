@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import { usePageView } from '@/lib/usePageView'
 import RatingChart from '@/components/RatingChart'
+import { getCache, setCache } from '@/lib/cache'
 
 type UserRow = {
   id: string
@@ -34,19 +35,22 @@ export default function MyPage() {
   const router = useRouter()
   const { showToast } = useToast()
 
-  const [loading, setLoading] = useState(true)
+  type MypageCache = { rating: number | null; wins: number | null; losses: number | null; bio: string | null; ratingHistory: { matchIndex: number; rating: number }[] }
+  const cached = typeof window !== 'undefined' ? getCache<MypageCache>('mypage_data') : null
+
+  const [loading, setLoading] = useState(!cached)
   const [profile, setProfile] = useState<UserRow | null>(null)
   const [team, setTeam] = useState<TeamRow | null>(null)
   const [pageError, setPageError] = useState('')
-  const [bio, setBio] = useState<string | null>(null)
+  const [bio, setBio] = useState<string | null>(cached?.bio ?? null)
   const [isBanned, setIsBanned] = useState(false)
   const [isMonitor, setIsMonitor] = useState(false)
   const [isApproved, setIsApproved] = useState(false)
   const [suspendedUntil, setSuspendedUntil] = useState<string | null>(null)
-  const [rating, setRating] = useState<number | null>(null)
-  const [wins, setWins] = useState<number | null>(null)
-  const [losses, setLosses] = useState<number | null>(null)
-  const [ratingHistory, setRatingHistory] = useState<{ matchIndex: number; rating: number }[]>([])
+  const [rating, setRating] = useState<number | null>(cached?.rating ?? null)
+  const [wins, setWins] = useState<number | null>(cached?.wins ?? null)
+  const [losses, setLosses] = useState<number | null>(cached?.losses ?? null)
+  const [ratingHistory, setRatingHistory] = useState<{ matchIndex: number; rating: number }[]>(cached?.ratingHistory ?? [])
 
   type SeasonOption = { id: string; name: string; start_date: string; end_date: string; is_active: boolean }
   const [seasons, setSeasons] = useState<SeasonOption[]>([])
@@ -258,6 +262,19 @@ export default function MyPage() {
     } else {
       setTeam(null)
     }
+
+    // Build and save rating history points
+    const rhPoints = (rhRes.data && rhRes.data.length > 0)
+      ? (rhRes.data as { rating_after: number; created_at: string }[]).map((r, i) => ({ matchIndex: i + 1, rating: r.rating_after }))
+      : []
+
+    setCache('mypage_data', {
+      rating: profileRow?.current_rating ?? null,
+      wins: profileRow?.wins ?? null,
+      losses: profileRow?.losses ?? null,
+      bio: profileRow?.bio ?? null,
+      ratingHistory: rhPoints,
+    })
 
     const seasonList = (seasonRes.data ?? []) as SeasonOption[]
     setSeasons(seasonList)

@@ -126,6 +126,8 @@ const MESSAGE_JA: Record<string, string> = {
   "report auto-approved after timeout": "承認期限を超過したため自動承認されました。レートが更新されました。",
   "match created": "マッチが成立しました。バンピックを開始してください。",
   "all players on report page, deadline shortened to 5 min": "全員が結果報告画面を開きました。承認期限が5分に短縮されました。",
+  "trophy timeout: both teams failed, match voided, -10 rating": "トロフィー選択の制限時間に達しました。両チームとも未選択のため無効試合となり、全プレイヤーのレートが-10されました。",
+  "trophy timeout: team forfeited for not selecting": "トロフィー選択の制限時間に達しました。未選択のチームの敗北として処理されました。",
 };
 
 function translateBody(body: string): string {
@@ -227,6 +229,13 @@ export default function ReportPage() {
     if (!match?.winner_match_team_id) return null;
     return teams.find((t) => t.id === match.winner_match_team_id) ?? null;
   }, [match?.winner_match_team_id, teams]);
+
+  const trophyTimeoutType = useMemo(() => {
+    const msgs = messages.map((m) => m.body);
+    if (msgs.some((b) => b.includes('trophy timeout: both teams failed'))) return 'voided';
+    if (msgs.some((b) => b.includes('trophy timeout: team forfeited'))) return 'forfeited';
+    return null;
+  }, [messages]);
 
   const groupedMembers = useMemo(() => {
     return {
@@ -556,6 +565,20 @@ export default function ReportPage() {
         {infoText && match?.status !== 'completed' && (
           <div className="mb-4 rounded border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
             {infoText}
+          </div>
+        )}
+
+        {trophyTimeoutType === 'voided' && (
+          <div className="mb-4 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <p className="font-semibold">無効試合 — トロフィー選択タイムアウト</p>
+            <p className="mt-1">両チームともトロフィー使用者を制限時間内に選択しなかったため、無効試合となりました。全プレイヤーのレートが-10されています。</p>
+          </div>
+        )}
+
+        {trophyTimeoutType === 'forfeited' && (
+          <div className="mb-4 rounded border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+            <p className="font-semibold">敗北 — トロフィー選択タイムアウト</p>
+            <p className="mt-1">トロフィー使用者を制限時間内に選択しなかったチームの敗北として処理されました。</p>
           </div>
         )}
 
