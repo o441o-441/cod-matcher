@@ -360,7 +360,18 @@ a:hover {
   background: rgba(0, 229, 255, 0.35);
 }
 
+.grid-ad-layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 16px;
+  align-items: start;
+}
+
 @media (max-width: 720px) {
+  .grid-ad-layout {
+    grid-template-columns: 1fr;
+  }
+
   main {
     padding: 36px 16px 72px;
   }
