@@ -256,6 +256,27 @@ export default function MatchConfirmPage() {
     return m?.profiles?.display_name ?? match.host_user_id;
   }, [match, members]);
 
+  const isHost = !!match?.host_user_id && match.host_user_id === myUserId;
+  const [lobbyCodeInput, setLobbyCodeInput] = useState("");
+
+  const handleSendLobbyCode = async () => {
+    if (!matchId) return;
+    clearMessages();
+    const code = lobbyCodeInput.trim();
+    if (!code) { setErrorText("ロビーコードを入力してください。"); return; }
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc("rpc_send_lobby_code", { p_match_id: matchId, p_lobby_code: code });
+      if (error) throw error;
+      setLobbyCodeInput("");
+      await loadAll({ silent: true });
+    } catch (e) {
+      setErrorText(e instanceof Error ? e.message : "ロビーコード送信に失敗しました。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const phaseStates = useMemo(() => {
     return {
       hp: parsePhaseState(session?.selected_maps ?? null, "hp"),
@@ -342,6 +363,23 @@ export default function MatchConfirmPage() {
                     </div>
                   )}
                 </div>
+              </div>
+              <div className="mt-3 rounded border border-white/10 bg-black/20 p-3">
+                <div className="mb-2 text-sm font-semibold">ロビーコード送信</div>
+                <input
+                  value={lobbyCodeInput}
+                  onChange={(e) => setLobbyCodeInput(e.target.value)}
+                  placeholder={isHost ? "例: ABCDE" : "ホストのみ送信可能"}
+                  className="mb-2 w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
+                  disabled={busy || !isHost}
+                />
+                <button
+                  onClick={handleSendLobbyCode}
+                  disabled={busy || !isHost}
+                  className="w-full rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  ロビーコード送信
+                </button>
               </div>
             </section>
 
