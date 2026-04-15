@@ -158,7 +158,7 @@ function isExpectedAutoMatchMiss(message: string) {
   const normalized = message.toLowerCase().replace(/\s+/g, " ").trim();
   return (
     normalized.includes("not enough compatible waiting players") ||
-    normalized.includes("failed to split teams into 4v4") ||
+    normalized.includes("failed to split teams") ||
     normalized.includes("anchor waiting queue entry not found")
   );
 }
@@ -275,17 +275,18 @@ export default function MatchPage() {
         return;
       }
 
-      const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("id,display_name,current_rating,is_banned,is_onboarded")
-        .eq("id", uid)
-        .maybeSingle<ProfileRow>();
+      // Phase 1: profile + party membership + pending invites + friends + team (parallel)
+      const [profileRes, partyMemberRes, pendingInvitesRes, friendsRes, membershipRes] = await Promise.all([
+        supabase.from("profiles").select("id,display_name,current_rating,is_banned,is_onboarded").eq("id", uid).maybeSingle<ProfileRow>(),
+        supabase.from("party_members").select("id,party_id,user_id").eq("user_id", uid).returns<PartyMemberRow[]>(),
+        supabase.rpc("rpc_list_my_pending_party_invites"),
+        supabase.rpc("rpc_list_my_friends"),
+        supabase.from("team_members").select("team_id").eq("user_id", uid).maybeSingle<{ team_id: string }>(),
+      ]);
 
-      if (profileError) throw profileError;
+      if (profileRes.error) throw profileRes.error;
 
-      // 旧 users テーブル（is_profile_complete）で onboarding 済みなのに、
-      // 新 profiles テーブルが未作成 / is_onboarded=false の場合は自己修復で同期する。
-      let resolvedProfile = profileData ?? null;
+      let resolvedProfile = profileRes.data ?? null;
       if (!resolvedProfile || !resolvedProfile.is_onboarded) {
         const { data: legacyUser } = await supabase
           .from("users")
@@ -296,49 +297,62 @@ export default function MatchPage() {
         if (legacyUser?.is_profile_complete && legacyUser.display_name) {
           const { data: upserted, error: upsertError } = await supabase
             .from("profiles")
-            .upsert(
-              {
-                id: uid,
-                display_name: legacyUser.display_name,
-                is_onboarded: true,
-              },
-              { onConflict: "id" }
-            )
+            .upsert({ id: uid, display_name: legacyUser.display_name, is_onboarded: true }, { onConflict: "id" })
             .select("id,display_name,current_rating,is_banned,is_onboarded")
             .maybeSingle<ProfileRow>();
-
-          if (!upsertError && upserted) {
-            resolvedProfile = upserted;
-          }
+          if (!upsertError && upserted) resolvedProfile = upserted;
         }
       }
 
       setProfile(resolvedProfile);
 
-      // 初期設定が未完了なら、対戦関連のロードはスキップする。
-      // RPC や RLS が onboarded を前提とすることがあり、無理にロードすると失敗するため。
       if (!resolvedProfile || !resolvedProfile.is_onboarded) {
-        setMyParty(null);
-        setMyPartyMembers([]);
-        setMyPartyInvites([]);
-        setMyPendingInvites([]);
-        setMyWaitingEntry(null);
-        setMyMatchedEntryIds([]);
-        setMyActiveMatch(null);
-        setMyTeam(null);
+        setMyParty(null); setMyPartyMembers([]); setMyPartyInvites([]);
+        setMyPendingInvites([]); setMyWaitingEntry(null); setMyMatchedEntryIds([]);
+        setMyActiveMatch(null); setMyTeam(null);
         if (!opts?.silent) setLoading(false);
         return;
       }
 
-      const { data: partyMemberData, error: partyMemberError } = await supabase
-        .from("party_members")
-        .select("id,party_id,user_id")
-        .eq("user_id", uid)
-        .returns<PartyMemberRow[]>();
+      // Set pending invites & friends from parallel results
+      if (!pendingInvitesRes.error) {
+        setMyPendingInvites((pendingInvitesRes.data as PendingInviteListRow[] | null) ?? []);
+      }
+      if (!friendsRes.error) {
+        setFriends((friendsRes.data as { friend_user_id: string; friend_display_name: string | null }[] | null) ?? []);
+      }
 
-      if (partyMemberError) throw partyMemberError;
+      // Set team info from parallel result
+      if (membershipRes.data?.team_id) {
+        const [teamRes, memberRowsRes] = await Promise.all([
+          supabase.from("teams").select("id, name").eq("id", membershipRes.data.team_id).maybeSingle<{ id: string; name: string }>(),
+          supabase.from("team_members").select("user_id, profiles!inner(id, display_name)").eq("team_id", membershipRes.data.team_id),
+        ]);
 
-      const partyIds = [...new Set((partyMemberData ?? []).map((x) => x.party_id))];
+        type RawTeamMemberRow = {
+          user_id: string;
+          profiles: { id: string; display_name: string | null } | { id: string; display_name: string | null }[] | null;
+        };
+
+        const otherMembers: MyTeamMember[] = ((memberRowsRes.data ?? []) as RawTeamMemberRow[])
+          .map((row) => {
+            const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+            return { auth_user_id: row.user_id, display_name: p?.display_name ?? null };
+          })
+          .filter((m) => m.auth_user_id && m.auth_user_id !== uid);
+
+        if (teamRes.data) {
+          setMyTeam({ id: teamRes.data.id, name: teamRes.data.name, members: otherMembers });
+        } else {
+          setMyTeam(null);
+        }
+      } else {
+        setMyTeam(null);
+      }
+
+      // Party data
+      if (partyMemberRes.error) throw partyMemberRes.error;
+      const partyIds = [...new Set((partyMemberRes.data ?? []).map((x) => x.party_id))];
 
       let partiesData: PartyRow[] = [];
       if (partyIds.length > 0) {
@@ -347,7 +361,6 @@ export default function MatchPage() {
           .select("id,leader_user_id,source_team_id,party_type,status,created_at,updated_at")
           .in("id", partyIds)
           .returns<PartyRow[]>();
-
         if (error) throw error;
         partiesData = data ?? [];
       }
@@ -362,51 +375,25 @@ export default function MatchPage() {
       setMyParty(activeParty);
 
       if (activeParty) {
-        const { data: membersData, error: membersError } = await supabase
-          .from("party_members")
-          .select("id,party_id,user_id,profiles!party_members_user_id_fkey(id,display_name)")
-          .eq("party_id", activeParty.id)
-          .returns<PartyMemberRow[]>();
+        // Parallel: party members, invites, waiting entry, matched entries
+        const [membersRes2, invitesRes, waitingRes, matchedRes] = await Promise.all([
+          supabase.from("party_members").select("id,party_id,user_id,profiles!party_members_user_id_fkey(id,display_name)").eq("party_id", activeParty.id).returns<PartyMemberRow[]>(),
+          supabase.from("party_invites").select("id,party_id,inviter_user_id,invitee_user_id,status,created_at,responded_at").eq("party_id", activeParty.id).order("created_at", { ascending: false }).returns<PartyInviteRow[]>(),
+          supabase.from("queue_entries").select("id,party_id,queue_type,status,party_size,avg_rating,min_rating,max_rating,party_size_bonus,wait_expand_level,created_at,matched_at,cancelled_at,expired_at").eq("party_id", activeParty.id).eq("status", "waiting").order("created_at", { ascending: false }).limit(1).maybeSingle<QueueEntryRow>(),
+          supabase.from("queue_entries").select("id,party_id,queue_type,status,party_size,avg_rating,min_rating,max_rating,party_size_bonus,wait_expand_level,created_at,matched_at,cancelled_at,expired_at").eq("party_id", activeParty.id).eq("status", "matched").returns<QueueEntryRow[]>(),
+        ]);
 
-        if (membersError) throw membersError;
-        setMyPartyMembers(membersData ?? []);
+        if (membersRes2.error) throw membersRes2.error;
+        setMyPartyMembers(membersRes2.data ?? []);
 
-        const { data: invitesData, error: invitesError } = await supabase
-          .from("party_invites")
-          .select("id,party_id,inviter_user_id,invitee_user_id,status,created_at,responded_at")
-          .eq("party_id", activeParty.id)
-          .order("created_at", { ascending: false })
-          .returns<PartyInviteRow[]>();
+        if (invitesRes.error) throw invitesRes.error;
+        setMyPartyInvites(invitesRes.data ?? []);
 
-        if (invitesError) throw invitesError;
-        setMyPartyInvites(invitesData ?? []);
+        if (waitingRes.error) throw waitingRes.error;
+        setMyWaitingEntry(waitingRes.data ?? null);
 
-        const { data: waitingEntryData, error: waitingEntryError } = await supabase
-          .from("queue_entries")
-          .select(
-            "id,party_id,queue_type,status,party_size,avg_rating,min_rating,max_rating,party_size_bonus,wait_expand_level,created_at,matched_at,cancelled_at,expired_at"
-          )
-          .eq("party_id", activeParty.id)
-          .eq("status", "waiting")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle<QueueEntryRow>();
-
-        if (waitingEntryError) throw waitingEntryError;
-        setMyWaitingEntry(waitingEntryData ?? null);
-
-        const { data: matchedEntriesData, error: matchedEntriesError } = await supabase
-          .from("queue_entries")
-          .select(
-            "id,party_id,queue_type,status,party_size,avg_rating,min_rating,max_rating,party_size_bonus,wait_expand_level,created_at,matched_at,cancelled_at,expired_at"
-          )
-          .eq("party_id", activeParty.id)
-          .eq("status", "matched")
-          .returns<QueueEntryRow[]>();
-
-        if (matchedEntriesError) throw matchedEntriesError;
-
-        const matchedIds = (matchedEntriesData ?? []).map((x) => x.id);
+        if (matchedRes.error) throw matchedRes.error;
+        const matchedIds = (matchedRes.data ?? []).map((x) => x.id);
         setMyMatchedEntryIds(matchedIds);
 
         if (matchedIds.length > 0) {
@@ -414,119 +401,25 @@ export default function MatchPage() {
             .from("match_team_members")
             .select("source_queue_entry_id,match_team_id")
             .in("source_queue_entry_id", matchedIds);
-
           if (mtmError) throw mtmError;
 
-          const matchTeamIds = [
-            ...new Set(
-              ((mtmData ?? []) as Array<{ match_team_id: string | null }>)
-                .map((x) => x.match_team_id)
-                .filter((id): id is string => Boolean(id))
-            ),
-          ];
+          const matchTeamIds = [...new Set(((mtmData ?? []) as Array<{ match_team_id: string | null }>).map((x) => x.match_team_id).filter((id): id is string => Boolean(id)))];
 
           if (matchTeamIds.length > 0) {
-            const { data: matchTeamsData, error: matchTeamsError } = await supabase
-              .from("match_teams")
-              .select("id,match_id")
-              .in("id", matchTeamIds);
-
+            const { data: matchTeamsData, error: matchTeamsError } = await supabase.from("match_teams").select("id,match_id").in("id", matchTeamIds);
             if (matchTeamsError) throw matchTeamsError;
-
-            const matchIds = [
-              ...new Set(
-                ((matchTeamsData ?? []) as Array<{ match_id: string | null }>)
-                  .map((x) => x.match_id)
-                  .filter((id): id is string => Boolean(id))
-              ),
-            ];
+            const matchIds = [...new Set(((matchTeamsData ?? []) as Array<{ match_id: string | null }>).map((x) => x.match_id).filter((id): id is string => Boolean(id)))];
 
             if (matchIds.length > 0) {
-              const { data: matchesData, error: matchesError } = await supabase
-                .from("matches")
-                .select("id,status,matched_at")
-                .in("id", matchIds)
-                .in("status", ["banpick", "ready", "in_progress", "report_pending"])
-                .order("matched_at", { ascending: false })
-                .limit(1)
-                .returns<MatchRow[]>();
-
+              const { data: matchesData, error: matchesError } = await supabase.from("matches").select("id,status,matched_at").in("id", matchIds).in("status", ["banpick", "ready", "in_progress", "report_pending"]).order("matched_at", { ascending: false }).limit(1).returns<MatchRow[]>();
               if (matchesError) throw matchesError;
               setMyActiveMatch((matchesData ?? [])[0] ?? null);
-            } else {
-              setMyActiveMatch(null);
-            }
-          } else {
-            setMyActiveMatch(null);
-          }
-        } else {
-          setMyActiveMatch(null);
-        }
+            } else { setMyActiveMatch(null); }
+          } else { setMyActiveMatch(null); }
+        } else { setMyActiveMatch(null); }
       } else {
-        setMyPartyMembers([]);
-        setMyPartyInvites([]);
-        setMyWaitingEntry(null);
-        setMyMatchedEntryIds([]);
-        setMyActiveMatch(null);
-      }
-
-      const { data: pendingInvitesData, error: pendingInvitesError } = await supabase.rpc(
-        "rpc_list_my_pending_party_invites"
-      );
-
-      if (pendingInvitesError) throw pendingInvitesError;
-      setMyPendingInvites((pendingInvitesData as PendingInviteListRow[] | null) ?? []);
-
-      const { data: friendsData, error: friendsError } = await supabase.rpc("rpc_list_my_friends");
-      if (friendsError) {
-        console.error("rpc_list_my_friends error:", friendsError);
-      } else {
-        setFriends(
-          (friendsData as { friend_user_id: string; friend_display_name: string | null }[] | null) ?? []
-        );
-      }
-
-      // 固定チーム情報（team_members.user_id は profiles.id = auth.uid()）
-      const { data: myMembership } = await supabase
-        .from("team_members")
-        .select("team_id")
-        .eq("user_id", uid)
-        .maybeSingle<{ team_id: string }>();
-
-      if (myMembership?.team_id) {
-        const { data: teamRow } = await supabase
-          .from("teams")
-          .select("id, name")
-          .eq("id", myMembership.team_id)
-          .maybeSingle<{ id: string; name: string }>();
-
-        const { data: memberRows } = await supabase
-          .from("team_members")
-          .select("user_id, profiles!inner(id, display_name)")
-          .eq("team_id", myMembership.team_id);
-
-        type RawTeamMemberRow = {
-          user_id: string;
-          profiles:
-            | { id: string; display_name: string | null }
-            | { id: string; display_name: string | null }[]
-            | null;
-        };
-
-        const otherMembers: MyTeamMember[] = ((memberRows ?? []) as RawTeamMemberRow[])
-          .map((row) => {
-            const p = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
-            return { auth_user_id: row.user_id, display_name: p?.display_name ?? null };
-          })
-          .filter((m) => m.auth_user_id && m.auth_user_id !== uid);
-
-        if (teamRow) {
-          setMyTeam({ id: teamRow.id, name: teamRow.name, members: otherMembers });
-        } else {
-          setMyTeam(null);
-        }
-      } else {
-        setMyTeam(null);
+        setMyPartyMembers([]); setMyPartyInvites([]);
+        setMyWaitingEntry(null); setMyMatchedEntryIds([]); setMyActiveMatch(null);
       }
     } catch (e) {
       console.error("loadMyState error:", e);

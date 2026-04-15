@@ -67,42 +67,29 @@ export default function UserProfilePage() {
       setIsMe(session?.user?.id === userId)
       setSignedIn(!!session?.user)
 
-      const { data: p } = await supabase
-        .from('profiles')
-        .select('id, display_name, current_rating, is_banned, is_monitor, is_approved, bio')
-        .eq('id', userId)
-        .maybeSingle<ProfileRow>()
-      setProfile(p ?? null)
+      // Parallel: profiles, users, team_members, seasons
+      const [profileRes, legacyRes, memberRes, seasonRes] = await Promise.all([
+        supabase.from('profiles').select('id, display_name, current_rating, is_banned, is_monitor, is_approved, bio').eq('id', userId).maybeSingle<ProfileRow>(),
+        supabase.from('users').select('controller, activision_id, discord_name, platform').eq('auth_user_id', userId).maybeSingle<LegacyUser>(),
+        supabase.from('team_members').select('team_id').eq('user_id', userId).maybeSingle<{ team_id: string }>(),
+        supabase.from('seasons').select('id, name, start_date, end_date, is_active').order('start_date', { ascending: false }),
+      ])
 
-      const { data: l } = await supabase
-        .from('users')
-        .select('controller, activision_id, discord_name, platform')
-        .eq('auth_user_id', userId)
-        .maybeSingle<LegacyUser>()
-      setLegacy(l ?? null)
+      setProfile(profileRes.data ?? null)
+      setLegacy(legacyRes.data ?? null)
 
-      const { data: memberRow } = await supabase
-        .from('team_members')
-        .select('team_id')
-        .eq('user_id', userId)
-        .maybeSingle<{ team_id: string }>()
-      if (memberRow?.team_id) {
+      if (memberRes.data?.team_id) {
         const { data: teamRow } = await supabase
           .from('teams')
           .select('name, is_disbanded')
-          .eq('id', memberRow.team_id)
+          .eq('id', memberRes.data.team_id)
           .maybeSingle<{ name: string; is_disbanded: boolean }>()
         if (teamRow && !teamRow.is_disbanded) {
           setTeamName(teamRow.name)
         }
       }
 
-      // Fetch seasons
-      const { data: seasonData } = await supabase
-        .from('seasons')
-        .select('id, name, start_date, end_date, is_active')
-        .order('start_date', { ascending: false })
-      const seasonList = (seasonData ?? []) as SeasonOption[]
+      const seasonList = (seasonRes.data ?? []) as SeasonOption[]
       setSeasons(seasonList)
       const activeSeason = seasonList.find((s) => s.is_active) ?? seasonList[0]
       if (activeSeason) {
@@ -116,17 +103,14 @@ export default function UserProfilePage() {
     async function fetchSeasonStatsForUser(uid: string, season: SeasonOption) {
       setSeasonLoading(true)
       try {
-        const { data: rhData } = await supabase
-          .from('rating_history')
-          .select('rating_after, created_at')
-          .eq('user_id', uid)
-          .gte('created_at', season.start_date)
-          .lte('created_at', season.end_date + 'T23:59:59.999Z')
-          .order('created_at', { ascending: true })
+        const [rhRes, rankingRes] = await Promise.all([
+          supabase.from('rating_history').select('rating_after, created_at').eq('user_id', uid).gte('created_at', season.start_date).lte('created_at', season.end_date + 'T23:59:59.999Z').order('created_at', { ascending: true }),
+          supabase.rpc('rpc_get_season_ranking', { p_season_id: season.id }),
+        ])
 
-        if (rhData && rhData.length > 0) {
+        if (rhRes.data && rhRes.data.length > 0) {
           setSeasonRatingHistory(
-            (rhData as { rating_after: number; created_at: string }[]).map((r, i) => ({
+            (rhRes.data as { rating_after: number; created_at: string }[]).map((r, i) => ({
               matchIndex: i + 1,
               rating: r.rating_after,
             }))
@@ -135,10 +119,7 @@ export default function UserProfilePage() {
           setSeasonRatingHistory([])
         }
 
-        const { data: rankingData } = await supabase.rpc('rpc_get_season_ranking', {
-          p_season_id: season.id,
-        })
-        const rows = (rankingData ?? []) as { user_id: string; wins: number; losses: number }[]
+        const rows = (rankingRes.data ?? []) as { user_id: string; wins: number; losses: number }[]
         const myRow = rows.find((r) => r.user_id === uid)
         setSeasonWins(myRow?.wins ?? 0)
         setSeasonLosses(myRow?.losses ?? 0)
@@ -158,16 +139,13 @@ export default function UserProfilePage() {
     if (!season || !userId) return
     setSeasonLoading(true)
     try {
-      const { data: rhData } = await supabase
-        .from('rating_history')
-        .select('rating_after, created_at')
-        .eq('user_id', userId)
-        .gte('created_at', season.start_date)
-        .lte('created_at', season.end_date + 'T23:59:59.999Z')
-        .order('created_at', { ascending: true })
-      if (rhData && rhData.length > 0) {
+      const [rhRes, rankingRes] = await Promise.all([
+        supabase.from('rating_history').select('rating_after, created_at').eq('user_id', userId).gte('created_at', season.start_date).lte('created_at', season.end_date + 'T23:59:59.999Z').order('created_at', { ascending: true }),
+        supabase.rpc('rpc_get_season_ranking', { p_season_id: season.id }),
+      ])
+      if (rhRes.data && rhRes.data.length > 0) {
         setSeasonRatingHistory(
-          (rhData as { rating_after: number; created_at: string }[]).map((r, i) => ({
+          (rhRes.data as { rating_after: number; created_at: string }[]).map((r, i) => ({
             matchIndex: i + 1,
             rating: r.rating_after,
           }))
@@ -175,8 +153,7 @@ export default function UserProfilePage() {
       } else {
         setSeasonRatingHistory([])
       }
-      const { data: rankingData } = await supabase.rpc('rpc_get_season_ranking', { p_season_id: season.id })
-      const rows = (rankingData ?? []) as { user_id: string; wins: number; losses: number }[]
+      const rows = (rankingRes.data ?? []) as { user_id: string; wins: number; losses: number }[]
       const myRow = rows.find((r) => r.user_id === userId)
       setSeasonWins(myRow?.wins ?? 0)
       setSeasonLosses(myRow?.losses ?? 0)

@@ -211,20 +211,15 @@ export default function MyPage() {
 
     setProfile(syncedUser)
 
-    const { data: profileRow } = await supabase
-      .from('profiles')
-      .select('bio, current_rating, wins, losses, is_banned, is_monitor, is_approved, suspended_until')
-      .eq('id', authUser.id)
-      .maybeSingle<{
-        bio: string | null
-        current_rating: number | null
-        wins: number | null
-        losses: number | null
-        is_banned: boolean | null
-        is_monitor: boolean | null
-        is_approved: boolean | null
-        suspended_until: string | null
-      }>()
+    // Parallel: profile, rating history, team membership, seasons
+    const [profileRes, rhRes, memberRes, seasonRes] = await Promise.all([
+      supabase.from('profiles').select('bio, current_rating, wins, losses, is_banned, is_monitor, is_approved, suspended_until').eq('id', authUser.id).maybeSingle<{ bio: string | null; current_rating: number | null; wins: number | null; losses: number | null; is_banned: boolean | null; is_monitor: boolean | null; is_approved: boolean | null; suspended_until: string | null }>(),
+      supabase.from('rating_history').select('rating_after, created_at').eq('user_id', authUser.id).order('created_at', { ascending: true }),
+      supabase.from('team_members').select('team_id').eq('user_id', authUser.id).maybeSingle(),
+      supabase.from('seasons').select('id, name, start_date, end_date, is_active').order('start_date', { ascending: false }),
+    ])
+
+    const profileRow = profileRes.data
     setBio(profileRow?.bio ?? null)
     setIsBanned(!!profileRow?.is_banned)
     setIsMonitor(!!profileRow?.is_monitor)
@@ -234,38 +229,24 @@ export default function MyPage() {
     setWins(profileRow?.wins ?? null)
     setLosses(profileRow?.losses ?? null)
 
-    // Fetch rating history for chart
-    const { data: rhData } = await supabase
-      .from('rating_history')
-      .select('rating_after, created_at')
-      .eq('user_id', authUser.id)
-      .order('created_at', { ascending: true })
-    if (rhData && rhData.length > 0) {
-      const points = (rhData as { rating_after: number; created_at: string }[]).map((r, i) => ({
+    if (rhRes.data && rhRes.data.length > 0) {
+      const points = (rhRes.data as { rating_after: number; created_at: string }[]).map((r, i) => ({
         matchIndex: i + 1,
         rating: r.rating_after,
       }))
       setRatingHistory(points)
     }
 
-    const { data: memberRow, error: memberError } = await supabase
-      .from('team_members')
-      .select('team_id')
-      .eq('user_id', authUser.id)
-      .maybeSingle()
-
-    if (memberError) {
-      console.error('memberError:', memberError)
+    if (memberRes.error) {
+      console.error('memberError:', memberRes.error)
       setPageError('所属チーム情報の取得に失敗しました')
     }
 
-    if (memberRow?.team_id) {
+    if (memberRes.data?.team_id) {
       const { data: teamRow, error: teamError } = await supabase
         .from('teams')
-        .select(
-          'id, name, owner_user_id, created_at, rating, wins, losses, matches_played'
-        )
-        .eq('id', memberRow.team_id)
+        .select('id, name, owner_user_id, created_at, rating, wins, losses, matches_played')
+        .eq('id', memberRes.data.team_id)
         .single()
 
       if (teamError) {
@@ -278,12 +259,7 @@ export default function MyPage() {
       setTeam(null)
     }
 
-    // Fetch seasons list
-    const { data: seasonData } = await supabase
-      .from('seasons')
-      .select('id, name, start_date, end_date, is_active')
-      .order('start_date', { ascending: false })
-    const seasonList = (seasonData ?? []) as SeasonOption[]
+    const seasonList = (seasonRes.data ?? []) as SeasonOption[]
     setSeasons(seasonList)
     const activeSeason = seasonList.find((s) => s.is_active) ?? seasonList[0]
     if (activeSeason) {
@@ -297,17 +273,13 @@ export default function MyPage() {
   async function fetchSeasonStats(userId: string, season: SeasonOption) {
     setSeasonLoading(true)
     try {
-      // Season rating history
-      const { data: rhData } = await supabase
-        .from('rating_history')
-        .select('rating_after, created_at')
-        .eq('user_id', userId)
-        .gte('created_at', season.start_date)
-        .lte('created_at', season.end_date + 'T23:59:59.999Z')
-        .order('created_at', { ascending: true })
+      const [rhRes, rankingRes] = await Promise.all([
+        supabase.from('rating_history').select('rating_after, created_at').eq('user_id', userId).gte('created_at', season.start_date).lte('created_at', season.end_date + 'T23:59:59.999Z').order('created_at', { ascending: true }),
+        supabase.rpc('rpc_get_season_ranking', { p_season_id: season.id }),
+      ])
 
-      if (rhData && rhData.length > 0) {
-        const points = (rhData as { rating_after: number; created_at: string }[]).map((r, i) => ({
+      if (rhRes.data && rhRes.data.length > 0) {
+        const points = (rhRes.data as { rating_after: number; created_at: string }[]).map((r, i) => ({
           matchIndex: i + 1,
           rating: r.rating_after,
         }))
@@ -316,11 +288,7 @@ export default function MyPage() {
         setSeasonRatingHistory([])
       }
 
-      // Season wins/losses via rpc
-      const { data: rankingData } = await supabase.rpc('rpc_get_season_ranking', {
-        p_season_id: season.id,
-      })
-      const rows = (rankingData ?? []) as { user_id: string; wins: number; losses: number }[]
+      const rows = (rankingRes.data ?? []) as { user_id: string; wins: number; losses: number }[]
       const myRow = rows.find((r) => r.user_id === userId)
       setSeasonWins(myRow?.wins ?? 0)
       setSeasonLosses(myRow?.losses ?? 0)

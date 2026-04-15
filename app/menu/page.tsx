@@ -123,30 +123,22 @@ export default function MenuPage() {
         return
       }
 
-      const { data: memberRow } = await supabase
-        .from('team_members')
-        .select('team_id')
-        .eq('user_id', session.user.id)
-        .maybeSingle<{ team_id: string | null }>()
-      setHasTeam(!!memberRow?.team_id)
+      const [memberRes, profileRes, notifRes] = await Promise.all([
+        supabase.from('team_members').select('team_id').eq('user_id', session.user.id).maybeSingle<{ team_id: string | null }>(),
+        supabase.from('profiles').select('is_admin, current_rating, wins, losses').eq('id', session.user.id).maybeSingle<{ is_admin: boolean | null; current_rating: number | null; wins: number | null; losses: number | null }>(),
+        supabase.from('notifications').select('id, type, body, link, created_at').eq('user_id', session.user.id).eq('is_read', false).order('created_at', { ascending: false }).limit(10),
+      ])
 
-      const { data: profileRow } = await supabase
-        .from('profiles')
-        .select('is_admin, current_rating, wins, losses')
-        .eq('id', session.user.id)
-        .maybeSingle<{
-          is_admin: boolean | null
-          current_rating: number | null
-          wins: number | null
-          losses: number | null
-        }>()
+      setHasTeam(!!memberRes.data?.team_id)
+
+      const profileRow = profileRes.data
       setIsAdmin(!!profileRow?.is_admin)
       setRating(profileRow?.current_rating ?? null)
       setWins(profileRow?.wins ?? null)
       setLosses(profileRow?.losses ?? null)
 
       setMyUserId(session.user.id)
-      await fetchNotifications(session.user.id)
+      setNotifications((notifRes.data ?? []) as { id: string; type: string; body: string; link: string | null; created_at: string }[])
 
       setLoading(false)
     }
