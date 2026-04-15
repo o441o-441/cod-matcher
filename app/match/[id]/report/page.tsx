@@ -21,6 +21,7 @@ function useSoundOnChange<T>(value: T, soundFn: () => void) {
   }, [value, soundFn]);
 }
 import { Tutorial } from "@/components/Tutorial";
+import { LoadingSkeleton } from "@/components/UIState";
 
 const REPORT_TUTORIAL = [
   { title: "試合結果報告", body: "試合が終わったら、勝者チームのボタンを押して結果を報告します。" },
@@ -526,7 +527,7 @@ export default function ReportPage() {
   }
 
   if (loading) {
-    return <div className="p-6 text-sm text-white">読み込み中です...</div>;
+    return <div className="p-6"><LoadingSkeleton cards={3} /></div>;
   }
 
   return (

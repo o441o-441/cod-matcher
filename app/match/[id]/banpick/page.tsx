@@ -21,6 +21,7 @@ function useSoundOnChange<T>(value: T, soundFn: () => void) {
   }, [value, soundFn]);
 }
 import { Tutorial } from "@/components/Tutorial";
+import { LoadingSkeleton } from "@/components/UIState";
 
 const BANPICK_TUTORIAL = [
   { title: "バンピックとは", body: "試合で使うマップとサイドを交互に選ぶフェーズです。3つのモード（HP / SND / OVL）それぞれでBAN → PICK → サイド選択を行います。" },
@@ -724,7 +725,7 @@ export default function BanpickPage() {
   }
 
   if (loading) {
-    return <div className="p-6 text-sm text-white">読み込み中です...</div>;
+    return <div className="p-6"><LoadingSkeleton cards={3} /></div>;
   }
 
   return (

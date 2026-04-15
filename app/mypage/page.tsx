@@ -8,6 +8,7 @@ import { useToast } from '@/components/ToastProvider'
 import { usePageView } from '@/lib/usePageView'
 import RatingChart from '@/components/RatingChart'
 import { getCache, setCache } from '@/lib/cache'
+import { LoadingSkeleton } from '@/components/UIState'
 
 type UserRow = {
   id: string
@@ -375,7 +376,7 @@ export default function MyPage() {
     return (
       <main>
         <h1>ASCENT マイページ</h1>
-        <p>読み込み中...</p>
+        <LoadingSkeleton cards={3} />
       </main>
     )
   }

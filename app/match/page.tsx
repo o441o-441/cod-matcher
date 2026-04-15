@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { Tutorial } from "@/components/Tutorial";
 import { playMatchFound } from "@/lib/sounds";
 import { usePageView } from "@/lib/usePageView";
+import { LoadingSkeleton } from "@/components/UIState";
 
 const RULES_KEY = "rules_accepted_v1";
 
@@ -879,7 +880,7 @@ export default function MatchPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-neutral-950 px-6 py-8 text-white">
-        <div className="mx-auto max-w-6xl">読み込み中です...</div>
+        <div className="mx-auto max-w-6xl"><LoadingSkeleton cards={3} /></div>
       </div>
     );
   }

@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { Tutorial } from '@/components/Tutorial'
 import { usePageView } from '@/lib/usePageView'
 import { getCache, setCache } from '@/lib/cache'
+import { LoadingSkeleton } from '@/components/UIState'
 
 const MENU_TUTORIAL = [
   { title: 'メニュー画面', body: 'ここがメインメニューです。対戦開始やフレンド管理など、すべての機能にここからアクセスできます。' },
@@ -177,7 +178,7 @@ export default function MenuPage() {
     return (
       <main>
         <h1>ASCENT メニュー</h1>
-        <p>読み込み中...</p>
+        <LoadingSkeleton cards={3} />
       </main>
     )
   }

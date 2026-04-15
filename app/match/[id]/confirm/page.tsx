@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { playChatReceive } from "@/lib/sounds";
+import { LoadingSkeleton } from "@/components/UIState";
 
 type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
@@ -309,7 +310,7 @@ export default function MatchConfirmPage() {
   };
 
   if (!matchId) return <div className="p-6 text-sm text-red-400">match id が見つかりません。</div>;
-  if (loading) return <div className="p-6 text-sm text-white">読み込み中です...</div>;
+  if (loading) return <div className="p-6"><LoadingSkeleton cards={3} /></div>;
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white">
