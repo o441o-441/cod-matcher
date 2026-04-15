@@ -76,9 +76,6 @@ begin
     raise exception 'anchor waiting queue entry not found';
   end if;
 
-  -- compute 12-level wait tier (30s intervals)
-  -- levels 0-3: rating +-100, levels 4-7: +-200, levels 8-11: +-300
-  -- within each rating band: 0=full only, 1=trio+, 2=duo+, 3=any
   v_wait_seconds := extract(epoch from (now() - v_anchor_created_at))::integer;
   v_anchor_level := least(v_wait_seconds / 30, 11);
 
@@ -88,7 +85,6 @@ begin
     else 300
   end;
 
-  -- min party size allowed in candidates: 4=full only, 3=trio+, 2=duo+, 1=any
   v_min_party_size := case (v_anchor_level % 4)
     when 0 then 4
     when 1 then 3

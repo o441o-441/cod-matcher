@@ -1010,9 +1010,18 @@ export default function MatchPage() {
                         <div className="mb-2 text-xs text-white/50">メンバー</div>
                         <div className="space-y-1 text-sm text-white/80">
                           {myPartyMembers.map((m) => (
-                            <div key={m.id}>
-                              {m.profiles?.display_name ?? m.user_id}
-                              {m.user_id === myParty.leader_user_id ? "（リーダー）" : ""}
+                            <div key={m.id} className="flex items-center justify-between">
+                              <span>
+                                {m.profiles?.display_name ?? m.user_id}
+                                {m.user_id === myParty.leader_user_id ? "（リーダー）" : ""}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => router.push(`/users/${m.user_id}`)}
+                                className="rounded border border-white/20 bg-white/5 px-2 py-0.5 text-xs hover:bg-white/10"
+                              >
+                                プロフィール
+                              </button>
                             </div>
                           ))}
                         </div>
