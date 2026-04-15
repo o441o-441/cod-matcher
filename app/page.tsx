@@ -164,7 +164,23 @@ export default function Home() {
 
   return (
     <main>
-      <div className="card-strong">
+      <div className="card-strong" style={{ textAlign: 'center' }}>
+        <p className="muted" style={{ fontSize: '0.7rem', marginBottom: 8 }}>広告</p>
+        <a
+          href="https://fuhen.jp/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ display: 'block', borderRadius: 12, overflow: 'hidden' }}
+        >
+          <img
+            src="/fuhen-ad.png"
+            alt="FUHEN Laboratory"
+            style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 12 }}
+          />
+        </a>
+      </div>
+
+      <div className="section card-strong">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <div>
             <h1>ASCENT</h1>
@@ -418,22 +434,6 @@ export default function Home() {
             </p>
           </div>
         </div>
-      </div>
-
-      <div className="section card-strong" style={{ textAlign: 'center' }}>
-        <p className="muted" style={{ fontSize: '0.7rem', marginBottom: 8 }}>広告</p>
-        <a
-          href="https://fuhen.jp/"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ display: 'block', borderRadius: 12, overflow: 'hidden' }}
-        >
-          <img
-            src="/fuhen-ad.png"
-            alt="FUHEN Laboratory"
-            style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 12 }}
-          />
-        </a>
       </div>
 
       <div className="section row" style={{ justifyContent: 'center', gap: 16 }}>
