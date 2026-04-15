@@ -420,6 +420,28 @@ export default function Home() {
         </div>
       </div>
 
+      <div className="section card-strong" style={{ textAlign: 'center' }}>
+        <p className="muted" style={{ fontSize: '0.7rem', marginBottom: 8 }}>広告</p>
+        <a
+          href="https://fuhen.jp/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'inline-block',
+            padding: '16px 32px',
+            borderRadius: 12,
+            background: 'linear-gradient(135deg, rgba(0,229,255,0.1), rgba(139,92,246,0.1))',
+            border: '1px solid rgba(255,255,255,0.12)',
+            textDecoration: 'none',
+            color: '#eaf0ff',
+            transition: 'opacity 0.2s',
+          }}
+        >
+          <p style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: 0 }}>FUHEN</p>
+          <p className="muted" style={{ margin: '4px 0 0', fontSize: '0.85rem' }}>fuhen.jp</p>
+        </a>
+      </div>
+
       <div className="section row" style={{ justifyContent: 'center', gap: 16 }}>
         <a href="/terms">利用規約</a>
         <a href="/privacy">プライバシーポリシー</a>
