@@ -254,58 +254,40 @@ export default function Home() {
         </div>
       )}
 
-      <div className="section grid-ad-layout">
-        <div className="card-strong">
-          <div className="row" style={{ justifyContent: 'space-between' }}>
-            <h2 style={{ margin: 0 }}>新着レビュー</h2>
-            <button onClick={() => router.push('/blog')}>レビュー一覧</button>
-          </div>
-          {recentPosts.length === 0 ? (
-            <p className="muted">まだ記事がありません</p>
-          ) : (
-            <div className="stack">
-              {recentPosts.map((p) => (
-                <div key={p.id} className="card">
-                  <h3 style={{ marginTop: 0 }}>
-                    <Link href={`/blog/${p.slug}`}>{p.title}</Link>
-                  </h3>
-                  {p.controller_name && (
-                    <p className="muted">
-                      {p.controller_name}
-                      {p.rating != null && (
-                        <span style={{ marginLeft: 8 }}>
-                          {'★'.repeat(p.rating)}{'☆'.repeat(5 - p.rating)}
-                        </span>
-                      )}
-                    </p>
-                  )}
-                  {p.excerpt && <p>{p.excerpt}</p>}
+      <div className="section card-strong">
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <h2 style={{ margin: 0 }}>新着レビュー</h2>
+          <button onClick={() => router.push('/blog')}>レビュー一覧</button>
+        </div>
+        {recentPosts.length === 0 ? (
+          <p className="muted">まだ記事がありません</p>
+        ) : (
+          <div className="stack">
+            {recentPosts.map((p) => (
+              <div key={p.id} className="card">
+                <h3 style={{ marginTop: 0 }}>
+                  <Link href={`/blog/${p.slug}`}>{p.title}</Link>
+                </h3>
+                {p.controller_name && (
                   <p className="muted">
-                    {p.published_at
-                      ? new Date(p.published_at).toLocaleString('ja-JP')
-                      : ''}
+                    {p.controller_name}
+                    {p.rating != null && (
+                      <span style={{ marginLeft: 8 }}>
+                        {'★'.repeat(p.rating)}{'☆'.repeat(5 - p.rating)}
+                      </span>
+                    )}
                   </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="card-strong" style={{ textAlign: 'center' }}>
-          <p className="muted" style={{ fontSize: '0.7rem', marginBottom: 8 }}>広告</p>
-          <a
-            href="https://fuhen.jp/"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ display: 'block', borderRadius: 12, overflow: 'hidden' }}
-          >
-            <img
-              src="/fuhen-ad.png"
-              alt="FUHEN Laboratory"
-              style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 12 }}
-            />
-          </a>
-        </div>
+                )}
+                {p.excerpt && <p>{p.excerpt}</p>}
+                <p className="muted">
+                  {p.published_at
+                    ? new Date(p.published_at).toLocaleString('ja-JP')
+                    : ''}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="section card-strong">
