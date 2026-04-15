@@ -329,6 +329,12 @@ export default function MatchConfirmPage() {
               試合結果を報告する
             </button>
             <button
+              onClick={() => router.push("/rules")}
+              className="rounded border border-white/20 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+            >
+              ルール一覧
+            </button>
+            <button
               onClick={() => void loadAll()}
               disabled={busy}
               className="rounded border border-white/20 px-4 py-2 text-sm text-white/90 disabled:opacity-50"
