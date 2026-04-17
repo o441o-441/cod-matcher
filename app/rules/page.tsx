@@ -36,6 +36,11 @@ export default function RulesPage() {
             <li>試合開始</li>
           </ol>
         </div>
+        <img
+          src="/tutorial.png"
+          alt="プライベートマッチロビーの見方 - ロビーコード、JSOC（チーム1）、ギルド（チーム2）の位置"
+          style={{ width: '100%', borderRadius: 8, marginTop: 16 }}
+        />
       </div>
 
       <div className="section card-strong">
