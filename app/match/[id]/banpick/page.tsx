@@ -242,6 +242,7 @@ export default function BanpickPage() {
 
   const [chatInput, setChatInput] = useState("");
   const [lobbyCodeInput, setLobbyCodeInput] = useState("");
+  const [showTrophyPopup, setShowTrophyPopup] = useState(false);
 
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -499,6 +500,16 @@ export default function BanpickPage() {
     })();
   }, [isBanpickCompleted, match?.host_user_id, myUserId, alphaTeam?.captain_user_id, myMatchTeamId, matchId, loadAll]);
 
+  // Show trophy popup when banpick completes
+  const trophyPopupShownRef = useRef(false);
+  useEffect(() => {
+    if (!isBanpickCompleted) return;
+    if (allTrophyDone) return;
+    if (trophyPopupShownRef.current) return;
+    trophyPopupShownRef.current = true;
+    setShowTrophyPopup(true);
+  }, [isBanpickCompleted, allTrophyDone]);
+
   // Auto-navigate to confirm page when all trophies are set
   const autoNavTriggeredRef = useRef(false);
   useEffect(() => {
@@ -730,6 +741,47 @@ export default function BanpickPage() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white">
+      {showTrophyPopup && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(0,0,0,0.7)",
+          }}
+          onClick={() => setShowTrophyPopup(false)}
+        >
+          <div
+            style={{
+              background: "#1a1a2e",
+              border: "1px solid rgba(0,229,255,0.4)",
+              borderRadius: 12,
+              padding: "32px 40px",
+              maxWidth: 420,
+              width: "90%",
+              textAlign: "center",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: 12 }}>
+              トロフィー使用者の選択をしてください。
+            </h2>
+            <p style={{ fontSize: "0.875rem", color: "rgba(255,255,255,0.6)", marginBottom: 24 }}>
+              ※各チーム2人まで
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowTrophyPopup(false)}
+              className="rounded bg-cyan-500 px-6 py-2 text-sm font-semibold text-white"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
       <div className="mx-auto max-w-7xl px-4 py-6">
         <div className="mb-6 flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-end md:justify-between">
           <div>

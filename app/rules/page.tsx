@@ -21,6 +21,23 @@ export default function RulesPage() {
         </div>
       </div>
 
+      <div id="lobby-guide" className="section card-strong">
+        <h2>プライベートマッチの作り方</h2>
+        <div className="card">
+          <ol>
+            <li>マルチプレイヤー</li>
+            <li>マッチを検索</li>
+            <li>プライベートマッチ</li>
+            <li>プライベートマッチを作成</li>
+            <li>モード、マップを設定</li>
+            <li>ルールを設定（S&Dのみ）</li>
+            <li>ロビーコードをASCENTに送信</li>
+            <li>勢力を確認（メンバーがJSOC、ギルドに正しく振り分けられているか）</li>
+            <li>試合開始</li>
+          </ol>
+        </div>
+      </div>
+
       <div className="section card-strong">
         <h2>マップ & モード</h2>
 

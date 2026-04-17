@@ -6,6 +6,7 @@ RETURNS TABLE(match_id uuid, alpha_match_team_id uuid, bravo_match_team_id uuid,
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO 'public'
+SET statement_timeout TO '25s'
 AS $function$
 declare
   v_match_id uuid;
@@ -57,10 +58,6 @@ begin
     queue_entry_id uuid not null, user_id uuid not null
   ) on commit drop;
 
-  create temporary table tmp_recent_opponents (
-    user_id uuid not null, recent_opponent_user_id uuid not null
-  ) on commit drop;
-
   -- 1) anchor lock
   select qe.avg_rating, qe.status, qe.created_at
   into v_anchor_avg, v_anchor_status, v_anchor_created_at
@@ -85,12 +82,9 @@ begin
     else 300
   end;
 
-  v_min_party_size := case (v_anchor_level % 4)
-    when 0 then 4
-    when 1 then 3
-    when 2 then 2
-    else 1
-  end;
+  -- all party sizes allowed as candidates from the start
+  -- full-party vs all-solo restriction is enforced in team split (level >= 3)
+  v_min_party_size := 1;
 
   -- 2) gather candidates
   insert into tmp_candidate_entries (queue_entry_id, party_id, party_size, avg_rating, party_size_bonus, created_at)
@@ -107,90 +101,48 @@ begin
       and abs(qe.avg_rating - v_anchor_avg) <= v_max_diff
       and qe.party_size >= v_min_party_size
     order by abs(qe.avg_rating - v_anchor_avg) asc, qe.created_at asc
-    limit 7
+    limit 1
     for update skip locked
   ) t
   on conflict (queue_entry_id) do nothing;
 
-  -- 3) find best 8-player combo
+  -- 3) find best 8-player combo using recursive CTE
   create temporary table tmp_best_selection (queue_entry_id uuid primary key) on commit drop;
 
-  with candidates as (
-    select row_number() over (order by created_at asc, queue_entry_id) as rn, * from tmp_candidate_entries
+  with recursive candidates as (
+    select queue_entry_id, party_size,
+      row_number() over (order by created_at asc, queue_entry_id) as rn
+    from tmp_candidate_entries
   ),
   combos as (
-    select array[c1.queue_entry_id]::uuid[] as ids,
-      c1.party_size as total_players
-    from candidates c1
+    select array[c.queue_entry_id] as ids,
+      c.party_size as total,
+      c.rn as max_rn
+    from candidates c
+    where c.party_size <= 2
+
     union all
-    select array[c1.queue_entry_id, c2.queue_entry_id],
-      c1.party_size + c2.party_size
-    from candidates c1
-    join candidates c2 on c2.rn > c1.rn
-    union all
-    select array[c1.queue_entry_id, c2.queue_entry_id, c3.queue_entry_id],
-      c1.party_size + c2.party_size + c3.party_size
-    from candidates c1
-    join candidates c2 on c2.rn > c1.rn
-    join candidates c3 on c3.rn > c2.rn
-    union all
-    select array[c1.queue_entry_id, c2.queue_entry_id, c3.queue_entry_id, c4.queue_entry_id],
-      c1.party_size + c2.party_size + c3.party_size + c4.party_size
-    from candidates c1
-    join candidates c2 on c2.rn > c1.rn
-    join candidates c3 on c3.rn > c2.rn
-    join candidates c4 on c4.rn > c3.rn
-    union all
-    select array[c1.queue_entry_id, c2.queue_entry_id, c3.queue_entry_id, c4.queue_entry_id, c5.queue_entry_id],
-      c1.party_size + c2.party_size + c3.party_size + c4.party_size + c5.party_size
-    from candidates c1
-    join candidates c2 on c2.rn > c1.rn
-    join candidates c3 on c3.rn > c2.rn
-    join candidates c4 on c4.rn > c3.rn
-    join candidates c5 on c5.rn > c4.rn
-    union all
-    select array[c1.queue_entry_id, c2.queue_entry_id, c3.queue_entry_id, c4.queue_entry_id, c5.queue_entry_id, c6.queue_entry_id],
-      c1.party_size + c2.party_size + c3.party_size + c4.party_size + c5.party_size + c6.party_size
-    from candidates c1
-    join candidates c2 on c2.rn > c1.rn
-    join candidates c3 on c3.rn > c2.rn
-    join candidates c4 on c4.rn > c3.rn
-    join candidates c5 on c5.rn > c4.rn
-    join candidates c6 on c6.rn > c5.rn
-    union all
-    select array[c1.queue_entry_id, c2.queue_entry_id, c3.queue_entry_id, c4.queue_entry_id, c5.queue_entry_id, c6.queue_entry_id, c7.queue_entry_id],
-      c1.party_size + c2.party_size + c3.party_size + c4.party_size + c5.party_size + c6.party_size + c7.party_size
-    from candidates c1
-    join candidates c2 on c2.rn > c1.rn
-    join candidates c3 on c3.rn > c2.rn
-    join candidates c4 on c4.rn > c3.rn
-    join candidates c5 on c5.rn > c4.rn
-    join candidates c6 on c6.rn > c5.rn
-    join candidates c7 on c7.rn > c6.rn
-    union all
-    select array[c1.queue_entry_id, c2.queue_entry_id, c3.queue_entry_id, c4.queue_entry_id, c5.queue_entry_id, c6.queue_entry_id, c7.queue_entry_id, c8.queue_entry_id],
-      c1.party_size + c2.party_size + c3.party_size + c4.party_size + c5.party_size + c6.party_size + c7.party_size + c8.party_size
-    from candidates c1
-    join candidates c2 on c2.rn > c1.rn
-    join candidates c3 on c3.rn > c2.rn
-    join candidates c4 on c4.rn > c3.rn
-    join candidates c5 on c5.rn > c4.rn
-    join candidates c6 on c6.rn > c5.rn
-    join candidates c7 on c7.rn > c6.rn
-    join candidates c8 on c8.rn > c7.rn
+
+    select cm.ids || c.queue_entry_id,
+      cm.total + c.party_size,
+      c.rn
+    from combos cm
+    join candidates c on c.rn > cm.max_rn
+    where cm.total + c.party_size <= 2
   ),
   valid_combos as (
     select ids from combos
-    where total_players = 8 and p_anchor_queue_entry_id = any(ids)
+    where total = 2 and p_anchor_queue_entry_id = any(ids)
   ),
   scored as (
     select vc.ids,
-      (select coalesce(sum(case when ce.party_size = 4 then 10 when ce.party_size = 3 then 6 when ce.party_size = 2 then 3 else 0 end), 0) from tmp_candidate_entries ce where ce.queue_entry_id = any(vc.ids)) as composition_weight,
-      (select round(avg(abs(ce.avg_rating - v_anchor_avg))::numeric, 2) from tmp_candidate_entries ce where ce.queue_entry_id = any(vc.ids)) as anchor_distance
+      (select round(avg(abs(ce.avg_rating - v_anchor_avg))::numeric, 2)
+       from tmp_candidate_entries ce where ce.queue_entry_id = any(vc.ids)) as anchor_distance
     from valid_combos vc
   )
   insert into tmp_best_selection(queue_entry_id)
-  select unnest(s.ids) from (select ids from scored order by composition_weight desc, anchor_distance asc limit 1) s;
+  select unnest(s.ids)
+  from (select ids from scored order by anchor_distance asc limit 1) s;
 
   if not exists (select 1 from tmp_best_selection) then
     raise exception 'not enough compatible waiting players to create a match';
@@ -202,84 +154,70 @@ begin
 
   select count(*) into v_locked_count from tmp_selected_entries;
   if v_locked_count <= 0 then raise exception 'no selected entries'; end if;
-  if (select coalesce(sum(party_size), 0) from tmp_selected_entries) <> 8 then
-    raise exception 'selected entries do not sum to 8';
+  if (select coalesce(sum(party_size), 0) from tmp_selected_entries) <> 2 then
+    raise exception 'selected entries do not sum to 2';
   end if;
 
   insert into tmp_selected_users(queue_entry_id, user_id)
   select qem.queue_entry_id, qem.user_id
   from public.queue_entry_members qem join tmp_selected_entries se on se.queue_entry_id = qem.queue_entry_id;
 
-  -- 4) recent opponents
-  with my_recent_match as (
-    select distinct on (mtm.user_id) mtm.user_id, mt.match_id, mtm.match_team_id
-    from public.match_team_members mtm
-    join public.match_teams mt on mt.id = mtm.match_team_id
-    join public.matches m on m.id = mt.match_id
-    where mtm.user_id in (select user_id from tmp_selected_users) and m.status = 'completed'
-    order by mtm.user_id, m.completed_at desc nulls last, m.matched_at desc nulls last
-  )
-  insert into tmp_recent_opponents(user_id, recent_opponent_user_id)
-  select mrm.user_id, opp_mtm.user_id
-  from my_recent_match mrm
-  join public.match_teams my_mt on my_mt.id = mrm.match_team_id
-  join public.match_teams opp_mt on opp_mt.match_id = my_mt.match_id and opp_mt.id <> my_mt.id
-  join public.match_team_members opp_mtm on opp_mtm.match_team_id = opp_mt.id;
-
-  -- 5) split into alpha/bravo
+  -- 4) split into alpha/bravo
   create temporary table tmp_side_candidates (
     queue_entry_id uuid not null, side text not null check (side in ('alpha','bravo'))
   ) on commit drop;
 
-  with selected as (
-    select row_number() over (order by created_at asc, queue_entry_id) as rn, * from tmp_selected_entries
+  with recursive selected as (
+    select queue_entry_id, party_size,
+      row_number() over (order by created_at asc, queue_entry_id) as rn
+    from tmp_selected_entries
   ),
-  alpha_sets as (
-    select array[s1.queue_entry_id]::uuid[] as alpha_ids, s1.party_size as alpha_players from selected s1
+  alpha_combos as (
+    select array[s.queue_entry_id] as alpha_ids,
+      s.party_size as alpha_total,
+      s.rn as max_rn
+    from selected s
+    where s.party_size <= 1
+
     union all
-    select array[s1.queue_entry_id, s2.queue_entry_id], s1.party_size + s2.party_size
-    from selected s1 join selected s2 on s2.rn > s1.rn
-    union all
-    select array[s1.queue_entry_id, s2.queue_entry_id, s3.queue_entry_id], s1.party_size + s2.party_size + s3.party_size
-    from selected s1 join selected s2 on s2.rn > s1.rn join selected s3 on s3.rn > s2.rn
-    union all
-    select array[s1.queue_entry_id, s2.queue_entry_id, s3.queue_entry_id, s4.queue_entry_id], s1.party_size + s2.party_size + s3.party_size + s4.party_size
-    from selected s1 join selected s2 on s2.rn > s1.rn join selected s3 on s3.rn > s2.rn join selected s4 on s4.rn > s3.rn
+
+    select ac.alpha_ids || s.queue_entry_id,
+      ac.alpha_total + s.party_size,
+      s.rn
+    from alpha_combos ac
+    join selected s on s.rn > ac.max_rn
+    where ac.alpha_total + s.party_size <= 1
   ),
   valid_alpha as (
-    select alpha_ids from alpha_sets where alpha_players = 4
+    select alpha_ids from alpha_combos where alpha_total = 1
   ),
   split_scored as (
     select va.alpha_ids,
-      (select round(avg(qem.rating_at_entry)::numeric, 2) from tmp_selected_entries se join public.queue_entry_members qem on qem.queue_entry_id = se.queue_entry_id where se.queue_entry_id = any(va.alpha_ids)) as alpha_avg,
-      (select round(avg(qem.rating_at_entry)::numeric, 2) from tmp_selected_entries se join public.queue_entry_members qem on qem.queue_entry_id = se.queue_entry_id where not (se.queue_entry_id = any(va.alpha_ids))) as bravo_avg,
-      (select coalesce(sum(se.party_size_bonus), 0) from tmp_selected_entries se where se.queue_entry_id = any(va.alpha_ids)) as alpha_bonus,
-      (select coalesce(sum(se.party_size_bonus), 0) from tmp_selected_entries se where not (se.queue_entry_id = any(va.alpha_ids))) as bravo_bonus,
-      (select bool_or(se.party_size = 4) from tmp_selected_entries se where se.queue_entry_id = any(va.alpha_ids)) as alpha_has_full,
-      (select bool_or(se.party_size = 4) from tmp_selected_entries se where not (se.queue_entry_id = any(va.alpha_ids))) as bravo_has_full,
-      (select bool_and(se.party_size = 1) from tmp_selected_entries se where se.queue_entry_id = any(va.alpha_ids)) as alpha_all_solo,
-      (select bool_and(se.party_size = 1) from tmp_selected_entries se where not (se.queue_entry_id = any(va.alpha_ids))) as bravo_all_solo,
-      (select string_agg(se.party_size::text, '+' order by se.party_size desc, se.created_at asc) from tmp_selected_entries se where se.queue_entry_id = any(va.alpha_ids)) as alpha_comp,
-      (select string_agg(se.party_size::text, '+' order by se.party_size desc, se.created_at asc) from tmp_selected_entries se where not (se.queue_entry_id = any(va.alpha_ids))) as bravo_comp,
-      (select count(*) from (select su.user_id from tmp_selected_users su where su.queue_entry_id = any(va.alpha_ids)) alpha_users join (select su.user_id from tmp_selected_users su where not (su.queue_entry_id = any(va.alpha_ids))) bravo_users on true join tmp_recent_opponents ro on ro.user_id = alpha_users.user_id and ro.recent_opponent_user_id = bravo_users.user_id) as recent_rematch_count
+      abs(
+        (select avg(qem.rating_at_entry) from tmp_selected_entries se join public.queue_entry_members qem on qem.queue_entry_id = se.queue_entry_id where se.queue_entry_id = any(va.alpha_ids))
+        -
+        (select avg(qem.rating_at_entry) from tmp_selected_entries se join public.queue_entry_members qem on qem.queue_entry_id = se.queue_entry_id where not (se.queue_entry_id = any(va.alpha_ids)))
+      ) as avg_diff,
+      case when
+        (select bool_or(se.party_size = 4) from tmp_selected_entries se where se.queue_entry_id = any(va.alpha_ids))
+        and (select bool_and(se.party_size = 1) from tmp_selected_entries se where not (se.queue_entry_id = any(va.alpha_ids)))
+      then true
+      when
+        (select bool_or(se.party_size = 4) from tmp_selected_entries se where not (se.queue_entry_id = any(va.alpha_ids)))
+        and (select bool_and(se.party_size = 1) from tmp_selected_entries se where se.queue_entry_id = any(va.alpha_ids))
+      then true
+      else false end as is_full_vs_solo
     from valid_alpha va
-  ),
-  final_scored as (
-    select *,
-      abs(alpha_avg - bravo_avg) as avg_diff,
-      abs(alpha_bonus - bravo_bonus) as bonus_diff,
-      case when (alpha_has_full and bravo_all_solo) or (bravo_has_full and alpha_all_solo) then 1000 else 0 end as full_vs_allsolo_penalty,
-      case when alpha_comp = bravo_comp then 0 else 50 end as composition_mismatch_penalty,
-      (recent_rematch_count * 200) as recent_rematch_penalty
-    from split_scored
   )
   insert into tmp_side_candidates(queue_entry_id, side)
   select se.queue_entry_id, case when se.queue_entry_id = any(best.alpha_ids) then 'alpha' else 'bravo' end
   from tmp_selected_entries se
   cross join (
-    select alpha_ids from final_scored
-    where (v_anchor_level >= 3 or full_vs_allsolo_penalty = 0)
-    order by full_vs_allsolo_penalty asc, recent_rematch_penalty asc, composition_mismatch_penalty asc, avg_diff asc, bonus_diff asc
+    select alpha_ids from split_scored
+    where (v_anchor_level >= 3 or not is_full_vs_solo)
+    order by
+      (case when is_full_vs_solo then 1 else 0 end) asc,
+      avg_diff asc
     limit 1
   ) best;
 
@@ -291,15 +229,15 @@ begin
   select coalesce(sum(se.party_size), 0) into v_bravo_players
   from tmp_best_side bs join tmp_selected_entries se on se.queue_entry_id = bs.queue_entry_id where bs.side = 'bravo';
 
-  if v_alpha_players <> 4 or v_bravo_players <> 4 then
-    raise exception 'failed to split teams into 4v4';
+  if v_alpha_players <> 1 or v_bravo_players <> 1 then
+    raise exception 'failed to split teams into 1v1';
   end if;
 
   if exists (select 1 from public.queue_entries qe join tmp_selected_entries se on se.queue_entry_id = qe.id where qe.status <> 'waiting') then
     raise exception 'some selected queue entries are no longer waiting';
   end if;
 
-  -- 6) create match
+  -- 5) create match
   insert into public.matches (queue_type, status, created_from_queue, matched_at, approval_status, metadata)
   values (p_queue_type, 'banpick', true, now(), 'none', '{}'::jsonb)
   returning id into v_match_id;

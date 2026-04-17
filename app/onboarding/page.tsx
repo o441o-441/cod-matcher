@@ -11,6 +11,7 @@ export default function OnboardingPage() {
   const [activisionId, setActivisionId] = useState('')
   const [controller, setController] = useState('')
   const [platform, setPlatform] = useState('')
+  const [skillLevel, setSkillLevel] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleSave = async () => {
@@ -26,6 +27,13 @@ export default function OnboardingPage() {
       return
     }
 
+    if (!skillLevel) {
+      alert('スキルレベルを選択してください')
+      setLoading(false)
+      return
+    }
+
+    const initialRating = Number(skillLevel)
     const user = session.user
 
     const { error } = await supabase
@@ -53,6 +61,9 @@ export default function OnboardingPage() {
           id: user.id,
           display_name: displayName,
           is_onboarded: true,
+          current_rating: initialRating,
+          initial_rating: initialRating,
+          peak_rating: initialRating,
         },
         { onConflict: 'id' }
       )
@@ -118,6 +129,22 @@ export default function OnboardingPage() {
           <option value="Steam">Steam</option>
           <option value="PlayStation">PlayStation</option>
           <option value="Xbox">Xbox</option>
+        </select>
+      </div>
+
+      <div style={{ marginTop: '20px' }}>
+        <p>スキルレベル</p>
+        <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
+          ランクマッチでの最高ランクを基準に選択してください。初期レートに反映されます。
+        </p>
+        <select
+          value={skillLevel}
+          onChange={(e) => setSkillLevel(e.target.value)}
+        >
+          <option value="">選択してください</option>
+          <option value="1400">初級者（プラチナ以下）</option>
+          <option value="1500">中級者（ダイヤ）</option>
+          <option value="1600">上級者（クリムゾン以上）</option>
         </select>
       </div>
 

@@ -78,6 +78,7 @@ export default function ControllerRankingPage() {
         </div>
         <div className="row">
           <button onClick={() => router.push('/ranking')}>レートランキング</button>
+          <button onClick={() => router.push('/ranking/games-played')}>プレイ回数</button>
           <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
         </div>
       </div>

@@ -75,7 +75,7 @@ export default function AdminSeasonsPage() {
   }
 
   const handleActivate = async (seasonId: string) => {
-    if (!confirm('このシーズンをアクティブにしますか？他のシーズンは非アクティブになります。全プレイヤーのレートが1500にリセットされます。')) return
+    if (!confirm('このシーズンをアクティブにしますか？他のシーズンは非アクティブになります。全プレイヤーのレートがリセットされます（初期レートまたは到達実績に基づく）。')) return
 
     await supabase.from('seasons').update({ is_active: false }).neq('id', seasonId)
     await supabase.from('seasons').update({ is_active: true }).eq('id', seasonId)
@@ -84,7 +84,7 @@ export default function AdminSeasonsPage() {
     if (error) {
       showToast('シーズン切替は成功しましたがレートリセットに失敗しました: ' + error.message, 'error')
     } else {
-      showToast('シーズンをアクティブにし、全プレイヤーのレートを1500にリセットしました', 'success')
+      showToast('シーズンをアクティブにし、全プレイヤーのレートをリセットしました', 'success')
     }
     await fetchSeasons()
   }

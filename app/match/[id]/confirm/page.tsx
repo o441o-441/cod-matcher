@@ -129,10 +129,12 @@ export default function MatchConfirmPage() {
   const [messages, setMessages] = useState<MatchMessageRow[]>([]);
 
   const [chatInput, setChatInput] = useState("");
+  const [showHostPopup, setShowHostPopup] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const prevMsgCountRef = useRef(0);
   const loadBusyRef = useRef(false);
   const cachedUidRef = useRef<string | null>(null);
+  const hostPopupShownRef = useRef(false);
 
   const clearMessages = () => setErrorText(null);
 
@@ -258,6 +260,14 @@ export default function MatchConfirmPage() {
   }, [match, members]);
 
   const isHost = !!match?.host_user_id && match.host_user_id === myUserId;
+
+  useEffect(() => {
+    if (!isHost) return;
+    if (hostPopupShownRef.current) return;
+    hostPopupShownRef.current = true;
+    setShowHostPopup(true);
+  }, [isHost]);
+
   const [lobbyCodeInput, setLobbyCodeInput] = useState("");
 
   const handleSendLobbyCode = async () => {
@@ -314,6 +324,62 @@ export default function MatchConfirmPage() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white">
+      {showHostPopup && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(0,0,0,0.7)",
+          }}
+          onClick={() => setShowHostPopup(false)}
+        >
+          <div
+            style={{
+              background: "#1a1a2e",
+              border: "1px solid rgba(0,229,255,0.4)",
+              borderRadius: 12,
+              padding: "32px 40px",
+              maxWidth: 440,
+              width: "90%",
+              textAlign: "center",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: 12 }}>
+              あなたがホストに選ばれました。
+            </h2>
+            <p style={{ fontSize: "0.875rem", color: "rgba(255,255,255,0.8)", marginBottom: 8 }}>
+              プライベートマッチロビーを作成してください。
+            </p>
+            <p style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", marginBottom: 24 }}>
+              やり方がわからない場合はロビー作成方法ボタンを押してください。
+            </p>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <button
+                type="button"
+                onClick={() => setShowHostPopup(false)}
+                className="rounded bg-cyan-500 px-6 py-2 text-sm font-semibold text-white"
+              >
+                OK
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowHostPopup(false);
+                  router.push("/rules#lobby-guide");
+                }}
+                className="rounded border border-white/30 bg-white/10 px-6 py-2 text-sm font-semibold text-white hover:bg-white/20"
+              >
+                ロビー作成方法
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="mx-auto max-w-5xl px-4 py-6">
         <div className="mb-6 flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-end md:justify-between">
           <div>
@@ -520,6 +586,15 @@ export default function MatchConfirmPage() {
             </section>
           </div>
         </div>
+
+        <section className="mt-6 rounded border border-white/10 bg-white/5 p-4">
+          <h2 className="mb-3 text-lg font-semibold">ロビー画面の見方</h2>
+          <img
+            src="/tutorial.png"
+            alt="プライベートマッチロビーの見方 - ロビーコード、JSOC（チーム1）、ギルド（チーム2）の位置"
+            className="w-full rounded border border-white/10"
+          />
+        </section>
       </div>
     </div>
   );
