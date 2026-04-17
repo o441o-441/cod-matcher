@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { CONTROLLER_GROUPS } from '@/lib/controllers'
@@ -13,6 +13,29 @@ export default function OnboardingPage() {
   const [platform, setPlatform] = useState('')
   const [skillLevel, setSkillLevel] = useState('')
   const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
+
+  useEffect(() => {
+    const loadExisting = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) { setInitialLoading(false); return }
+
+      const { data } = await supabase
+        .from('users')
+        .select('display_name, activision_id, controller, platform')
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle()
+
+      if (data) {
+        if (data.display_name) setDisplayName(data.display_name)
+        if (data.activision_id) setActivisionId(data.activision_id)
+        if (data.controller) setController(data.controller)
+        if (data.platform) setPlatform(data.platform)
+      }
+      setInitialLoading(false)
+    }
+    void loadExisting()
+  }, [])
 
   const handleSave = async () => {
     setLoading(true)
@@ -53,6 +76,16 @@ export default function OnboardingPage() {
       return
     }
 
+    // 既存の peak_rating を取得して保持する
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('peak_rating')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const existingPeak = (existingProfile?.peak_rating as number | null) ?? 0
+    const newPeakRating = Math.max(initialRating, existingPeak)
+
     // /match 系（パーティーモデル）が参照する profiles テーブルにも反映する
     const { error: profileError } = await supabase
       .from('profiles')
@@ -63,7 +96,7 @@ export default function OnboardingPage() {
           is_onboarded: true,
           current_rating: initialRating,
           initial_rating: initialRating,
-          peak_rating: initialRating,
+          peak_rating: newPeakRating,
         },
         { onConflict: 'id' }
       )
@@ -75,6 +108,15 @@ export default function OnboardingPage() {
     }
 
     router.push('/menu')
+  }
+
+  if (initialLoading) {
+    return (
+      <main style={{ padding: '40px' }}>
+        <h1>ASCENT プロフィール登録</h1>
+        <p className="muted">読み込み中...</p>
+      </main>
+    )
   }
 
   return (
