@@ -101,7 +101,7 @@ begin
       and abs(qe.avg_rating - v_anchor_avg) <= v_max_diff
       and qe.party_size >= v_min_party_size
     order by abs(qe.avg_rating - v_anchor_avg) asc, qe.created_at asc
-    limit 1
+    limit 7
     for update skip locked
   ) t
   on conflict (queue_entry_id) do nothing;
@@ -119,7 +119,7 @@ begin
       c.party_size as total,
       c.rn as max_rn
     from candidates c
-    where c.party_size <= 2
+    where c.party_size <= 8
 
     union all
 
@@ -128,11 +128,11 @@ begin
       c.rn
     from combos cm
     join candidates c on c.rn > cm.max_rn
-    where cm.total + c.party_size <= 2
+    where cm.total + c.party_size <= 8
   ),
   valid_combos as (
     select ids from combos
-    where total = 2 and p_anchor_queue_entry_id = any(ids)
+    where total = 8 and p_anchor_queue_entry_id = any(ids)
   ),
   scored as (
     select vc.ids,
@@ -154,8 +154,8 @@ begin
 
   select count(*) into v_locked_count from tmp_selected_entries;
   if v_locked_count <= 0 then raise exception 'no selected entries'; end if;
-  if (select coalesce(sum(party_size), 0) from tmp_selected_entries) <> 2 then
-    raise exception 'selected entries do not sum to 2';
+  if (select coalesce(sum(party_size), 0) from tmp_selected_entries) <> 8 then
+    raise exception 'selected entries do not sum to 8';
   end if;
 
   insert into tmp_selected_users(queue_entry_id, user_id)
@@ -177,7 +177,7 @@ begin
       s.party_size as alpha_total,
       s.rn as max_rn
     from selected s
-    where s.party_size <= 1
+    where s.party_size <= 4
 
     union all
 
@@ -186,10 +186,10 @@ begin
       s.rn
     from alpha_combos ac
     join selected s on s.rn > ac.max_rn
-    where ac.alpha_total + s.party_size <= 1
+    where ac.alpha_total + s.party_size <= 4
   ),
   valid_alpha as (
-    select alpha_ids from alpha_combos where alpha_total = 1
+    select alpha_ids from alpha_combos where alpha_total = 4
   ),
   split_scored as (
     select va.alpha_ids,
@@ -229,8 +229,8 @@ begin
   select coalesce(sum(se.party_size), 0) into v_bravo_players
   from tmp_best_side bs join tmp_selected_entries se on se.queue_entry_id = bs.queue_entry_id where bs.side = 'bravo';
 
-  if v_alpha_players <> 1 or v_bravo_players <> 1 then
-    raise exception 'failed to split teams into 1v1';
+  if v_alpha_players <> 4 or v_bravo_players <> 4 then
+    raise exception 'failed to split teams into 4v4';
   end if;
 
   if exists (select 1 from public.queue_entries qe join tmp_selected_entries se on se.queue_entry_id = qe.id where qe.status <> 'waiting') then
