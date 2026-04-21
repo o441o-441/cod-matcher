@@ -910,7 +910,7 @@ export default function MatchPage() {
       <div className="rowx" style={{ marginBottom: 24 }}>
         <div>
           <span className="eyebrow">RANKED MATCHMAKING</span>
-          <h1 style={{ marginBottom: 0 }}>ASCENT マッチング</h1>
+          <h1 style={{ marginBottom: 0 }}>マッチング</h1>
           <p className="muted" style={{ marginTop: 4 }}>招待制パーティ + 自動マッチ生成</p>
         </div>
         <div className="row">

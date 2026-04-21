@@ -71,7 +71,7 @@ function BlogIndexContent() {
         <div>
           <div className="eyebrow">REVIEWS</div>
           <h1 className="display" style={{ marginBottom: 8 }}>
-            ASCENT <em>コントローラーレビュー</em>
+            <em>コントローラーレビュー</em>
           </h1>
           <p className="muted">コミュニティのレビュー一覧</p>
         </div>
@@ -141,7 +141,7 @@ function BlogIndexContent() {
 
 export default function BlogIndexPage() {
   return (
-    <Suspense fallback={<main><h1>ASCENT コントローラーレビュー</h1><LoadingCard message="読み込み中..." /></main>}>
+    <Suspense fallback={<main><h1>コントローラーレビュー</h1><LoadingCard message="読み込み中..." /></main>}>
       <BlogIndexContent />
     </Suspense>
   )

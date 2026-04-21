@@ -277,7 +277,7 @@ export default function AdminDashboardPage() {
   if (loading || !authorized) {
     return (
       <main>
-        <h1>ASCENT ダッシュボード</h1>
+        <h1>ダッシュボード</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -290,7 +290,7 @@ export default function AdminDashboardPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>ASCENT ダッシュボード</h1>
+          <h1>ダッシュボード</h1>
           <p className="muted">プラットフォーム統計 / KPI</p>
         </div>
         <div className="row">

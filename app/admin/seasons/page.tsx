@@ -114,14 +114,14 @@ export default function AdminSeasonsPage() {
   }
 
   if (loading || !authorized) {
-    return <main><h1>ASCENT シーズン管理</h1><LoadingCard message="読み込み中..." /></main>
+    return <main><h1>シーズン管理</h1><LoadingCard message="読み込み中..." /></main>
   }
 
   return (
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>ASCENT シーズン管理</h1>
+          <h1>シーズン管理</h1>
           <p className="muted">シーズンの作成・編集・切り替え</p>
         </div>
         <div className="row">

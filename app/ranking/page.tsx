@@ -155,7 +155,7 @@ export default function RankingPage() {
       <div>
         <div className="eyebrow">LEADERBOARD</div>
         <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginTop: 6 }}>
-          ASCENT <em>ランキング</em>
+          <em>ランキング</em>
         </h1>
         <p className="muted">
           {selectedSeasonName || 'シーズンを選択してください'}

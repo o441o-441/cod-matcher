@@ -115,7 +115,7 @@ export default function OnboardingPage() {
       <main>
         <div className="eyebrow">ONBOARDING</div>
         <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginTop: 6 }}>
-          ASCENT <em>プロフィール登録</em>
+          <em>プロフィール登録</em>
         </h1>
         <p className="muted">読み込み中...</p>
       </main>

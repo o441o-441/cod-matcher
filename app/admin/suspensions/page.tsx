@@ -84,7 +84,7 @@ export default function AdminSuspensionsPage() {
   if (loading || !authorized) {
     return (
       <main>
-        <h1>ASCENT 一時停止ユーザー</h1>
+        <h1>一時停止ユーザー</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -94,7 +94,7 @@ export default function AdminSuspensionsPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>ASCENT 一時停止ユーザー</h1>
+          <h1>一時停止ユーザー</h1>
           <p className="muted">監視ユーザーによって24時間停止されたユーザー一覧</p>
         </div>
         <div className="row">

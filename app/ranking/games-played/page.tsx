@@ -115,7 +115,7 @@ export default function GamesPlayedRankingPage() {
       <div>
         <div className="eyebrow">GAMES PLAYED</div>
         <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginTop: 6 }}>
-          ASCENT <em>プレイ回数ランキング</em>
+          <em>プレイ回数ランキング</em>
         </h1>
         <p className="muted">{selectedSeasonName}</p>
       </div>

@@ -91,7 +91,7 @@ export default function AdminAffiliatesPage() {
   if (loading || !authorized) {
     return (
       <main>
-        <h1>ASCENT 購入リンク管理</h1>
+        <h1>購入リンク管理</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -101,7 +101,7 @@ export default function AdminAffiliatesPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>ASCENT 購入リンク管理</h1>
+          <h1>購入リンク管理</h1>
           <p className="muted">コントローラーのアフィリエイトリンクを管理</p>
         </div>
         <div className="row">

@@ -165,7 +165,7 @@ export default function AdminAnnouncementsPage() {
   if (loading || !authorized) {
     return (
       <main>
-        <h1>ASCENT お知らせ管理</h1>
+        <h1>お知らせ管理</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -175,7 +175,7 @@ export default function AdminAnnouncementsPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>ASCENT お知らせ管理</h1>
+          <h1>お知らせ管理</h1>
           <p className="muted">トップページに表示される運営からのお知らせ</p>
         </div>
         <div className="row">

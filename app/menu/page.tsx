@@ -193,7 +193,7 @@ export default function MenuPage() {
     return (
       <main>
         <div className="eyebrow">MAIN / MENU</div>
-        <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3.2rem)', marginTop: 8 }}>ASCENT メニュー</h1>
+        <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3.2rem)', marginTop: 8 }}>メニュー</h1>
         <LoadingSkeleton cards={3} />
       </main>
     )
@@ -207,7 +207,7 @@ export default function MenuPage() {
     <main>
       <div className="eyebrow">MAIN / MENU</div>
       <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3.2rem)', marginTop: 8 }}>
-        ASCENT <em>メニュー</em>
+        <em>メニュー</em>
       </h1>
       <Tutorial pageKey="menu" steps={MENU_TUTORIAL} />
 

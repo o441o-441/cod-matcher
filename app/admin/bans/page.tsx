@@ -90,7 +90,7 @@ export default function AdminBansPage() {
   if (loading || !authorized) {
     return (
       <main>
-        <h1>ASCENT BANユーザー管理</h1>
+        <h1>BANユーザー管理</h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -100,7 +100,7 @@ export default function AdminBansPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>ASCENT BANユーザー管理</h1>
+          <h1>BANユーザー管理</h1>
           <p className="muted">現在BANされているユーザー一覧</p>
         </div>
         <div className="row">

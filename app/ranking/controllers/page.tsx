@@ -74,7 +74,7 @@ export default function ControllerRankingPage() {
       <div>
         <div className="eyebrow">CONTROLLER RANKING</div>
         <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginTop: 6 }}>
-          ASCENT <em>コントローラーランキング</em>
+          <em>コントローラーランキング</em>
         </h1>
         <p className="muted">使用者の平均レートが高い順</p>
       </div>
