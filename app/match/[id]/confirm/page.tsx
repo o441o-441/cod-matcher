@@ -130,6 +130,7 @@ export default function MatchConfirmPage() {
 
   const [chatInput, setChatInput] = useState("");
   const [showHostPopup, setShowHostPopup] = useState(false);
+  const [showNonHostPopup, setShowNonHostPopup] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const prevMsgCountRef = useRef(0);
   const loadBusyRef = useRef(false);
@@ -260,11 +261,15 @@ export default function MatchConfirmPage() {
   const isHost = !!match?.host_user_id && match.host_user_id === myUserId;
 
   useEffect(() => {
-    if (!isHost) return;
+    if (!match?.host_user_id || !myUserId) return;
     if (hostPopupShownRef.current) return;
     hostPopupShownRef.current = true;
-    setShowHostPopup(true);
-  }, [isHost]);
+    if (isHost) {
+      setShowHostPopup(true);
+    } else {
+      setShowNonHostPopup(true);
+    }
+  }, [isHost, match?.host_user_id, myUserId]);
 
   const [lobbyCodeInput, setLobbyCodeInput] = useState("");
 
@@ -333,6 +338,9 @@ export default function MatchConfirmPage() {
               <p className="muted">
                 やり方がわからない場合はロビー作成方法ボタンを押してください。
               </p>
+              <p className="muted">
+                何らかの理由でホストを持てない場合は他プレイヤーと相談してホストを変わってください。
+              </p>
             </div>
             <div className="modal-foot" style={{ justifyContent: "center" }}>
               <button
@@ -349,6 +357,27 @@ export default function MatchConfirmPage() {
                 }}
               >
                 ロビー作成方法
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Non-host popup modal */}
+      {showNonHostPopup && (
+        <div className="modal-root" onClick={() => setShowNonHostPopup(false)}>
+          <div className="modal-scrim" />
+          <div className="modal-card" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-body" style={{ textAlign: "center", padding: "32px 24px" }}>
+              <h2 style={{ marginTop: 0 }}>あなたはホストではありません。</h2>
+              <p>ホストからロビーコードが送信されたら速やかに参加してください。</p>
+            </div>
+            <div className="modal-foot" style={{ justifyContent: "center" }}>
+              <button
+                className="btn-primary"
+                onClick={() => setShowNonHostPopup(false)}
+              >
+                OK
               </button>
             </div>
           </div>
