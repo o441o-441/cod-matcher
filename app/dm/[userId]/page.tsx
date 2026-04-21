@@ -79,7 +79,10 @@ export default function DmConversationPage() {
   }, [partnerId])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = bottomRef.current?.parentElement
+    if (!el) return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+    if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   // Realtime + polling
