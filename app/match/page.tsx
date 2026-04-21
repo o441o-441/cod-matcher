@@ -7,6 +7,7 @@ import { Tutorial } from "@/components/Tutorial";
 import { playMatchFound } from "@/lib/sounds";
 import { usePageView } from "@/lib/usePageView";
 import { LoadingSkeleton } from "@/components/UIState";
+import QueueRadar from '@/components/QueueRadar';
 
 const RULES_KEY = "rules_accepted_v1";
 
@@ -1177,37 +1178,42 @@ export default function MatchPage() {
                   ]
                   return (
                     <div className="rounded border border-white/10 bg-black/20 p-4">
-                      <div className="mb-2 flex items-center justify-between">
-                        <div className="text-sm font-semibold">
-                          {autoMatching ? "対戦相手を探しています" : "待機中"}
-                        </div>
-                        <div className="text-xs text-white/50">
-                          {Math.floor(waitingSeconds / 60)}:{String(waitingSeconds % 60).padStart(2, "0")}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+                        <QueueRadar size={160} />
+                        <div style={{ flex: 1 }}>
+                          <div className="mb-2 flex items-center justify-between">
+                            <div className="text-sm font-semibold">
+                              {autoMatching ? "対戦相手を探しています" : "待機中"}
+                            </div>
+                            <div className="text-xs text-white/50">
+                              {Math.floor(waitingSeconds / 60)}:{String(waitingSeconds % 60).padStart(2, "0")}
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              height: 8,
+                              borderRadius: 4,
+                              background: "rgba(140,160,220,0.15)",
+                              overflow: "hidden",
+                              marginBottom: 8,
+                            }}
+                          >
+                            <div
+                              style={{
+                                height: "100%",
+                                width: `${Math.max(pct * 100, 5)}%`,
+                                borderRadius: 4,
+                                background: "linear-gradient(90deg, var(--accent-cyan, #00e5ff), var(--accent-violet, #8b5cf6))",
+                                transition: "width 1s ease",
+                              }}
+                            />
+                          </div>
+                          <p className="text-sm text-white/70">{messages[phase]}</p>
+                          <p className="mt-2 text-xs text-white/40">
+                            待ち時間が長いほど検索範囲が広がります。キャンセルすると最初からやり直しになります。
+                          </p>
                         </div>
                       </div>
-                      <div
-                        style={{
-                          height: 8,
-                          borderRadius: 4,
-                          background: "rgba(140,160,220,0.15)",
-                          overflow: "hidden",
-                          marginBottom: 8,
-                        }}
-                      >
-                        <div
-                          style={{
-                            height: "100%",
-                            width: `${Math.max(pct * 100, 5)}%`,
-                            borderRadius: 4,
-                            background: "linear-gradient(90deg, var(--accent-cyan, #00e5ff), var(--accent-violet, #8b5cf6))",
-                            transition: "width 1s ease",
-                          }}
-                        />
-                      </div>
-                      <p className="text-sm text-white/70">{messages[phase]}</p>
-                      <p className="mt-2 text-xs text-white/40">
-                        待ち時間が長いほど検索範囲が広がります。キャンセルすると最初からやり直しになります。
-                      </p>
                     </div>
                   )
                 })()}
@@ -1219,8 +1225,8 @@ export default function MatchPage() {
                 )}
 
                 {myActiveMatch && (
-                  <div className="rounded border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm">
-                    <div className="font-semibold">成立済み試合があります</div>
+                  <div className="enter rounded border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm">
+                    <div className="font-semibold" style={{ fontFamily: 'var(--font-display)', fontSize: 44, fontWeight: 800, background: 'linear-gradient(135deg, #fff, var(--cyan))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>マッチ成立</div>
                   </div>
                 )}
               </div>

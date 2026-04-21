@@ -22,6 +22,7 @@ function useSoundOnChange<T>(value: T, soundFn: () => void) {
 }
 import { Tutorial } from "@/components/Tutorial";
 import { LoadingSkeleton } from "@/components/UIState";
+import RatingDelta from "@/components/RatingDelta";
 
 const REPORT_TUTORIAL = [
   { title: "試合結果報告", body: "試合が終わったら、勝者チームのボタンを押して結果を報告します。" },
@@ -53,6 +54,7 @@ type MatchTeamMemberRow = {
   id: string;
   match_team_id: string;
   user_id: string;
+  rating_before: number | null;
   profiles?: {
     id: string;
     display_name: string;
@@ -167,6 +169,8 @@ export default function ReportPage() {
   const [notes, setNotes] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [chatInput, setChatInput] = useState("");
+  const [oldRating, setOldRating] = useState<number | null>(null);
+  const [newRating, setNewRating] = useState<number | null>(null);
 
   useSoundOnChange(report?.id ?? null, playReportNotify);
   useSoundOnChange(report?.status ?? null, playReportNotify);
@@ -287,7 +291,7 @@ export default function ReportPage() {
             .returns<MatchTeamRow[]>(),
           supabase
             .from("match_team_members")
-            .select("id,match_team_id,user_id,profiles!match_team_members_user_id_fkey(id,display_name)")
+            .select("id,match_team_id,user_id,rating_before,profiles!match_team_members_user_id_fkey(id,display_name)")
             .in("match_team_id", teamIds.length > 0 ? teamIds : ["00000000-0000-0000-0000-000000000000"])
             .returns<MatchTeamMemberRow[]>(),
           supabase
@@ -408,6 +412,35 @@ export default function ReportPage() {
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
+
+  // Fetch rating delta when match completes
+  useEffect(() => {
+    if (match?.status !== "completed" || match.approval_status === "voided") return;
+    if (!myUserId || !myMember) return;
+
+    const ratingBefore = myMember.rating_before;
+    if (ratingBefore == null) return;
+
+    setOldRating(ratingBefore);
+
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from("rating_history")
+          .select("rating_after")
+          .eq("user_id", myUserId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle<{ rating_after: number }>();
+
+        if (data?.rating_after != null) {
+          setNewRating(data.rating_after);
+        }
+      } catch (e) {
+        console.error("rating fetch error:", e);
+      }
+    })();
+  }, [match?.status, match?.approval_status, myUserId, myMember]);
 
   const handleGameChange = <K extends keyof ReportFormGame>(
     index: number,
@@ -849,15 +882,27 @@ export default function ReportPage() {
             )}
 
             {match?.status === "completed" && match.approval_status !== "voided" && (
-              <section className="rounded border border-emerald-500/20 bg-emerald-500/10 p-4">
-                <h2 className="text-lg font-semibold">試合確定済み</h2>
+              <section className="enter rounded border border-emerald-500/20 bg-emerald-500/10 p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <h2 className="text-lg font-semibold" style={{ fontFamily: 'var(--font-display)' }}>試合確定済み</h2>
+                  <span className="badge rounded bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                    COMPLETED
+                  </span>
+                </div>
                 <div className="mt-2 text-sm">
-                  勝者: <span className="font-semibold">{teamLabel(completedWinnerTeam)}</span>
+                  勝者: <span className="font-semibold" style={{ fontFamily: 'var(--font-display)' }}>{teamLabel(completedWinnerTeam)}</span>
                 </div>
                 {match.completed_at && (
                   <div className="mt-1 text-xs text-white/60">
                     確定日時: {new Date(match.completed_at).toLocaleString()}
                   </div>
+                )}
+                {oldRating != null && newRating != null && (
+                  <RatingDelta
+                    oldRating={oldRating}
+                    newRating={newRating}
+                    show={true}
+                  />
                 )}
               </section>
             )}

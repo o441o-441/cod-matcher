@@ -22,6 +22,8 @@ function useSoundOnChange<T>(value: T, soundFn: () => void) {
 }
 import { Tutorial } from "@/components/Tutorial";
 import { LoadingSkeleton } from "@/components/UIState";
+import TimerRing from "@/components/TimerRing";
+import MapThumb from "@/components/MapThumb";
 
 const BANPICK_TUTORIAL = [
   { title: "バンピックとは", body: "試合で使うマップとサイドを交互に選ぶフェーズです。3つのモード（HP / SND / OVL）それぞれでBAN → PICK → サイド選択を行います。" },
@@ -140,6 +142,19 @@ const PHASE_LABEL: Record<BanpickPhase, string> = {
 };
 
 const SIDE_OPTIONS = ["JSOC", "ギルド"];
+
+const MAP_META: Record<string, { id: string; en: string }> = {
+  "酒": { id: "sake", en: "Sake" },
+  "コロッサス": { id: "colossus", en: "Colossus" },
+  "デン": { id: "den", en: "Den" },
+  "クリフタウン": { id: "clifftown", en: "Clifftown" },
+  "スカー": { id: "scar", en: "Scar" },
+  "グリッドロック": { id: "gridlock", en: "Gridlock" },
+  "プラザ": { id: "plaza", en: "Plaza" },
+  "レイド": { id: "raid", en: "Raid" },
+  "フリンジ": { id: "fringe", en: "Fringe" },
+  "エクスポージャー": { id: "exposure", en: "Exposure" },
+};
 
 function parsePhaseState(
   selected: Json,
@@ -971,17 +986,9 @@ export default function BanpickPage() {
                         </div>
                       </div>
                       {remainingSec !== null && session.status === "in_progress" && (
-                        <div className="text-right">
+                        <div className="flex flex-col items-end gap-1">
                           <div className="text-xs text-white/50">残り時間</div>
-                          <div
-                            className={`text-2xl font-bold ${
-                              remainingSec <= 30 ? "text-red-400" : "text-white"
-                            }`}
-                          >
-                            {remainingSec > 0
-                              ? `${Math.floor(remainingSec / 60)}:${String(remainingSec % 60).padStart(2, "0")}`
-                              : "0:00"}
-                          </div>
+                          <TimerRing seconds={remainingSec > 0 ? remainingSec : 0} max={300} size={60} />
                         </div>
                       )}
                     </div>
@@ -1017,7 +1024,7 @@ export default function BanpickPage() {
                           )}
                         </div>
 
-                        <div className="mb-3 flex flex-wrap gap-2">
+                        <div className="mb-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {pool.map((mapName) => {
                             const banned = state.bans.includes(mapName);
                             const picked = state.map === mapName;
@@ -1027,6 +1034,12 @@ export default function BanpickPage() {
                                 session.current_action_type === "pick_map") &&
                               !banned &&
                               state.map === null;
+                            const meta = MAP_META[mapName];
+                            const thumbState: "available" | "banned" | "picked" = picked
+                              ? "picked"
+                              : banned
+                              ? "banned"
+                              : "available";
 
                             return (
                               <button
@@ -1037,17 +1050,20 @@ export default function BanpickPage() {
                                   if (!canClickAsMapAction) return;
                                   void handleSubmitBanpickActionWith(mapName);
                                 }}
-                                className={`rounded px-3 py-2 text-sm transition ${
-                                  picked
-                                    ? "bg-emerald-500/30 text-emerald-100 border border-emerald-400"
-                                    : banned
-                                    ? "bg-red-500/10 text-red-300 line-through border border-red-500/30"
-                                    : canClickAsMapAction
-                                    ? "border border-white/30 bg-white/5 hover:bg-white/10"
-                                    : "border border-white/10 bg-white/5 text-white/40"
+                                className={`rounded text-sm transition ${
+                                  canClickAsMapAction
+                                    ? "ring-1 ring-white/30 hover:ring-cyan-400/60 hover:scale-[1.02]"
+                                    : ""
                                 }`}
+                                style={{ background: "none", border: "none", padding: 0, cursor: canClickAsMapAction ? "pointer" : "default" }}
                               >
-                                {mapName}
+                                <MapThumb
+                                  mapId={meta?.id ?? mapName}
+                                  mapName={mapName}
+                                  mapNameEn={meta?.en}
+                                  state={thumbState}
+                                  small
+                                />
                               </button>
                             );
                           })}
