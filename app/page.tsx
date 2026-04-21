@@ -54,6 +54,7 @@ export default function Home() {
   const [recentPosts, setRecentPosts] = useState<RecentPostRow[]>([])
   const [signedIn, setSignedIn] = useState(false)
   const [tournaments, setTournaments] = useState<TournamentRow[]>([])
+  const [seasonName, setSeasonName] = useState<string | null>(null)
 
   usePageView('/')
 
@@ -144,6 +145,13 @@ export default function Home() {
     void fetchPopularPosts()
     void fetchRecentPosts()
     void fetchTournaments()
+    void supabase
+      .from('seasons')
+      .select('name')
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle<{ name: string }>()
+      .then(({ data }) => { if (data?.name) setSeasonName(data.name) })
     void supabase.auth.getSession().then(({ data }) => {
       setSignedIn(!!data.session?.user)
     })
@@ -163,7 +171,7 @@ export default function Home() {
         </div>
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div className="badge mb-m">
-            <span className="badge-dot" />SEASON 4 / LIVE
+            <span className="badge-dot" />{seasonName ?? 'SEASON'} / LIVE
           </div>
           <h1 className="display" style={{ fontSize: 'clamp(2.4rem, 5vw, 4.5rem)' }}>
             <em>GENTLEMEN&apos;S<br />AGREEMENT.</em><br />RANKED 4v4.
