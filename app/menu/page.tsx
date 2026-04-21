@@ -28,13 +28,14 @@ function getTierInfo(r: number | null): { label: string; color: string } {
 export default function MenuPage() {
   const router = useRouter()
 
-  type MenuCache = { hasTeam: boolean; isAdmin: boolean; rating: number | null; wins: number | null; losses: number | null }
+  type MenuCache = { hasTeam: boolean; isAdmin: boolean; rating: number | null; peakRating: number | null; wins: number | null; losses: number | null }
   const cached = typeof window !== 'undefined' ? getCache<MenuCache>('menu_data') : null
 
   const [loading, setLoading] = useState(!cached)
   const [hasTeam, setHasTeam] = useState(cached?.hasTeam ?? false)
   const [isAdmin, setIsAdmin] = useState(cached?.isAdmin ?? false)
   const [rating, setRating] = useState<number | null>(cached?.rating ?? null)
+  const [peakRating, setPeakRating] = useState<number | null>(cached?.peakRating ?? null)
   const [wins, setWins] = useState<number | null>(cached?.wins ?? null)
   const [losses, setLosses] = useState<number | null>(cached?.losses ?? null)
   const [myUserId, setMyUserId] = useState<string | null>(null)
@@ -140,7 +141,7 @@ export default function MenuPage() {
 
       const [memberRes, profileRes, notifRes] = await Promise.all([
         supabase.from('team_members').select('team_id').eq('user_id', session.user.id).maybeSingle<{ team_id: string | null }>(),
-        supabase.from('profiles').select('is_admin, current_rating, wins, losses').eq('id', session.user.id).maybeSingle<{ is_admin: boolean | null; current_rating: number | null; wins: number | null; losses: number | null }>(),
+        supabase.from('profiles').select('is_admin, current_rating, peak_rating, wins, losses').eq('id', session.user.id).maybeSingle<{ is_admin: boolean | null; current_rating: number | null; peak_rating: number | null; wins: number | null; losses: number | null }>(),
         supabase.from('notifications').select('id, type, body, link, created_at').eq('user_id', session.user.id).eq('is_read', false).order('created_at', { ascending: false }).limit(10),
       ])
 
@@ -149,6 +150,7 @@ export default function MenuPage() {
       const profileRow = profileRes.data
       setIsAdmin(!!profileRow?.is_admin)
       setRating(profileRow?.current_rating ?? null)
+      setPeakRating(profileRow?.peak_rating ?? null)
       setWins(profileRow?.wins ?? null)
       setLosses(profileRow?.losses ?? null)
 
@@ -159,6 +161,7 @@ export default function MenuPage() {
         hasTeam: !!memberRes.data?.team_id,
         isAdmin: !!profileRow?.is_admin,
         rating: profileRow?.current_rating ?? null,
+        peakRating: profileRow?.peak_rating ?? null,
         wins: profileRow?.wins ?? null,
         losses: profileRow?.losses ?? null,
       })
@@ -339,7 +342,7 @@ export default function MenuPage() {
               </span>
               {/* Peak */}
               <span className="muted" style={{ fontSize: 10, letterSpacing: '0.1em' }}>
-                PEAK {rating ?? '—'}
+                PEAK {peakRating ?? rating ?? '—'}
               </span>
             </div>
           </div>
