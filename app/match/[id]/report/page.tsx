@@ -602,6 +602,9 @@ export default function ReportPage() {
           </h1>
         </div>
         <div className="row">
+          <button className="btn-ghost" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => router.push(`/match/${matchId}/confirm`)}>
+            試合条件確認に戻る
+          </button>
           {statusBadge}
           <Tutorial pageKey="report" steps={REPORT_TUTORIAL} />
         </div>

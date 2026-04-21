@@ -1,15 +1,24 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { usePageView } from '@/lib/usePageView'
 
 export default function RulesPage() {
+  const router = useRouter()
   usePageView('/rules')
 
   return (
     <main>
-      <p className="eyebrow">RULES &amp; FAQ</p>
-      <h1 className="display"><em>ルール一覧</em></h1>
-      <p className="muted">Black Ops 7 GA（ジェントルマンズアグリーメント）</p>
+      <div className="rowx mb-s">
+        <div>
+          <p className="eyebrow">RULES &amp; FAQ</p>
+          <h1 className="display"><em>ルール一覧</em></h1>
+          <p className="muted">Black Ops 7 GA（ジェントルマンズアグリーメント）</p>
+        </div>
+        <button className="btn-ghost" style={{ padding: '8px 14px' }} onClick={() => router.back()}>
+          戻る
+        </button>
+      </div>
 
       <div id="lobby-guide" className="section">
         <p className="sec-title">プライベートマッチの作り方</p>
