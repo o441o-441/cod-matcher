@@ -41,10 +41,48 @@ export default function HistoryPage() {
   usePageView('/history')
 
   const fetchHistory = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    if (!session?.user) {
+      setLoading(false)
+      return
+    }
+    const uid = session.user.id
+
+    // 自分が参加したマッチのIDを取得
+    const { data: myMemberships, error: memErr } = await supabase
+      .from('match_team_members')
+      .select('match_team_id, match_teams!inner(match_id)')
+      .eq('user_id', uid)
+
+    if (memErr) {
+      console.error('my memberships error:', memErr)
+      setLoading(false)
+      return
+    }
+
+    const myMatchIds = [
+      ...new Set(
+        ((myMemberships ?? []) as unknown as { match_team_id: string; match_teams: { match_id: string } }[]).map(
+          (r) => r.match_teams.match_id
+        )
+      ),
+    ]
+
+    if (myMatchIds.length === 0) {
+      setMatches([])
+      setMatchTeams([])
+      setMembers([])
+      setLoading(false)
+      return
+    }
+
     const { data, error } = await supabase
       .from('matches')
       .select('id, status, winner_match_team_id, loser_match_team_id, matched_at')
       .eq('status', 'completed')
+      .in('id', myMatchIds)
       .order('matched_at', { ascending: false })
       .limit(20)
 
