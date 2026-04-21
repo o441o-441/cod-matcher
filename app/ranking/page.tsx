@@ -136,7 +136,10 @@ export default function RankingPage() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>ASCENT ランキング</h1>
+          <div className="eyebrow">LEADERBOARD</div>
+          <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginTop: 6 }}>
+            ASCENT <em>ランキング</em>
+          </h1>
           <p className="muted">
             {selectedSeasonName || 'シーズンを選択してください'}
           </p>
@@ -154,7 +157,6 @@ export default function RankingPage() {
           </select>
           <button onClick={() => router.push('/ranking/games-played')}>プレイ回数</button>
           <button onClick={() => router.push('/ranking/controllers')}>コントローラー</button>
-          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
         </div>
       </div>
 
@@ -179,7 +181,22 @@ export default function RankingPage() {
                 <div key={p.user_id} className="card">
                   <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <p className="muted">#{index + 1}</p>
+                      <p
+                        className="muted"
+                        style={{
+                          color:
+                            index === 0
+                              ? 'var(--tier-gold)'
+                              : index === 1
+                                ? 'var(--tier-silver)'
+                                : index === 2
+                                  ? 'var(--tier-bronze)'
+                                  : undefined,
+                          fontWeight: index < 3 ? 700 : undefined,
+                        }}
+                      >
+                        #{index + 1}
+                      </p>
                       <h3 style={{ marginTop: 0 }}>{p.display_name || '(名前未設定)'}</h3>
                       {teamNames[p.user_id] && (
                         <p className="muted" style={{ marginTop: 2 }}>{teamNames[p.user_id]}</p>

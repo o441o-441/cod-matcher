@@ -69,12 +69,13 @@ function BlogIndexContent() {
     <main>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1>ASCENT コントローラーレビュー</h1>
+          <div className="eyebrow">REVIEWS</div>
+          <h1 className="display" style={{ marginBottom: 8 }}>
+            ASCENT <em>コントローラーレビュー</em>
+          </h1>
           <p className="muted">コミュニティのレビュー一覧</p>
         </div>
         <div className="row">
-          <button onClick={() => router.push('/')}>トップページへ戻る</button>
-          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
           {signedIn && (
             <button onClick={() => router.push('/blog/new')}>レビューを書く</button>
           )}
@@ -101,6 +102,7 @@ function BlogIndexContent() {
       </div>
 
       <div className="section card-strong">
+        <div className="sec-title">レビュー一覧</div>
         {loading ? (
           <LoadingCard message="読み込み中..." />
         ) : posts.length === 0 ? (
@@ -108,15 +110,15 @@ function BlogIndexContent() {
         ) : (
           <div className="stack">
             {posts.map((p) => (
-              <div key={p.id} className="card">
-                <h2 style={{ marginTop: 0 }}>
+              <div key={p.id} className="card glow-hover">
+                <div style={{ marginTop: 0, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.2rem' }}>
                   <Link href={`/blog/${p.slug}`}>{p.title}</Link>
-                </h2>
+                </div>
                 {p.controller_name && (
                   <p className="muted">
                     {p.controller_name}
                     {p.rating != null && (
-                      <span style={{ marginLeft: 8 }}>
+                      <span style={{ marginLeft: 8, color: 'var(--amber)' }}>
                         {'★'.repeat(p.rating)}{'☆'.repeat(5 - p.rating)}
                       </span>
                     )}

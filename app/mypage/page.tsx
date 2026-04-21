@@ -375,7 +375,10 @@ export default function MyPage() {
   if (loading) {
     return (
       <main>
-        <h1>ASCENT マイページ</h1>
+        <div className="eyebrow">MY PAGE</div>
+        <h1 className="display" style={{ fontSize: 'clamp(1.8rem, 4vw, 3rem)' }}>
+          <em>MY PAGE</em>
+        </h1>
         <LoadingSkeleton cards={3} />
       </main>
     )
@@ -383,29 +386,25 @@ export default function MyPage() {
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>
-            ASCENT マイページ
-            {isMonitor && (
-              <span style={{ fontSize: '0.7rem', marginLeft: 8, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan, #0ff)', color: '#000', verticalAlign: 'middle' }}>
-                監視ユーザー
-              </span>
-            )}
-            {isApproved && (
-              <span style={{ fontSize: '0.7rem', marginLeft: 8, padding: '2px 6px', borderRadius: 4, background: 'var(--success, #0f0)', color: '#000', verticalAlign: 'middle' }}>
-                承認ユーザー
-              </span>
-            )}
-          </h1>
-          <p className="muted">チーム状況や対戦導線をここから管理します</p>
-        </div>
+      <div className="eyebrow">MY PAGE</div>
+      <h1 className="display" style={{ fontSize: 'clamp(1.8rem, 4vw, 3rem)' }}>
+        <em>マイページ</em>
+        {isMonitor && (
+          <span style={{ fontSize: '0.7rem', marginLeft: 8, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan, #0ff)', color: '#000', verticalAlign: 'middle' }}>
+            監視ユーザー
+          </span>
+        )}
+        {isApproved && (
+          <span style={{ fontSize: '0.7rem', marginLeft: 8, padding: '2px 6px', borderRadius: 4, background: 'var(--success, #0f0)', color: '#000', verticalAlign: 'middle' }}>
+            承認ユーザー
+          </span>
+        )}
+      </h1>
+      <p className="muted">チーム状況や対戦導線をここから管理します</p>
 
-        <div className="row">
-          <span className="muted">ログイン中</span>
-          <button onClick={() => router.push('/menu')}>メニューへ</button>
-          <button onClick={handleLogout}>ログアウト</button>
-        </div>
+      <div className="row" style={{ marginTop: 12 }}>
+        <button onClick={() => router.push('/profile/edit')}>プロフィール編集</button>
+        <button onClick={handleLogout}>ログアウト</button>
       </div>
 
       {pageError && (
@@ -420,7 +419,10 @@ export default function MyPage() {
 
       <div className="section">
         <div className="card-strong">
-          <h2>プロフィール</h2>
+          <div className="sec-title">
+            <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            プロフィール
+          </div>
 
           {suspendedUntil && new Date(suspendedUntil) > new Date() && (
             <div className="card" style={{ borderColor: 'var(--warning, orange)', marginBottom: 12 }}>
@@ -461,14 +463,14 @@ export default function MyPage() {
 
           <div className="section grid grid-2">
             <div className="card">
-              <p className="muted">現在のレート</p>
-              <h3>{rating ?? '-'}</h3>
+              <div className="stat-label">RATING</div>
+              <div className="stat-val" style={{ color: 'var(--cyan)' }}>{rating ?? '-'}</div>
             </div>
             <div className="card">
-              <p className="muted">通算戦績</p>
-              <h3>
+              <div className="stat-label">RECORD</div>
+              <div className="stat-val">
                 {wins ?? 0}勝 {losses ?? 0}敗
-              </h3>
+              </div>
             </div>
           </div>
 
@@ -482,7 +484,10 @@ export default function MyPage() {
           {seasons.length > 0 && (
             <div className="section card-strong">
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <h2 style={{ marginTop: 0 }}>シーズン別 戦績 / レート推移</h2>
+                <div className="sec-title" style={{ marginTop: 0 }}>
+                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18M7 16l4-4 4 4 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  シーズン別 戦績 / レート推移
+                </div>
                 <select
                   value={selectedSeasonId}
                   onChange={(e) => void handleSeasonChange(e.target.value)}
@@ -540,7 +545,7 @@ export default function MyPage() {
 
           <div className="section row">
             <button onClick={() => router.push('/profile/edit')}>
-              プロフィールを編集
+              プロフィール編集
             </button>
           </div>
         </div>
@@ -548,7 +553,10 @@ export default function MyPage() {
 
       <div className="section">
         <div className="card-strong">
-          <h2>所属チーム</h2>
+          <div className="sec-title">
+            <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            所属チーム
+          </div>
 
           {team ? (
             <>

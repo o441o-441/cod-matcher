@@ -177,7 +177,8 @@ export default function MenuPage() {
   if (loading) {
     return (
       <main>
-        <h1>ASCENT メニュー</h1>
+        <div className="eyebrow">MAIN / MENU</div>
+        <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3.2rem)', marginTop: 8 }}>ASCENT メニュー</h1>
         <LoadingSkeleton cards={3} />
       </main>
     )
@@ -185,22 +186,19 @@ export default function MenuPage() {
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>ASCENT メニュー</h1>
-          <p className="muted">対戦・コミュニティ機能はここから</p>
-        </div>
-        <div className="row">
-          <Tutorial pageKey="menu" steps={MENU_TUTORIAL} />
-          <button onClick={() => router.push('/mypage')}>マイページ</button>
-          <button onClick={() => router.push('/')}>トップページに戻る</button>
-        </div>
-      </div>
+      <div className="eyebrow">MAIN / MENU</div>
+      <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3.2rem)', marginTop: 8 }}>
+        ASCENT <em>メニュー</em>
+      </h1>
+      <Tutorial pageKey="menu" steps={MENU_TUTORIAL} />
 
       {notifications.length > 0 && (
         <div className="section card-strong" style={{ borderColor: 'var(--accent-cyan, #00e5ff)' }}>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ marginTop: 0 }}>通知（{notifications.length}）</h2>
+            <div className="sec-title" style={{ margin: 0 }}>
+              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M6 9a6 6 0 1112 0v4l2 3H4l2-3V9zM10 19a2 2 0 004 0" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
+              通知（{notifications.length}）
+            </div>
             <button onClick={handleDismissAll} style={{ fontSize: '0.8rem' }}>すべて既読</button>
           </div>
           <div className="stack">
@@ -232,7 +230,10 @@ export default function MenuPage() {
       )}
 
       <div className="section card-strong">
-        <h2 style={{ marginTop: 0, textAlign: 'center' }}>対戦を始める</h2>
+        <div className="sec-title" style={{ marginTop: 0, textAlign: 'center', justifyContent: 'center' }}>
+          <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M5 3l14 9-14 9V3z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
+          対戦を始める
+        </div>
         <div
           className="row"
           style={{
@@ -269,7 +270,10 @@ export default function MenuPage() {
       </div>
 
       <div className="section card-strong">
-        <h2>チーム</h2>
+        <div className="sec-title">
+          <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          チーム
+        </div>
         <div className="row">
           {hasTeam ? (
             <button onClick={() => router.push('/team/edit')}>チーム編集</button>
@@ -287,7 +291,10 @@ export default function MenuPage() {
       </div>
 
       <div className="section card-strong">
-        <h2>コミュニティ</h2>
+        <div className="sec-title">
+          <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          コミュニティ
+        </div>
         <div className="row">
           <button onClick={() => router.push('/friends')}>フレンド管理</button>
           <button onClick={() => router.push('/dm')}>DM</button>
@@ -298,7 +305,10 @@ export default function MenuPage() {
       </div>
 
       <div className="section card-strong">
-        <h2>その他</h2>
+        <div className="sec-title">
+          <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="1" stroke="currentColor" strokeWidth="1.6" /><circle cx="19" cy="12" r="1" stroke="currentColor" strokeWidth="1.6" /><circle cx="5" cy="12" r="1" stroke="currentColor" strokeWidth="1.6" /></svg>
+          その他
+        </div>
         <div className="row">
           <button onClick={() => router.push('/rules')}>ルール一覧</button>
           <button onClick={() => router.push('/reports')}>通報履歴</button>

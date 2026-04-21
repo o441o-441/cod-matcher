@@ -2,6 +2,7 @@ import './globals.css'
 import { ToastProvider } from '@/components/ToastProvider'
 import CookieConsent from '@/components/CookieConsent'
 import GlobalNotificationListener from '@/components/GlobalNotificationListener'
+import AppShell from '@/components/AppShell'
 
 export default function RootLayout({
   children,
@@ -21,7 +22,7 @@ export default function RootLayout({
       <body>
         <ToastProvider>
           <GlobalNotificationListener />
-          {children}
+          <AppShell>{children}</AppShell>
           <CookieConsent />
         </ToastProvider>
       </body>
