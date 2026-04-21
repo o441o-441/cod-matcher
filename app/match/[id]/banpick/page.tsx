@@ -141,6 +141,18 @@ const PHASE_LABEL: Record<BanpickPhase, string> = {
   completed: "バンピック完了",
 };
 
+const PHASE_SHORT: Record<"hp" | "snd" | "ovl", string> = {
+  hp: "HP",
+  snd: "SND",
+  ovl: "OVL",
+};
+
+const PHASE_NAME: Record<"hp" | "snd" | "ovl", string> = {
+  hp: "ハードポイント",
+  snd: "サーチ&デストロイ",
+  ovl: "オーバーロード",
+};
+
 const SIDE_OPTIONS = ["JSOC", "ギルド"];
 
 const MAP_META: Record<string, { id: string; en: string }> = {
@@ -225,16 +237,16 @@ function actionTypeLabel(actionType: string | null) {
   }
 }
 
-function messageTypeLabel(messageType: MatchMessageRow["message_type"]) {
-  switch (messageType) {
-    case "system":
-      return "SYSTEM";
-    case "lobby_code":
-      return "LOBBY";
-    default:
-      return "CHAT";
-  }
-}
+/* ---- SVG icons (inline to avoid extra deps) ---- */
+const IconCheck = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7.5L5.5 10.5L11.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+);
+const IconChat = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+);
+const IconUsers = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+);
 
 export default function BanpickPage() {
   const router = useRouter();
@@ -746,572 +758,613 @@ export default function BanpickPage() {
     }
   };
 
+  /* ---- helpers for phase bar ---- */
+  const phaseKeys = ["hp", "snd", "ovl"] as const;
+  const currentPhaseIndex = session
+    ? session.phase === "completed"
+      ? 3
+      : phaseKeys.indexOf(session.phase as "hp" | "snd" | "ovl")
+    : -1;
+
+  function phaseStatus(pk: "hp" | "snd" | "ovl") {
+    const idx = phaseKeys.indexOf(pk);
+    if (!session) return "pending" as const;
+    if (session.phase === "completed" || idx < currentPhaseIndex) return "done" as const;
+    if (idx === currentPhaseIndex) return "active" as const;
+    return "pending" as const;
+  }
+
+  function phaseStepText(pk: "hp" | "snd" | "ovl") {
+    const st = phaseStatus(pk);
+    if (st === "done") {
+      const ps = phaseStates[pk];
+      return `${ps.map ?? "-"} / ${ps.side ?? "-"}`;
+    }
+    if (st === "active") {
+      const turnInPhase = session ? session.turn_number : 0;
+      return `STEP ${turnInPhase}/4`;
+    }
+    return "未着手";
+  }
+
+  /* ---- turn card helpers ---- */
+  const currentPhase: "hp" | "snd" | "ovl" | null =
+    session && session.phase !== "completed" ? (session.phase as "hp" | "snd" | "ovl") : null;
+  const currentState = currentPhase ? phaseStates[currentPhase] : null;
+  const currentPool = currentPhase ? PHASE_POOLS[currentPhase] : [];
+  const allowInteraction =
+    !!currentPhase &&
+    isMyTurn &&
+    session?.status === "in_progress" &&
+    session?.current_action_type !== null;
+
+  const turnActionText = (() => {
+    if (!session?.current_action_type) return "";
+    switch (session.current_action_type) {
+      case "ban": return "マップを BAN";
+      case "pick_map": return "マップを PICK";
+      case "pick_side": return "サイドを選択";
+      default: return "";
+    }
+  })();
+
+  /* ---- side selection helpers ---- */
+  function getSideForPhase(pk: "hp" | "snd" | "ovl") {
+    const ps = phaseStates[pk];
+    if (!ps.side) return null;
+    const pickerIsTeamA = pk === "snd" || pk === "ovl";
+    const teamAIsAlpha = teamAssignment.teamA === alphaTeam?.id;
+    const pickerIsAlpha = pickerIsTeamA ? teamAIsAlpha : !teamAIsAlpha;
+    const alphaSide = pickerIsAlpha ? ps.side : (ps.side === "JSOC" ? "ギルド" : "JSOC");
+    return alphaSide;
+  }
+
+  /* ---- completion count for progress ---- */
+  const completedPhases = phaseKeys.filter((pk) => phaseStatus(pk) === "done").length;
+
   if (!matchId) {
-    return <div className="p-6 text-sm text-red-400">match id が見つかりません。</div>;
+    return (
+      <main>
+        <div className="card-strong" style={{ padding: 24, color: "var(--danger)" }}>
+          match id が見つかりません。
+        </div>
+      </main>
+    );
   }
 
   if (loading) {
-    return <div className="p-6"><LoadingSkeleton cards={3} /></div>;
+    return <main><LoadingSkeleton cards={3} /></main>;
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white">
+    <main>
+      {/* ---- TROPHY POPUP ---- */}
       {showTrophyPopup && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 50,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "rgba(0,0,0,0.7)",
-          }}
-          onClick={() => setShowTrophyPopup(false)}
-        >
+        <div className="modal-root" onClick={() => setShowTrophyPopup(false)}>
+          <div className="modal-scrim" />
           <div
-            style={{
-              background: "#1a1a2e",
-              border: "1px solid rgba(0,229,255,0.4)",
-              borderRadius: 12,
-              padding: "32px 40px",
-              maxWidth: 420,
-              width: "90%",
-              textAlign: "center",
-            }}
+            className="card-strong"
+            style={{ position: "relative", maxWidth: 420, width: "90%", textAlign: "center", padding: "32px 40px" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: 12 }}>
+            <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.25rem", margin: "0 0 12px" }}>
               トロフィー使用者の選択をしてください。
-            </h2>
-            <p style={{ fontSize: "0.875rem", color: "rgba(255,255,255,0.6)", marginBottom: 24 }}>
+            </h3>
+            <p className="muted" style={{ marginBottom: 24 }}>
               ※各チーム2人まで
             </p>
+            {trophyRemainingSec !== null && !allTrophyDone && (
+              <div style={{ marginBottom: 16 }}>
+                <span className="badge amber">
+                  残り {Math.floor(trophyRemainingSec / 60)}:{String(trophyRemainingSec % 60).padStart(2, "0")}
+                </span>
+              </div>
+            )}
             <button
               type="button"
+              className="btn-primary"
               onClick={() => setShowTrophyPopup(false)}
-              className="rounded bg-cyan-500 px-6 py-2 text-sm font-semibold text-white"
             >
               OK
             </button>
           </div>
         </div>
       )}
-      <div className="mx-auto max-w-7xl px-4 py-6">
-        <div className="mb-6 flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">ASCENT バンピック</h1>
-            <p className="mt-1 text-sm text-white/60">マッチ ID: {matchId}</p>
-          </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Tutorial pageKey="banpick" steps={BANPICK_TUTORIAL} />
-            <button
-              type="button"
-              onClick={() => router.push("/rules")}
-              className="rounded border border-white/20 bg-white/5 px-3 py-2 text-sm hover:bg-white/10"
-            >
-              ルール一覧
+      {/* ---- HEADER ---- */}
+      <div className="rowx mb-l">
+        <div>
+          <div className="eyebrow">MATCH / BAN &amp; PICK</div>
+          <h1 className="display" style={{ fontSize: "clamp(1.8rem, 3.5vw, 2.8rem)", marginTop: 6 }}>
+            マップ&サイド<em>選択。</em>
+          </h1>
+        </div>
+        <div className="row">
+          {session?.status === "in_progress" && (
+            <span className="badge magenta"><span className="badge-dot" />IN SESSION</span>
+          )}
+          {!session && (
+            <button onClick={handleCreateBanpickSession} disabled={busy} className="btn-primary btn-sm">
+              バンピック開始
             </button>
-
-            {!session && (
-              <button
-                onClick={handleCreateBanpickSession}
-                disabled={busy}
-                className="rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
-              >
-                バンピック開始
-              </button>
-            )}
-
-            {isBanpickCompleted && allTrophyDone && (
-              <button
-                onClick={() => router.push(`/match/${matchId}/confirm`)}
-                className="rounded bg-cyan-500 px-4 py-2 text-sm font-semibold text-white"
-              >
-                試合条件最終確認へ
-              </button>
-            )}
-
-            <button
-              onClick={() => void loadAll()}
-              disabled={busy}
-              className="rounded border border-white/20 px-4 py-2 text-sm text-white/90 disabled:opacity-50"
-            >
-              再読み込み
+          )}
+          {isBanpickCompleted && allTrophyDone && (
+            <button onClick={() => router.push(`/match/${matchId}/confirm`)} className="btn-primary btn-sm">
+              試合条件最終確認へ
             </button>
+          )}
+          <Tutorial pageKey="banpick" steps={BANPICK_TUTORIAL} />
+        </div>
+      </div>
+
+      {/* ---- ERRORS / INFO ---- */}
+      {errorText && (
+        <div className="card" style={{ borderColor: "var(--danger)", background: "var(--danger-soft)", marginBottom: 16, padding: "12px 16px", fontSize: 13, color: "var(--danger)" }}>
+          {errorText}
+        </div>
+      )}
+      {infoText && (
+        <div className="card" style={{ borderColor: "rgba(0,245,160,0.3)", background: "var(--success-soft)", marginBottom: 16, padding: "12px 16px", fontSize: 13, color: "var(--success)" }}>
+          {infoText}
+        </div>
+      )}
+
+      {/* ---- PHASE BAR ---- */}
+      {session && (
+        <div className="card-strong" style={{ padding: "18px 20px", marginBottom: 20 }}>
+          <div className="grid-3">
+            {phaseKeys.map((pk) => {
+              const st = phaseStatus(pk);
+              const borderColor = st === "active"
+                ? "var(--cyan)"
+                : st === "done"
+                ? "var(--success)"
+                : "var(--line)";
+              return (
+                <div
+                  key={pk}
+                  className="card"
+                  style={{ borderColor, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}
+                >
+                  <div
+                    style={{
+                      width: 28, height: 28, borderRadius: 6,
+                      background: st === "active" ? "var(--cyan-soft)" : st === "done" ? "var(--success-soft)" : "rgba(255,255,255,0.04)",
+                      display: "grid", placeItems: "center",
+                      fontFamily: "var(--font-display)", fontSize: 10, fontWeight: 800, letterSpacing: "0.1em",
+                      color: st === "active" ? "var(--cyan)" : st === "done" ? "var(--success)" : "var(--text-dim)",
+                    }}
+                  >
+                    {PHASE_SHORT[pk]}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: "var(--font-display)", fontSize: 12, fontWeight: 700, color: "var(--text-strong)" }}>
+                      {PHASE_NAME[pk]}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-soft)", marginTop: 2 }}>
+                      {phaseStepText(pk)}
+                    </div>
+                  </div>
+                  {st === "done" && (
+                    <span style={{ color: "var(--success)" }}><IconCheck /></span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
+      )}
 
-        {errorText && (
-          <div className="mb-4 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-            {errorText}
-          </div>
-        )}
+      {/* ---- MAIN 2-COLUMN LAYOUT ---- */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20 }}>
 
-        {infoText && (
-          <div className="mb-4 rounded border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-            {infoText}
-          </div>
-        )}
+        {/* ---- LEFT COLUMN ---- */}
+        <div className="stack">
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <div className="space-y-4 xl:col-span-2">
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">試合情報</h2>
-
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="rounded bg-black/20 p-3">
-                  <div className="text-xs text-white/50">試合状態</div>
-                  <div className="mt-1 text-sm font-medium">{match?.status ?? "-"}</div>
-                </div>
-
-                <div className="rounded bg-black/20 p-3">
-                  <div className="text-xs text-white/50">現在フェーズ</div>
-                  <div className="mt-1 text-sm font-medium">{session ? phaseLabel(session.phase) : "-"}</div>
-                </div>
-
-                <div className="rounded bg-black/20 p-3">
-                  <div className="text-xs text-white/50">現在の操作</div>
-                  <div className="mt-1 text-sm font-medium">
-                    {session ? actionTypeLabel(session.current_action_type) : "-"}
-                  </div>
-                </div>
-
-                <div className="rounded bg-black/20 p-3">
-                  <div className="text-xs text-white/50">現在の手番</div>
-                  <div className="mt-1 text-sm font-medium">
-                    {currentTurnTeam
-                      ? `${currentTurnTeam.side.toUpperCase()} (${currentTurnTeam.display_name ?? currentTurnTeam.side})`
-                      : "-"}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">チーム構成</h2>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="rounded border border-white/10 bg-black/20 p-4">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="font-semibold">ALPHA</div>
-                    <div className="text-xs text-white/60">{alphaTeam?.party_composition ?? "-"}</div>
-                  </div>
-
-                  <div className="mb-3 text-xs text-white/60">
-                    平均: {alphaTeam?.base_avg_rating ?? "-"} / 補正: +{alphaTeam?.synergy_bonus ?? 0} / 実効:{" "}
-                    {alphaTeam?.effective_avg_rating ?? "-"}
-                  </div>
-
-                  <div className="space-y-2">
-                    {groupedMembers.alpha.map((m) => (
-                      <div key={m.id} className="rounded bg-white/5 px-3 py-2 text-sm">
-                        <div className="flex items-center justify-between">
-                          <button
-                            type="button"
-                            onClick={() => router.push(`/users/${m.user_id}?match=${matchId}`)}
-                            className="text-left text-cyan-300 underline decoration-dotted hover:text-white"
-                          >
-                            {m.profiles?.display_name ?? m.user_id}
-                          </button>
-                          <div className="flex gap-2 text-[11px] text-white/50">
-                            {m.is_party_leader && <span>リーダー</span>}
-                            {match?.host_user_id === m.user_id && <span>ホスト</span>}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded border border-white/10 bg-black/20 p-4">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="font-semibold">BRAVO</div>
-                    <div className="text-xs text-white/60">{bravoTeam?.party_composition ?? "-"}</div>
-                  </div>
-
-                  <div className="mb-3 text-xs text-white/60">
-                    平均: {bravoTeam?.base_avg_rating ?? "-"} / 補正: +{bravoTeam?.synergy_bonus ?? 0} / 実効:{" "}
-                    {bravoTeam?.effective_avg_rating ?? "-"}
-                  </div>
-
-                  <div className="space-y-2">
-                    {groupedMembers.bravo.map((m) => (
-                      <div key={m.id} className="rounded bg-white/5 px-3 py-2 text-sm">
-                        <div className="flex items-center justify-between">
-                          <button
-                            type="button"
-                            onClick={() => router.push(`/users/${m.user_id}?match=${matchId}`)}
-                            className="text-left text-cyan-300 underline decoration-dotted hover:text-white"
-                          >
-                            {m.profiles?.display_name ?? m.user_id}
-                          </button>
-                          <div className="flex gap-2 text-[11px] text-white/50">
-                            {m.is_party_leader && <span>リーダー</span>}
-                            {match?.host_user_id === m.user_id && <span>ホスト</span>}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">バンピック</h2>
-
-              {!session ? (
-                <div className="text-sm text-white/60">まだバンピックは開始されていません。</div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="rounded bg-black/20 p-3 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <div className="font-semibold">{phaseLabel(session.phase)}</div>
-                        <div className="mt-1 text-white/60">
-                          手番:{" "}
-                          {currentTeamLetter
-                            ? `Team ${currentTeamLetter}`
-                            : session.status === "completed" || session.status === "timeout"
-                            ? "-"
-                            : "?"}{" "}
-                          / 操作: {actionTypeLabel(session.current_action_type)}
-                        </div>
-                        <div className="mt-1 text-white/60">
-                          あなたの所属: {myTeamLetter ? `Team ${myTeamLetter}` : "観戦"}
-                          {" / "}
-                          {isMyTurn ? "あなたの操作待ち" : "相手の操作待ち"}
-                        </div>
-                      </div>
-                      {remainingSec !== null && session.status === "in_progress" && (
-                        <div className="flex flex-col items-end gap-1">
-                          <div className="text-xs text-white/50">残り時間</div>
-                          <TimerRing seconds={remainingSec > 0 ? remainingSec : 0} max={300} size={60} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {(["hp", "snd", "ovl"] as const).map((phaseKey) => {
-                    const state = phaseStates[phaseKey];
-                    const pool = PHASE_POOLS[phaseKey];
-                    const isCurrent = session.phase === phaseKey;
-                    const allowInteraction =
-                      isCurrent &&
-                      isMyTurn &&
-                      session.status === "in_progress" &&
-                      session.current_action_type !== null;
-
-                    return (
-                      <div
-                        key={phaseKey}
-                        className={`rounded border p-4 ${
-                          isCurrent ? "border-cyan-400/60 bg-cyan-500/5" : "border-white/10 bg-black/20"
-                        }`}
-                      >
-                        <div className="mb-2 flex items-center justify-between">
-                          <div className="font-semibold">
-                            {phaseKey === "hp" && "Phase 1 / HARDPOINT"}
-                            {phaseKey === "snd" && "Phase 2 / SEARCH & DESTROY"}
-                            {phaseKey === "ovl" && "Phase 3 / OVERLOAD"}
-                          </div>
-                          {isCurrent && (
-                            <span className="rounded bg-cyan-500/30 px-2 py-0.5 text-xs text-cyan-100">
-                              進行中
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="mb-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {pool.map((mapName) => {
-                            const banned = state.bans.includes(mapName);
-                            const picked = state.map === mapName;
-                            const canClickAsMapAction =
-                              allowInteraction &&
-                              (session.current_action_type === "ban" ||
-                                session.current_action_type === "pick_map") &&
-                              !banned &&
-                              state.map === null;
-                            const meta = MAP_META[mapName];
-                            const thumbState: "available" | "banned" | "picked" = picked
-                              ? "picked"
-                              : banned
-                              ? "banned"
-                              : "available";
-
-                            return (
-                              <button
-                                key={mapName}
-                                type="button"
-                                disabled={busy || !canClickAsMapAction}
-                                onClick={() => {
-                                  if (!canClickAsMapAction) return;
-                                  void handleSubmitBanpickActionWith(mapName);
-                                }}
-                                className={`rounded text-sm transition ${
-                                  canClickAsMapAction
-                                    ? "ring-1 ring-white/30 hover:ring-cyan-400/60 hover:scale-[1.02]"
-                                    : ""
-                                }`}
-                                style={{ background: "none", border: "none", padding: 0, cursor: canClickAsMapAction ? "pointer" : "default" }}
-                              >
-                                <MapThumb
-                                  mapId={meta?.id ?? mapName}
-                                  mapName={mapName}
-                                  mapNameEn={meta?.en}
-                                  state={thumbState}
-                                  small
-                                />
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-3 text-sm text-white/70">
-                          <div>
-                            マップ: <span className="text-white">{state.map ?? "-"}</span>
-                          </div>
-                          {state.side ? (() => {
-                            // side picker: HP=team_b, SND=team_a, OVL=team_a
-                            const pickerIsTeamA = phaseKey === "snd" || phaseKey === "ovl";
-                            const teamAIsAlpha = teamAssignment.teamA === alphaTeam?.id;
-                            const pickerIsAlpha = pickerIsTeamA ? teamAIsAlpha : !teamAIsAlpha;
-                            const alphaSide = pickerIsAlpha ? state.side : (state.side === "JSOC" ? "ギルド" : "JSOC");
-                            const bravoSide = alphaSide === "JSOC" ? "ギルド" : "JSOC";
-                            return (
-                              <div>
-                                サイド:
-                                <span className="text-white ml-1">
-                                  Alpha: {alphaSide} / Bravo: {bravoSide}
-                                </span>
-                              </div>
-                            );
-                          })() : (
-                            <div>サイド: <span className="text-white">-</span></div>
-                          )}
-                        </div>
-
-                        {isCurrent &&
-                          session.current_action_type === "pick_side" &&
-                          allowInteraction && (
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              {SIDE_OPTIONS.map((s) => (
-                                <button
-                                  key={s}
-                                  type="button"
-                                  disabled={busy}
-                                  onClick={() => {
-                                    void handleSubmitBanpickActionWith(s);
-                                  }}
-                                  className="rounded border border-white/30 bg-white/10 px-4 py-2 text-sm hover:bg-white/20"
-                                >
-                                  {s}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">バンピック履歴</h2>
-
-              <div className="space-y-2">
-                {actions.length === 0 ? (
-                  <div className="text-sm text-white/50">まだ履歴はありません。</div>
-                ) : (
-                  actions.map((action) => (
-                    <div key={action.id} className="rounded bg-black/20 px-3 py-2 text-sm">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          ターン {action.turn_number} / {phaseLabel(action.phase)}
-                        </div>
-                        <div className="text-white/50">{new Date(action.created_at).toLocaleString()}</div>
-                      </div>
-                      <div className="mt-1">
-                        {action.profiles?.display_name ?? action.actor_user_id} が{" "}
-                        <span className="font-semibold">{actionTypeLabel(action.action_type)}</span> : {action.target}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-          </div>
-
-          <div className="space-y-4">
-            {isBanpickCompleted && (
-              <section className="rounded border border-white/10 bg-white/5 p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">トロフィー選択</h2>
-                  {trophyRemainingSec !== null && !allTrophyDone && (
-                    <span className={`rounded px-2 py-0.5 text-xs font-bold ${trophyRemainingSec <= 30 ? "bg-red-500/30 text-red-300" : "bg-cyan-500/30 text-cyan-100"}`}>
-                      残り {Math.floor(trophyRemainingSec / 60)}:{String(trophyRemainingSec % 60).padStart(2, "0")}
+          {/* Turn card or Complete card */}
+          {!isBanpickCompleted && session && currentPhase ? (
+            <div className="card-strong">
+              {/* header */}
+              <div className="rowx" style={{ marginBottom: 16 }}>
+                <div className="row">
+                  {currentTurnTeam && (
+                    <span className={`side-chip ${currentTurnTeam.side}`}>
+                      {currentTurnTeam.side.toUpperCase()}
                     </span>
                   )}
+                  <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15, color: "var(--text-strong)" }}>
+                    {turnActionText}
+                  </span>
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    {PHASE_NAME[currentPhase]}
+                  </span>
                 </div>
-                <p className="mb-3 text-xs text-white/60">
-                  各チームからトロフィー使用者を選択してください。3分以内に選択しないと強制敗北になります。
-                </p>
+                {remainingSec !== null && session.status === "in_progress" && (
+                  <TimerRing seconds={remainingSec > 0 ? remainingSec : 0} max={300} size={60} />
+                )}
+              </div>
 
-                {(["alpha", "bravo"] as const).map((side) => {
-                  const team = side === "alpha" ? alphaTeam : bravoTeam;
-                  const teamMembers = groupedMembers[side];
-                  const trophyList: string[] = Array.isArray(team?.trophy_users) ? team.trophy_users : [];
-                  const isMyTeam = !!myMatchTeamId && team?.id === myMatchTeamId;
+              {/* Ban / Pick map grid */}
+              {(session.current_action_type === "ban" || session.current_action_type === "pick_map") && (
+                isMyTurn ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                    {currentPool.map((mapName) => {
+                      const banned = currentState?.bans.includes(mapName) ?? false;
+                      const picked = currentState?.map === mapName;
+                      const canClick = allowInteraction && !banned && !currentState?.map;
+                      const meta = MAP_META[mapName];
+                      const thumbState: "available" | "banned" | "picked" = picked
+                        ? "picked"
+                        : banned
+                        ? "banned"
+                        : "available";
 
-                  return (
-                    <div key={side} className="mb-3 rounded border border-white/10 bg-black/20 p-3">
-                      <div className="mb-2 font-semibold">{side.toUpperCase()}</div>
-                      <div className="space-y-1">
-                        {teamMembers.map((m) => {
-                          const isTrophy = trophyList.includes(m.user_id);
-                          return (
-                            <div key={m.id} className="flex items-center justify-between rounded bg-white/5 px-3 py-2 text-sm">
-                              <span>
-                                {m.profiles?.display_name ?? m.user_id}
-                                {isTrophy && (
-                                  <span style={{ marginLeft: 8, color: "var(--accent-cyan, #0ff)" }}>
-                                    [トロフィー]
-                                  </span>
-                                )}
-                              </span>
-                              {isMyTeam && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleTrophy(m.user_id)}
-                                  disabled={busy}
-                                  className={`rounded px-3 py-1 text-xs ${
-                                    isTrophy
-                                      ? "bg-red-500/20 text-red-300"
-                                      : "bg-emerald-500/20 text-emerald-300"
-                                  }`}
-                                >
-                                  {isTrophy ? "解除" : "選択"}
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div className="mt-2 text-xs text-white/50">
-                        選択済み: {trophyList.length} / 2
-                      </div>
-                    </div>
-                  );
-                })}
-              </section>
-            )}
-
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">ホスト / ロビー</h2>
-
-              {match?.host_user_id && (
-                <div className="mb-3 rounded border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
-                  <p className="font-semibold">ホストが決定されました。</p>
-                  <p className="mt-1 text-white/80">ホストはロビーを作成してロビーコードを送信してください。</p>
-                  <p className="mt-1 text-white/60 text-xs">何らかの理由でホストになれない場合はチャット欄で他プレイヤーと相談し、ホストを変わってください。</p>
-                </div>
+                      return (
+                        <button
+                          key={mapName}
+                          type="button"
+                          disabled={busy || !canClick}
+                          onClick={() => {
+                            if (!canClick) return;
+                            void handleSubmitBanpickActionWith(mapName);
+                          }}
+                          style={{
+                            background: "none", border: "none", padding: 0,
+                            cursor: canClick ? "pointer" : "default",
+                            transition: "transform 0.15s",
+                          }}
+                          onMouseEnter={(e) => { if (canClick) (e.currentTarget.style.transform = "translateY(-2px)"); }}
+                          onMouseLeave={(e) => { e.currentTarget.style.transform = ""; }}
+                        >
+                          <MapThumb
+                            mapId={meta?.id ?? mapName}
+                            mapName={mapName}
+                            mapNameEn={meta?.en}
+                            state={thumbState}
+                            small
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="muted" style={{ fontStyle: "italic", textAlign: "center", padding: "24px 0" }}>
+                    相手の手番を待っています...
+                  </p>
+                )
               )}
 
-              <div className="space-y-3">
-                <div className="rounded bg-black/20 p-3">
-                  <div className="text-xs text-white/50">現在のホスト</div>
-                  <div className="mt-1 text-sm font-medium">{hostDisplayName ?? "決定中..."}</div>
-                </div>
+              {/* Side selection */}
+              {session.current_action_type === "pick_side" && (
+                isMyTurn ? (
+                  <div className="grid-2" style={{ gap: 12 }}>
+                    {SIDE_OPTIONS.map((s, i) => {
+                      const isAlphaSide = i === 0;
+                      const borderC = isAlphaSide ? "var(--cyan)" : "var(--magenta)";
+                      const bgC = isAlphaSide ? "var(--cyan-dim)" : "var(--magenta-soft)";
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          disabled={busy}
+                          onClick={() => { void handleSubmitBanpickActionWith(s); }}
+                          className="card"
+                          style={{
+                            borderColor: borderC, background: bgC,
+                            textAlign: "center", padding: "20px 16px", cursor: "pointer",
+                          }}
+                        >
+                          <div style={{
+                            fontFamily: "var(--font-display)", fontSize: 36, fontWeight: 800,
+                            color: isAlphaSide ? "var(--cyan)" : "var(--magenta)",
+                            lineHeight: 1.1,
+                          }}>
+                            {isAlphaSide ? "ALPHA" : "BRAVO"}
+                          </div>
+                          <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>{s}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="muted" style={{ fontStyle: "italic", textAlign: "center", padding: "24px 0" }}>
+                    相手の手番を待っています...
+                  </p>
+                )
+              )}
+            </div>
+          ) : isBanpickCompleted ? (
+            <div className="card-strong enter">
+              <span className="badge success" style={{ marginBottom: 12 }}>
+                <span className="badge-dot" />COMPLETE
+              </span>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 44, fontWeight: 800, lineHeight: 1.1 }}>
+                バンピック<span style={{ color: "var(--cyan)" }}>完了。</span>
+              </div>
+            </div>
+          ) : !session ? (
+            <div className="card-strong">
+              <p className="muted" style={{ textAlign: "center", padding: "24px 0" }}>
+                まだバンピックは開始されていません。
+              </p>
+            </div>
+          ) : null}
 
-                <div className="rounded bg-black/20 p-3">
-                  <div className="text-xs text-white/50">現在のロビーコード</div>
-                  <div className="mt-1 break-all text-sm font-medium">{match?.lobby_code ?? "未設定"}</div>
-                  {match?.lobby_code_set_at && (
-                    <div className="mt-1 text-[11px] text-white/40">
-                      更新: {new Date(match.lobby_code_set_at).toLocaleString()}
-                    </div>
-                  )}
-                </div>
+          {/* ---- Selected maps summary ---- */}
+          <div className="card-strong">
+            <div className="sec-title">確定マップ</div>
+            <div className="grid-3">
+              {phaseKeys.map((pk) => {
+                const ps = phaseStates[pk];
+                const meta = ps.map ? MAP_META[ps.map] : null;
+                const sideLabel = getSideForPhase(pk);
+                return (
+                  <div key={pk} style={{ textAlign: "center" }}>
+                    {ps.map && meta ? (
+                      <MapThumb
+                        mapId={meta.id}
+                        mapName={ps.map}
+                        mapNameEn={meta.en}
+                        state="picked"
+                        small
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          height: 80, borderRadius: "var(--r-md)",
+                          border: "1px dashed var(--line-strong)",
+                          display: "grid", placeItems: "center",
+                          color: "var(--text-dim)", fontSize: 11,
+                        }}
+                      >
+                        {PHASE_SHORT[pk]}
+                      </div>
+                    )}
+                    {sideLabel && (
+                      <div style={{ marginTop: 6 }}>
+                        <span className={`side-chip ${sideLabel === "JSOC" ? "alpha" : "bravo"}`}>
+                          {sideLabel}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
-                <div className="rounded border border-white/10 bg-black/20 p-3">
-                  <div className="mb-2 text-sm font-semibold">ロビーコード送信</div>
+          {/* ---- Host display ---- */}
+          {isBanpickCompleted && match?.host_user_id && (
+            <div className="card-strong">
+              <div className="sec-title">ホスト</div>
+              <div className="row" style={{ marginBottom: 12 }}>
+                <div className="avatar">{(hostDisplayName ?? "?")[0]}</div>
+                <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15, color: "var(--text-strong)" }}>
+                  {hostDisplayName ?? "決定中..."}
+                </span>
+              </div>
+              {isHost && (
+                <div style={{ display: "flex", gap: 8 }}>
                   <input
                     value={lobbyCodeInput}
                     onChange={(e) => setLobbyCodeInput(e.target.value)}
-                    placeholder={isHost ? "例: ABCDE" : "ホストのみ送信可能"}
-                    className="mb-2 w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                    disabled={busy || !isHost}
+                    placeholder="ロビーコード"
+                    style={{ fontFamily: "var(--font-mono)", flex: 1 }}
+                    disabled={busy}
                   />
-                  <button
-                    onClick={handleSendLobbyCode}
-                    disabled={busy || !isHost}
-                    className="w-full rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                  >
-                    ロビーコード送信
+                  <button onClick={handleSendLobbyCode} disabled={busy} className="btn-primary btn-sm">
+                    送信
                   </button>
                 </div>
+              )}
+              {match.lobby_code && (
+                <div style={{ marginTop: 10, fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 700, color: "var(--cyan)", letterSpacing: "0.1em" }}>
+                  {match.lobby_code}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ---- Trophy selection (inline, only when banpick complete and not all done) ---- */}
+          {isBanpickCompleted && !allTrophyDone && (
+            <div className="card-strong">
+              <div className="rowx" style={{ marginBottom: 14 }}>
+                <div className="sec-title" style={{ margin: 0 }}>トロフィー選択</div>
+                {trophyRemainingSec !== null && (
+                  <span className={`badge ${trophyRemainingSec <= 30 ? "danger" : "amber"}`}>
+                    残り {Math.floor(trophyRemainingSec / 60)}:{String(trophyRemainingSec % 60).padStart(2, "0")}
+                  </span>
+                )}
               </div>
-            </section>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+                各チームからトロフィー使用者を選択してください。3分以内に選択しないと強制敗北になります。
+              </p>
+              {(["alpha", "bravo"] as const).map((side) => {
+                const team = side === "alpha" ? alphaTeam : bravoTeam;
+                const teamMembers = groupedMembers[side];
+                const trophyList: string[] = Array.isArray(team?.trophy_users) ? team.trophy_users : [];
+                const isMyTeam = !!myMatchTeamId && team?.id === myMatchTeamId;
 
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">試合チャット</h2>
+                return (
+                  <div key={side} style={{ marginBottom: 12 }}>
+                    <div className={`side-chip ${side}`} style={{ marginBottom: 8 }}>{side.toUpperCase()}</div>
+                    <div className="stack-sm">
+                      {teamMembers.map((m) => {
+                        const isTrophy = trophyList.includes(m.user_id);
+                        return (
+                          <div key={m.id} className="card" style={{ padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 13 }}>
+                              {m.profiles?.display_name ?? m.user_id}
+                              {isTrophy && (
+                                <span style={{ marginLeft: 8, color: "var(--cyan)", fontSize: 11 }}>
+                                  [トロフィー]
+                                </span>
+                              )}
+                            </span>
+                            {isMyTeam && (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleTrophy(m.user_id)}
+                                disabled={busy}
+                                className={isTrophy ? "btn-danger btn-sm" : "btn-sm"}
+                                style={{ padding: "4px 10px", fontSize: 11 }}
+                              >
+                                {isTrophy ? "解除" : "選択"}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
+                      選択済み: {trophyList.length} / 2
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-              <div className="mb-3 h-[420px] overflow-y-auto rounded border border-white/10 bg-black/20 p-3">
-                <div className="space-y-2">
-                  {messages.length === 0 ? (
-                    <div className="text-sm text-white/50">まだメッセージはありません。</div>
-                  ) : (
-                    messages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`rounded px-3 py-2 text-sm ${
-                          msg.message_type === "system"
-                            ? "bg-white/5 text-white/70"
-                            : msg.message_type === "lobby_code"
-                            ? "bg-emerald-500/15 text-emerald-200"
-                            : "bg-white/10 text-white"
-                        }`}
-                      >
-                        <div className="mb-1 flex items-center justify-between gap-3 text-[11px] opacity-70">
-                          <span>
-                            [{messageTypeLabel(msg.message_type)}]{" "}
-                            {msg.profiles?.display_name ?? (msg.sender_user_id ? msg.sender_user_id : "system")}
-                          </span>
-                          <span>{new Date(msg.created_at).toLocaleString()}</span>
-                        </div>
-                        <div className="break-words whitespace-pre-wrap">{translateBody(msg.body)}</div>
-                      </div>
-                    ))
-                  )}
-                  <div ref={chatBottomRef} />
+        {/* ---- RIGHT COLUMN ---- */}
+        <div className="stack">
+
+          {/* Action log */}
+          <div className="card-strong">
+            <div className="sec-title"><IconChat /> アクションログ</div>
+            <div style={{ maxHeight: 400, overflowY: "auto" }} className="stack-sm">
+              {actions.length === 0 ? (
+                <div className="muted" style={{ fontSize: 12, padding: "12px 0", textAlign: "center" }}>まだ履歴はありません。</div>
+              ) : (
+                actions.map((action) => (
+                  <div key={action.id} className="card" style={{ padding: "8px 12px", fontSize: 12 }}>
+                    <div className="row" style={{ gap: 8 }}>
+                      <span className="badge" style={{ fontSize: 9, padding: "2px 6px" }}>
+                        {action.phase.toUpperCase()}
+                      </span>
+                      <span style={{ color: "var(--text-soft)" }}>
+                        {action.profiles?.display_name ?? action.actor_user_id} が{" "}
+                        <span style={{ fontWeight: 700, color: "var(--text-strong)" }}>
+                          {actionTypeLabel(action.action_type)}
+                        </span>{" "}
+                        : {action.target}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Teams */}
+          <div className="card-strong">
+            <div className="sec-title"><IconUsers /> チーム</div>
+            <div className="stack-sm">
+              {([alphaTeam, bravoTeam] as const).map((team) => {
+                if (!team) return null;
+                return (
+                  <div key={team.id} className="card" style={{ padding: 10 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 10, alignItems: "center" }}>
+                      <span className={`side-chip ${team.side}`}>{team.side.toUpperCase()}</span>
+                      <span style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, color: "var(--text-strong)" }}>
+                        {team.display_name ?? team.side}
+                      </span>
+                      <span className="mono muted" style={{ fontSize: 11 }}>
+                        SR {team.effective_avg_rating}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Progress */}
+          <div className="card">
+            <div className="stat-label">フェーズ進捗</div>
+            <div className="rowx" style={{ marginTop: 8 }}>
+              <span className="mono" style={{ fontSize: 22, fontWeight: 700, color: "var(--text-strong)" }}>
+                {completedPhases}/3
+              </span>
+              <div style={{ flex: 1, marginLeft: 12 }}>
+                <div className="bar">
+                  <div className="bar-fill" style={{ width: `${(completedPhases / 3) * 100}%` }} />
                 </div>
               </div>
+            </div>
+          </div>
 
-              <div className="space-y-2">
-                <textarea
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="メッセージを入力"
-                  rows={4}
-                  maxLength={300}
-                  className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                  disabled={busy}
-                />
-                <button
-                  onClick={handleSendChat}
-                  disabled={busy}
-                  className="w-full rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
-                >
-                  メッセージ送信
-                </button>
-              </div>
-            </section>
+          {/* Chat */}
+          <div className="card-strong">
+            <div className="sec-title"><IconChat /> チャット</div>
+            <div style={{ maxHeight: 320, overflowY: "auto", marginBottom: 10 }} className="stack-sm">
+              {messages.length === 0 ? (
+                <div className="muted" style={{ fontSize: 12, padding: "12px 0", textAlign: "center" }}>まだメッセージはありません。</div>
+              ) : (
+                messages.map((msg) => {
+                  const isSystem = msg.message_type === "system";
+                  const isMine = msg.sender_user_id === myUserId;
+                  const bg = isSystem
+                    ? "rgba(255,176,32,0.08)"
+                    : isMine
+                    ? "rgba(0,229,255,0.06)"
+                    : "rgba(255,255,255,0.03)";
+                  return (
+                    <div
+                      key={msg.id}
+                      style={{
+                        background: bg,
+                        borderRadius: "var(--r-md)",
+                        padding: "8px 12px",
+                        fontSize: 12,
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-dim)", marginBottom: 4 }}>
+                        <span>
+                          {msg.profiles?.display_name ?? (msg.sender_user_id ? msg.sender_user_id : "system")}
+                        </span>
+                        <span>{new Date(msg.created_at).toLocaleTimeString()}</span>
+                      </div>
+                      <div style={{ color: "var(--text)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                        {translateBody(msg.body)}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={chatBottomRef} />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="メッセージを入力"
+                maxLength={300}
+                disabled={busy}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleSendChat();
+                  }
+                }}
+                style={{ flex: 1 }}
+              />
+              <button onClick={handleSendChat} disabled={busy} className="btn-sm">
+                送信
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+
+      {/* ---- Responsive override for mobile ---- */}
+      <style>{`
+        @media (max-width: 900px) {
+          main > div[style*="grid-template-columns"] {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
+    </main>
   );
 }

@@ -143,6 +143,11 @@ function teamLabel(team: MatchTeamRow | null) {
   return `${team.side.toUpperCase()}${team.display_name ? ` (${team.display_name})` : ""}`;
 }
 
+function formatTimer(sec: number): string {
+  if (sec <= 0) return "0:00";
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+}
+
 export default function ReportPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -556,424 +561,561 @@ export default function ReportPage() {
   };
 
   if (!matchId) {
-    return <div className="p-6 text-sm text-red-400">match id が見つかりません。</div>;
+    return (
+      <main className="container page-pad">
+        <p className="muted">match id が見つかりません。</p>
+      </main>
+    );
   }
 
   if (loading) {
-    return <div className="p-6"><LoadingSkeleton cards={3} /></div>;
+    return (
+      <main className="container page-pad">
+        <LoadingSkeleton cards={3} />
+      </main>
+    );
   }
 
+  const reportWinnerTeam = report ? (teams.find((t) => t.id === report.winner_match_team_id) ?? null) : null;
+  const isCompleted = match?.status === "completed" && match.approval_status !== "voided";
+  const isVoided = match?.status === "completed" && match.approval_status === "voided";
+  const hasReport = !!report;
+  const showSubmitForm = !report && match?.status !== "completed";
+
+  /* Status badge for header */
+  const statusBadge = (() => {
+    if (isCompleted) return <span className="badge success">COMPLETED</span>;
+    if (isVoided) return <span className="badge danger">VOIDED</span>;
+    if (report?.status === "pending") return <span className="badge amber"><span className="badge-dot" />PENDING</span>;
+    if (report?.status === "approved") return <span className="badge success">APPROVED</span>;
+    return <span className="badge">{match?.status?.toUpperCase() ?? "---"}</span>;
+  })();
+
   return (
-    <div className="min-h-screen bg-neutral-950 text-white">
-      <div className="mx-auto max-w-7xl px-4 py-6">
-        <div className="mb-6 flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">ASCENT 試合結果報告</h1>
-            <p className="mt-1 text-sm text-white/60">マッチ ID: {matchId}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Tutorial pageKey="report" steps={REPORT_TUTORIAL} />
-            <button
-              type="button"
-              onClick={() => router.push("/menu")}
-              className="rounded border border-white/20 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
-            >
-              メニューへ戻る
-            </button>
-            <button
-              type="button"
-              onClick={() => router.push(`/match/${matchId}/confirm`)}
-              className="rounded border border-white/20 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
-            >
-              試合条件最終確認へ戻る
-            </button>
-          </div>
+    <main className="container page-pad" style={{ maxWidth: 1100 }}>
+      {/* ── HEADER ── */}
+      <div className="rowx mb-l">
+        <div>
+          <div className="eyebrow">MATCH · REPORT</div>
+          <h1 className="display" style={{ fontSize: 'clamp(1.8rem, 3.5vw, 2.8rem)', marginTop: 6 }}>
+            試合結果<em>報告。</em>
+          </h1>
         </div>
+        <div className="row">
+          {statusBadge}
+          <Tutorial pageKey="report" steps={REPORT_TUTORIAL} />
+        </div>
+      </div>
 
-        {errorText && (
-          <div className="mb-4 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-            {errorText}
-          </div>
-        )}
+      {/* ── ERRORS / INFO ── */}
+      {errorText && (
+        <div className="card" style={{ borderColor: 'var(--danger)', background: 'var(--danger-soft)', marginBottom: 16 }}>
+          <p style={{ color: 'var(--danger)', fontSize: 13 }}>{errorText}</p>
+        </div>
+      )}
+      {infoText && match?.status !== 'completed' && (
+        <div className="card" style={{ borderColor: 'rgba(0,245,160,0.3)', background: 'rgba(0,245,160,0.06)', marginBottom: 16 }}>
+          <p style={{ color: 'var(--success)', fontSize: 13 }}>{infoText}</p>
+        </div>
+      )}
 
-        {infoText && match?.status !== 'completed' && (
-          <div className="mb-4 rounded border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-            {infoText}
-          </div>
-        )}
+      {trophyTimeoutType === 'voided' && (
+        <div className="card" style={{ borderColor: 'var(--danger)', background: 'var(--danger-soft)', marginBottom: 16 }}>
+          <p style={{ color: 'var(--danger)', fontWeight: 600, fontSize: 13 }}>無効試合 — トロフィー選択タイムアウト</p>
+          <p className="muted" style={{ marginTop: 6 }}>両チームともトロフィー使用者を制限時間内に選択しなかったため、無効試合となりました。全プレイヤーのレートが-10されています。</p>
+        </div>
+      )}
+      {trophyTimeoutType === 'forfeited' && (
+        <div className="card" style={{ borderColor: 'rgba(255,176,32,0.4)', background: 'var(--amber-soft)', marginBottom: 16 }}>
+          <p style={{ color: 'var(--amber)', fontWeight: 600, fontSize: 13 }}>敗北 — トロフィー選択タイムアウト</p>
+          <p className="muted" style={{ marginTop: 6 }}>トロフィー使用者を制限時間内に選択しなかったチームの敗北として処理されました。</p>
+        </div>
+      )}
 
-        {trophyTimeoutType === 'voided' && (
-          <div className="mb-4 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-            <p className="font-semibold">無効試合 — トロフィー選択タイムアウト</p>
-            <p className="mt-1">両チームともトロフィー使用者を制限時間内に選択しなかったため、無効試合となりました。全プレイヤーのレートが-10されています。</p>
-          </div>
-        )}
+      {/* ── MAIN 2-COLUMN LAYOUT ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
 
-        {trophyTimeoutType === 'forfeited' && (
-          <div className="mb-4 rounded border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
-            <p className="font-semibold">敗北 — トロフィー選択タイムアウト</p>
-            <p className="mt-1">トロフィー使用者を制限時間内に選択しなかったチームの敗北として処理されました。</p>
-          </div>
-        )}
+        {/* ═══ LEFT COLUMN ═══ */}
+        <div className="stack">
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <div className="space-y-4 xl:col-span-2">
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">試合情報</h2>
+          {/* ── SUBMIT FORM (no report yet) ── */}
+          {showSubmitForm && (
+            <div className="card-strong">
+              <div className="sec-title">勝者を選択</div>
+              <p className="muted" style={{ marginBottom: 16 }}>
+                勝利したチームのボタンを押して申請してください。相手チームの承認でレートと戦績が反映されます。
+              </p>
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                <div className="rounded bg-black/20 p-3">
-                  <div className="text-xs text-white/50">試合状態</div>
-                  <div className="mt-1 text-sm font-medium">{match?.status ?? "-"}</div>
-                </div>
+              <div className="g2">
+                <button
+                  className="btn btn-lg glow-hover"
+                  onClick={() => alphaTeam && void handleSubmitReportWith(alphaTeam.id)}
+                  disabled={busy || !alphaTeam}
+                  style={{
+                    border: '1px solid var(--alpha)',
+                    background: 'var(--alpha-soft)',
+                    color: '#fff',
+                    padding: '24px 16px',
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 16,
+                    fontWeight: 700,
+                    borderRadius: 'var(--r-lg)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <span className="side-chip alpha" style={{ marginRight: 8 }}>ALPHA</span>
+                  {alphaTeam?.display_name ?? "ALPHA"} 勝利
+                </button>
 
-                <div className="rounded bg-black/20 p-3">
-                  <div className="text-xs text-white/50">承認状態</div>
-                  <div className="mt-1 text-sm font-medium">{match?.approval_status ?? "-"}</div>
-                </div>
-
-                <div className="rounded bg-black/20 p-3">
-                  <div className="text-xs text-white/50">あなたのチーム</div>
-                  <div className="mt-1 text-sm font-medium">
-                    {myMatchTeamId === alphaTeam?.id
-                      ? teamLabel(alphaTeam)
-                      : myMatchTeamId === bravoTeam?.id
-                      ? teamLabel(bravoTeam)
-                      : "-"}
-                  </div>
-                </div>
+                <button
+                  className="btn btn-lg glow-hover"
+                  onClick={() => bravoTeam && void handleSubmitReportWith(bravoTeam.id)}
+                  disabled={busy || !bravoTeam}
+                  style={{
+                    border: '1px solid var(--bravo)',
+                    background: 'var(--bravo-soft)',
+                    color: '#fff',
+                    padding: '24px 16px',
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 16,
+                    fontWeight: 700,
+                    borderRadius: 'var(--r-lg)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <span className="side-chip bravo" style={{ marginRight: 8 }}>BRAVO</span>
+                  {bravoTeam?.display_name ?? "BRAVO"} 勝利
+                </button>
               </div>
-            </section>
+            </div>
+          )}
 
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">チーム一覧</h2>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="rounded border border-white/10 bg-black/20 p-4">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="font-semibold">ALPHA</div>
-                    <div className="text-xs text-white/60">{alphaTeam?.party_composition ?? "-"}</div>
-                  </div>
-                  <div className="mb-3 text-xs text-white/60">実効レート: {alphaTeam?.effective_avg_rating ?? "-"}</div>
-
-                  <div className="space-y-2">
-                    {groupedMembers.alpha.map((m) => (
-                      <div key={m.id} className="flex items-center justify-between rounded bg-white/5 px-3 py-2 text-sm">
-                        <span>{m.profiles?.display_name ?? m.user_id}</span>
-                        <button
-                          type="button"
-                          onClick={() => router.push(`/users/${m.user_id}`)}
-                          className="rounded border border-white/20 bg-white/5 px-2 py-0.5 text-xs hover:bg-white/10"
-                        >
-                          プロフィール
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded border border-white/10 bg-black/20 p-4">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="font-semibold">BRAVO</div>
-                    <div className="text-xs text-white/60">{bravoTeam?.party_composition ?? "-"}</div>
-                  </div>
-                  <div className="mb-3 text-xs text-white/60">実効レート: {bravoTeam?.effective_avg_rating ?? "-"}</div>
-
-                  <div className="space-y-2">
-                    {groupedMembers.bravo.map((m) => (
-                      <div key={m.id} className="flex items-center justify-between rounded bg-white/5 px-3 py-2 text-sm">
-                        <span>{m.profiles?.display_name ?? m.user_id}</span>
-                        <button
-                          type="button"
-                          onClick={() => router.push(`/users/${m.user_id}`)}
-                          className="rounded border border-white/20 bg-white/5 px-2 py-0.5 text-xs hover:bg-white/10"
-                        >
-                          プロフィール
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+          {/* ── REPORT STATUS (submitted, pending/approved) ── */}
+          {hasReport && !isCompleted && !isVoided && (
+            <div className="card-strong">
+              <div className="rowx" style={{ marginBottom: 16 }}>
+                <div className="sec-title" style={{ margin: 0 }}>提出済みレポート</div>
+                {report.status === "pending" ? (
+                  <span className="badge amber"><span className="badge-dot" />AWAITING APPROVAL</span>
+                ) : (
+                  <span className="badge success">APPROVED</span>
+                )}
               </div>
-            </section>
 
-            {!report && match?.status !== "completed" && (
-              <section className="rounded border border-white/10 bg-white/5 p-4">
-                <h2 className="mb-3 text-lg font-semibold">勝者を選択</h2>
-                <p className="mb-4 text-sm text-white/60">
-                  勝利したチームのボタンを押して申請してください。相手チームの承認でレートと戦績が反映されます。
-                </p>
-
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <button
-                    onClick={() => alphaTeam && void handleSubmitReportWith(alphaTeam.id)}
-                    disabled={busy || !alphaTeam}
-                    className="rounded border border-cyan-400 bg-cyan-500/20 px-6 py-6 text-lg font-bold text-white hover:bg-cyan-500/30 disabled:opacity-50"
-                  >
-                    {teamLabel(alphaTeam)} 勝利
-                  </button>
-
-                  <button
-                    onClick={() => bravoTeam && void handleSubmitReportWith(bravoTeam.id)}
-                    disabled={busy || !bravoTeam}
-                    className="rounded border border-fuchsia-400 bg-fuchsia-500/20 px-6 py-6 text-lg font-bold text-white hover:bg-fuchsia-500/30 disabled:opacity-50"
-                  >
-                    {teamLabel(bravoTeam)} 勝利
-                  </button>
-                </div>
-              </section>
-            )}
-
-            {report && (
-              <section className="rounded border border-white/10 bg-white/5 p-4">
-                <h2 className="mb-3 text-lg font-semibold">提出済みレポート</h2>
-
-                <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <div className="rounded bg-black/20 p-3">
-                    <div className="text-xs text-white/50">状態</div>
-                    <div className="mt-1 text-sm font-medium">{report.status}</div>
-                  </div>
-
-                  <div className="rounded bg-black/20 p-3">
-                    <div className="text-xs text-white/50">勝者</div>
-                    <div className="mt-1 text-sm font-medium">
-                      {teamLabel(teams.find((t) => t.id === report.winner_match_team_id) ?? null)}
-                    </div>
-                  </div>
-
-                  <div className="rounded bg-black/20 p-3">
-                    <div className="text-xs text-white/50">スコア</div>
-                    <div className="mt-1 text-sm font-medium">{report.score_summary ?? "-"}</div>
-                  </div>
-                </div>
-
-                <div className="mb-4 rounded bg-black/20 p-3">
-                  <div className="text-xs text-white/50">備考</div>
-                  <div className="mt-1 whitespace-pre-wrap text-sm">{report.notes || "-"}</div>
-                </div>
-
-                <div className="space-y-2">
-                  {reportGames.length === 0 ? (
-                    <div className="text-sm text-white/50">ゲーム別情報はありません。</div>
-                  ) : (
-                    reportGames.map((game) => {
-                      const winnerTeam = teams.find((t) => t.id === game.winner_match_team_id) ?? null;
-                      return (
-                        <div key={game.id} className="rounded bg-black/20 px-3 py-3 text-sm">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="font-medium">Game {game.game_number}</div>
-                            <div className="text-xs text-white/50">
-                              {game.was_played ? "played" : "not played"}
-                            </div>
-                          </div>
-
-                          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
-                            <div>モード: {game.mode}</div>
-                            <div>マップ: {game.map_name ?? "-"}</div>
-                            <div>勝者: {teamLabel(winnerTeam)}</div>
-                          </div>
-                        </div>
-                      );
-                    })
+              {/* Winner display */}
+              <div className="card" style={{ marginBottom: 12 }}>
+                <div className="stat-label">勝者</div>
+                <div className="row" style={{ marginTop: 6 }}>
+                  {reportWinnerTeam && (
+                    <span className={`side-chip ${reportWinnerTeam.side}`}>
+                      {reportWinnerTeam.side.toUpperCase()}
+                    </span>
                   )}
-                </div>
-
-                {canApproveOrReject && (
-                  <div className="mt-4 rounded border border-white/10 bg-black/20 p-4">
-                    <div className="mb-3 flex items-center justify-between">
-                      <div className="text-sm font-semibold">相手チームの申請を確認</div>
-                      {reportRemainingSec !== null && (
-                        <div className={`text-lg font-bold ${reportRemainingSec <= 60 ? "text-red-400" : "text-white"}`}>
-                          {reportRemainingSec > 0
-                            ? `${Math.floor(reportRemainingSec / 60)}:${String(reportRemainingSec % 60).padStart(2, "0")}`
-                            : "0:00"}
-                        </div>
-                      )}
-                    </div>
-
-                    {visitInfo && (
-                      <div className="mb-3 text-xs text-white/60">
-                        {visitInfo.all_visited
-                          ? `全員がこの画面を開いています（${visitInfo.visited}/${visitInfo.total}人）— 制限時間5分`
-                          : `まだ全員が画面を開いていません（${visitInfo.visited}/${visitInfo.total}人）— 制限時間1時間`}
-                      </div>
-                    )}
-
-                    {priorRejectCount >= 1 && (
-                      <div className="mb-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-                        既に1回却下されています。次の却下で<strong>無効試合</strong>となり、レート変動はありません。虚偽の報告や不当な却下をするプレイヤーは通報してください。
-                      </div>
-                    )}
-
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={handleApproveReport}
-                        disabled={busy}
-                        className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      >
-                        承認する
-                      </button>
-
-                      <button
-                        onClick={handleRejectReport}
-                        disabled={busy}
-                        className="rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      >
-                        {priorRejectCount >= 1 ? "却下する（無効試合になります）" : "却下する"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {isMyOwnReport && report.status === "pending" && (
-                  <div className="mt-4 rounded border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
-                    <div>相手チームの承認待ちです。</div>
-                    {visitInfo && (
-                      <div className="mt-2">
-                        {visitInfo.all_visited
-                          ? `全員がこの画面を開いています（${visitInfo.visited}/${visitInfo.total}人）— 制限時間5分`
-                          : `まだ全員が画面を開いていません（${visitInfo.visited}/${visitInfo.total}人）— 制限時間1時間`}
-                      </div>
-                    )}
-                    {reportRemainingSec !== null && (
-                      <div className="mt-2">
-                        承認期限まで残り:{" "}
-                        <span className={`font-bold ${reportRemainingSec <= 60 ? "text-red-400" : ""}`}>
-                          {reportRemainingSec > 0
-                            ? `${Math.floor(reportRemainingSec / 60)}:${String(reportRemainingSec % 60).padStart(2, "0")}`
-                            : "0:00（自動承認処理中...）"}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </section>
-            )}
-
-            {match?.status === "completed" && match.approval_status === "voided" && (
-              <section className="rounded border border-amber-500/40 bg-amber-500/10 p-4">
-                <h2 className="text-lg font-semibold">無効試合</h2>
-                <p className="mt-2 text-sm">
-                  却下が連続したため無効試合となりました。レート変動はありません。
-                </p>
-                {match.completed_at && (
-                  <div className="mt-1 text-xs text-white/60">
-                    確定日時: {new Date(match.completed_at).toLocaleString()}
-                  </div>
-                )}
-                <div className="mt-4 space-y-2">
-                  <p className="text-xs text-white/60">虚偽の報告や不当な却下があった場合は通報してください。</p>
-                  {members
-                    .filter((m) => m.match_team_id !== myMatchTeamId)
-                    .map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() =>
-                          router.push(`/reports/new?reported=${m.user_id}&match=${matchId}`)
-                        }
-                        className="block w-full rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-left text-sm hover:bg-amber-500/20"
-                      >
-                        {m.profiles?.display_name ?? m.user_id} を通報する
-                      </button>
-                    ))}
-                </div>
-              </section>
-            )}
-
-            {match?.status === "completed" && match.approval_status !== "voided" && (
-              <section className="enter rounded border border-emerald-500/20 bg-emerald-500/10 p-4">
-                <div className="mb-2 flex items-center gap-2">
-                  <h2 className="text-lg font-semibold" style={{ fontFamily: 'var(--font-display)' }}>試合確定済み</h2>
-                  <span className="badge rounded bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300">
-                    COMPLETED
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>
+                    {teamLabel(reportWinnerTeam)}
                   </span>
                 </div>
-                <div className="mt-2 text-sm">
-                  勝者: <span className="font-semibold" style={{ fontFamily: 'var(--font-display)' }}>{teamLabel(completedWinnerTeam)}</span>
+              </div>
+
+              {/* Score summary */}
+              <div className="card" style={{ marginBottom: 12 }}>
+                <div className="stat-label">スコア</div>
+                <div className="mono tabular" style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>
+                  {report.score_summary ?? "-"}
                 </div>
-                {match.completed_at && (
-                  <div className="mt-1 text-xs text-white/60">
-                    確定日時: {new Date(match.completed_at).toLocaleString()}
+              </div>
+
+              {/* Report games */}
+              {reportGames.length > 0 && (
+                <div className="stack-sm" style={{ marginBottom: 16 }}>
+                  {reportGames.map((game) => {
+                    const winnerTeam = teams.find((t) => t.id === game.winner_match_team_id) ?? null;
+                    return (
+                      <div key={game.id} className="card" style={{ padding: '10px 14px' }}>
+                        <div className="rowx">
+                          <div className="row" style={{ gap: 8 }}>
+                            <span className="badge" style={{ padding: '2px 8px', fontSize: 11 }}>
+                              {game.mode.toUpperCase()}
+                            </span>
+                            <span className="muted" style={{ fontSize: 12 }}>Game {game.game_number}</span>
+                            {game.map_name && <span className="dim" style={{ fontSize: 12 }}>{game.map_name}</span>}
+                          </div>
+                          <div style={{ fontSize: 13 }}>
+                            {winnerTeam ? (
+                              <span style={{ color: winnerTeam.side === 'alpha' ? 'var(--alpha)' : 'var(--bravo)', fontWeight: 600 }}>
+                                {winnerTeam.side.toUpperCase()} WIN
+                              </span>
+                            ) : (
+                              <span className="dim">{game.was_played ? "-" : "未実施"}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Notes */}
+              {report.notes && (
+                <div className="card" style={{ marginBottom: 16 }}>
+                  <div className="stat-label">備考</div>
+                  <p style={{ marginTop: 4, fontSize: 13, whiteSpace: 'pre-wrap' }}>{report.notes}</p>
+                </div>
+              )}
+
+              {/* Approve / Reject controls */}
+              {canApproveOrReject && (
+                <div style={{ marginTop: 16 }}>
+                  {priorRejectCount >= 1 && (
+                    <div className="card" style={{ borderColor: 'rgba(255,176,32,0.4)', background: 'var(--amber-soft)', marginBottom: 12 }}>
+                      <p style={{ color: 'var(--amber)', fontSize: 13 }}>
+                        既に1回却下されています。次の却下で<strong>無効試合</strong>となり、レート変動はありません。
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="row" style={{ gap: 10 }}>
+                    <button
+                      className="btn btn-primary btn-lg"
+                      onClick={handleApproveReport}
+                      disabled={busy}
+                    >
+                      承認する
+                    </button>
+                    <button
+                      className="btn btn-danger btn-lg"
+                      onClick={handleRejectReport}
+                      disabled={busy}
+                    >
+                      {priorRejectCount >= 1 ? "却下する（無効試合になります）" : "却下する"}
+                    </button>
                   </div>
-                )}
-                {oldRating != null && newRating != null && (
+                </div>
+              )}
+
+              {/* Own report waiting info */}
+              {isMyOwnReport && report.status === "pending" && (
+                <div className="card" style={{ borderColor: 'rgba(255,176,32,0.3)', background: 'var(--amber-soft)', marginTop: 16 }}>
+                  <p style={{ color: 'var(--amber)', fontSize: 13 }}>相手チームの承認待ちです。</p>
+                  {visitInfo && (
+                    <p className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+                      {visitInfo.all_visited
+                        ? `全員がこの画面を開いています（${visitInfo.visited}/${visitInfo.total}人）— 制限時間5分`
+                        : `まだ全員が画面を開いていません（${visitInfo.visited}/${visitInfo.total}人）— 制限時間1時間`}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── COMPLETED CARD ── */}
+          {isCompleted && (
+            <div className="card-strong enter" style={{ textAlign: 'center', padding: 40 }}>
+              <span className="badge success">COMPLETED</span>
+              <div style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 44,
+                fontWeight: 800,
+                marginTop: 16,
+                lineHeight: 1,
+              }}>
+                試合終了。
+              </div>
+
+              {completedWinnerTeam && (
+                <div className="row" style={{ justifyContent: 'center', marginTop: 20, gap: 10 }}>
+                  <span className={`side-chip ${completedWinnerTeam.side}`}>
+                    {completedWinnerTeam.side.toUpperCase()}
+                  </span>
+                  <span style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 22,
+                    fontWeight: 700,
+                    color: completedWinnerTeam.side === 'alpha' ? 'var(--alpha)' : 'var(--bravo)',
+                    textShadow: completedWinnerTeam.side === 'alpha'
+                      ? '0 0 16px rgba(0,229,255,0.5)'
+                      : '0 0 16px rgba(255,43,214,0.5)',
+                  }}>
+                    {teamLabel(completedWinnerTeam)} WIN
+                  </span>
+                </div>
+              )}
+
+              {match.completed_at && (
+                <p className="muted" style={{ marginTop: 12, fontSize: 12 }}>
+                  確定日時: {new Date(match.completed_at).toLocaleString()}
+                </p>
+              )}
+
+              {oldRating != null && newRating != null && (
+                <div style={{ marginTop: 20 }}>
                   <RatingDelta
                     oldRating={oldRating}
                     newRating={newRating}
                     show={true}
                   />
-                )}
-              </section>
-            )}
+                </div>
+              )}
+
+              <div className="row" style={{ justifyContent: 'center', marginTop: 24, gap: 10 }}>
+                <button className="btn btn-ghost" onClick={() => router.push("/menu")}>メニューへ</button>
+                <button className="btn btn-primary" onClick={() => router.push(`/users/${myUserId}`)}>戦績を見る</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── VOIDED CARD ── */}
+          {isVoided && (
+            <div className="card-strong">
+              <span className="badge danger">VOIDED</span>
+              <div style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 32,
+                fontWeight: 800,
+                marginTop: 16,
+              }}>
+                無効試合
+              </div>
+              <p className="muted" style={{ marginTop: 8 }}>
+                却下が連続したため無効試合となりました。レート変動はありません。
+              </p>
+              {match.completed_at && (
+                <p className="dim" style={{ marginTop: 4, fontSize: 12 }}>
+                  確定日時: {new Date(match.completed_at).toLocaleString()}
+                </p>
+              )}
+
+              <div className="stack-sm" style={{ marginTop: 16 }}>
+                <p className="muted" style={{ fontSize: 12 }}>虚偽の報告や不当な却下があった場合は通報してください。</p>
+                {members
+                  .filter((m) => m.match_team_id !== myMatchTeamId)
+                  .map((m) => (
+                    <button
+                      key={m.id}
+                      className="btn btn-danger"
+                      style={{ width: '100%', textAlign: 'left' }}
+                      onClick={() =>
+                        router.push(`/reports/new?reported=${m.user_id}&match=${matchId}`)
+                      }
+                    >
+                      {m.profiles?.display_name ?? m.user_id} を通報する
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ═══ RIGHT COLUMN ═══ */}
+        <div className="stack">
+
+          {/* ── MATCH INFO ── */}
+          <div className="card-strong">
+            <div className="sec-title">マッチ情報</div>
+
+            {/* Alpha team */}
+            <div className="card" style={{ marginBottom: 10 }}>
+              <div className="rowx" style={{ marginBottom: 8 }}>
+                <div className="row" style={{ gap: 8 }}>
+                  <span className="side-chip alpha">ALPHA</span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14 }}>
+                    {alphaTeam?.display_name ?? "ALPHA"}
+                  </span>
+                </div>
+                <span className="mono tabular dim" style={{ fontSize: 12 }}>
+                  SR {alphaTeam?.effective_avg_rating ?? "-"}
+                </span>
+              </div>
+              <div className="row" style={{ gap: 6 }}>
+                {groupedMembers.alpha.map((m) => (
+                  <div
+                    key={m.id}
+                    onClick={() => router.push(`/users/${m.user_id}`)}
+                    title={m.profiles?.display_name ?? m.user_id}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      background: 'var(--alpha-soft)',
+                      border: '1px solid rgba(0,229,255,0.3)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: 'var(--alpha)',
+                      cursor: 'pointer',
+                      transition: 'transform 0.15s',
+                    }}
+                  >
+                    {(m.profiles?.display_name ?? "?")[0]}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Bravo team */}
+            <div className="card">
+              <div className="rowx" style={{ marginBottom: 8 }}>
+                <div className="row" style={{ gap: 8 }}>
+                  <span className="side-chip bravo">BRAVO</span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14 }}>
+                    {bravoTeam?.display_name ?? "BRAVO"}
+                  </span>
+                </div>
+                <span className="mono tabular dim" style={{ fontSize: 12 }}>
+                  SR {bravoTeam?.effective_avg_rating ?? "-"}
+                </span>
+              </div>
+              <div className="row" style={{ gap: 6 }}>
+                {groupedMembers.bravo.map((m) => (
+                  <div
+                    key={m.id}
+                    onClick={() => router.push(`/users/${m.user_id}`)}
+                    title={m.profiles?.display_name ?? m.user_id}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      background: 'var(--bravo-soft)',
+                      border: '1px solid rgba(255,43,214,0.3)',
+                      display: 'grid',
+                      placeItems: 'center',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: 'var(--bravo)',
+                      cursor: 'pointer',
+                      transition: 'transform 0.15s',
+                    }}
+                  >
+                    {(m.profiles?.display_name ?? "?")[0]}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-4">
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">試合チャット</h2>
-
-              <div className="mb-3 h-[420px] overflow-y-auto rounded border border-white/10 bg-black/20 p-3">
-                <div className="space-y-2">
-                  {messages.length === 0 ? (
-                    <div className="text-sm text-white/50">まだメッセージはありません。</div>
-                  ) : (
-                    messages.map((msg) => {
-                      const senderName = msg.profiles?.display_name ?? null;
-                      return (
-                        <div
-                          key={msg.id}
-                          className={`rounded px-3 py-2 text-sm ${
-                            msg.message_type === "system"
-                              ? "bg-white/5 text-white/70"
-                              : "bg-white/10 text-white"
-                          }`}
-                        >
-                          <div className="mb-1 text-[11px] text-white/50">
-                            {new Date(msg.created_at).toLocaleString()}
-                          </div>
-                          <div className="whitespace-pre-wrap break-words">
-                            {senderName && (
-                              <span className="font-semibold text-cyan-300">{senderName}: </span>
-                            )}
-                            {translateBody(msg.body)}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
+          {/* ── TIMER ── */}
+          {report?.status === "pending" && reportRemainingSec !== null && (
+            <div className="card">
+              <div className="stat-label">承認期限</div>
+              <div className="mono tabular" style={{
+                fontSize: 32,
+                fontWeight: 700,
+                marginTop: 6,
+                color: reportRemainingSec <= 60 ? 'var(--danger)' : 'var(--text)',
+              }}>
+                {reportRemainingSec > 0 ? formatTimer(reportRemainingSec) : "0:00"}
               </div>
+              {reportRemainingSec <= 0 && (
+                <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>自動承認処理中...</p>
+              )}
+              {visitInfo && (
+                <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+                  {visitInfo.all_visited
+                    ? `全員閲覧中（${visitInfo.visited}/${visitInfo.total}人）— 5分`
+                    : `${visitInfo.visited}/${visitInfo.total}人が閲覧中 — 1時間`}
+                </p>
+              )}
+            </div>
+          )}
 
-              <div className="space-y-2">
-                <textarea
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="メッセージを入力"
-                  rows={3}
-                  maxLength={300}
-                  className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                  disabled={busy}
-                />
-                <button
-                  onClick={handleSendChat}
-                  disabled={busy}
-                  className="w-full rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
-                >
-                  メッセージ送信
-                </button>
-              </div>
-            </section>
+          {/* ── CHAT ── */}
+          <div className="card-strong">
+            <div className="sec-title">チャット</div>
 
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">使い方</h2>
-              <div className="space-y-2 text-sm text-white/80">
-                <div>1. 勝者チームのボタンを押します。</div>
-                <div>2. 相手チームが承認するとレートと戦績が更新されます。</div>
-              </div>
-            </section>
+            <div style={{
+              height: 360,
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              marginBottom: 12,
+            }}>
+              {messages.length === 0 ? (
+                <p className="muted" style={{ padding: 16, textAlign: 'center' }}>メッセージはありません</p>
+              ) : (
+                messages.map((msg) => {
+                  const senderName = msg.profiles?.display_name ?? null;
+                  const isSystem = msg.message_type === "system";
+                  const senderMember = members.find((m) => m.user_id === msg.sender_user_id);
+                  const senderSide = senderMember
+                    ? teams.find((t) => t.id === senderMember.match_team_id)?.side
+                    : null;
+
+                  return (
+                    <div
+                      key={msg.id}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: 8,
+                        fontSize: 13,
+                        background: isSystem
+                          ? 'rgba(255,255,255,0.03)'
+                          : senderSide === 'alpha'
+                            ? 'var(--alpha-soft)'
+                            : senderSide === 'bravo'
+                              ? 'var(--bravo-soft)'
+                              : 'rgba(255,255,255,0.05)',
+                        border: isSystem ? '1px solid var(--line)' : 'none',
+                      }}
+                    >
+                      <div className="dim" style={{ fontSize: 10, marginBottom: 2 }}>
+                        {new Date(msg.created_at).toLocaleString()}
+                      </div>
+                      <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        {senderName && (
+                          <span style={{
+                            fontWeight: 600,
+                            color: senderSide === 'alpha' ? 'var(--alpha)' : senderSide === 'bravo' ? 'var(--bravo)' : 'var(--text-soft)',
+                            marginRight: 6,
+                          }}>
+                            {senderName}:
+                          </span>
+                        )}
+                        {isSystem ? (
+                          <span className="muted">{translateBody(msg.body)}</span>
+                        ) : (
+                          translateBody(msg.body)
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="row" style={{ gap: 8 }}>
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="メッセージを入力..."
+                rows={2}
+                maxLength={300}
+                disabled={busy}
+                style={{ flex: 1, minHeight: 'unset' }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleSendChat();
+                  }
+                }}
+              />
+              <button
+                className="btn btn-primary"
+                onClick={handleSendChat}
+                disabled={busy}
+                style={{ alignSelf: 'stretch' }}
+              >
+                送信
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
