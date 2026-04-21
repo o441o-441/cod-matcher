@@ -95,6 +95,7 @@ type PartyMemberRow = {
   profiles?: {
     id: string;
     display_name: string;
+    current_rating: number | null;
   } | null;
 };
 
@@ -387,7 +388,7 @@ export default function MatchPage() {
       if (activeParty) {
         // Parallel: party members, invites, waiting entry, matched entries
         const [membersRes2, invitesRes, waitingRes, matchedRes] = await Promise.all([
-          supabase.from("party_members").select("id,party_id,user_id,profiles!party_members_user_id_fkey(id,display_name)").eq("party_id", activeParty.id).returns<PartyMemberRow[]>(),
+          supabase.from("party_members").select("id,party_id,user_id,profiles!party_members_user_id_fkey(id,display_name,current_rating)").eq("party_id", activeParty.id).returns<PartyMemberRow[]>(),
           supabase.from("party_invites").select("id,party_id,inviter_user_id,invitee_user_id,status,created_at,responded_at").eq("party_id", activeParty.id).order("created_at", { ascending: false }).returns<PartyInviteRow[]>(),
           supabase.from("queue_entries").select("id,party_id,queue_type,status,party_size,avg_rating,min_rating,max_rating,party_size_bonus,wait_expand_level,created_at,matched_at,cancelled_at,expired_at").eq("party_id", activeParty.id).eq("status", "waiting").order("created_at", { ascending: false }).limit(1).maybeSingle<QueueEntryRow>(),
           supabase.from("queue_entries").select("id,party_id,queue_type,status,party_size,avg_rating,min_rating,max_rating,party_size_bonus,wait_expand_level,created_at,matched_at,cancelled_at,expired_at").eq("party_id", activeParty.id).eq("status", "matched").returns<QueueEntryRow[]>(),
@@ -1050,13 +1051,9 @@ export default function MatchPage() {
                       <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {name}
                       </div>
-                      {/* Tag */}
-                      <div className="mono muted" style={{ fontSize: 10, marginTop: 2 }}>
-                        {member.user_id.slice(0, 8)}
-                      </div>
-                      {/* SR row */}
+                      {/* SR */}
                       <div className="row" style={{ justifyContent: 'center', marginTop: 6, gap: 6 }}>
-                        <span className="mono" style={{ fontSize: 12, color: 'var(--cyan)' }}>SR --</span>
+                        <span className="mono" style={{ fontSize: 12, color: 'var(--cyan)' }}>SR {member.profiles?.current_rating ?? '---'}</span>
                       </div>
                     </div>
                   );
