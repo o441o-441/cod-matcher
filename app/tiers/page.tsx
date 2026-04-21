@@ -99,8 +99,8 @@ export default function TiersPage() {
         <div className="grid-2" style={{ gap: 12 }}>
           <div className="card">
             <div className="stat-label">初期レート</div>
-            <div className="stat-val" style={{ color: 'var(--tier-platinum)' }}>1500</div>
-            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>全プレイヤーは PLATINUM ティアからスタートします。</p>
+            <div className="stat-val" style={{ color: 'var(--tier-platinum)' }}>1400 / 1500</div>
+            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>オンボーディングで「初級者」を選んだ場合は 1400、それ以外は 1500 からスタートします。</p>
           </div>
           <div className="card">
             <div className="stat-label">レート変動</div>
@@ -108,14 +108,47 @@ export default function TiersPage() {
             <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>勝敗とレート差に基づいて変動します。格上に勝つと大きく上がります。</p>
           </div>
           <div className="card">
-            <div className="stat-label">シーズン</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, marginTop: 4 }}>リセット制</div>
-            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>シーズン終了時にレートがリセットされ、新シーズンは 1500 から再スタートです。</p>
-          </div>
-          <div className="card">
             <div className="stat-label">ピークレート</div>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, marginTop: 4 }}>記録</div>
             <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>シーズン中の最高レートがプロフィールに記録されます。</p>
+          </div>
+          <div className="card">
+            <div className="stat-label">シーズン</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, marginTop: 4 }}>リセット制</div>
+            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>シーズン終了時にレートがリセットされます。リセット後の開始レートはシーズン中のピークレートに応じて決まります。</p>
+          </div>
+        </div>
+      </div>
+      {/* Season reset rules */}
+      <div className="card-strong mt-l">
+        <div className="sec-title">
+          <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+          シーズンリセット時の開始レート
+        </div>
+        <p className="muted" style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 16 }}>
+          シーズンリセット時の開始レートは、前シーズン中に一度でも到達したピークレートに基づいて決まります。
+        </p>
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="card" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', padding: '12px 16px' }}>
+            <div>
+              <div style={{ fontWeight: 700 }}>ピークレートが 1600 以上</div>
+              <div className="muted" style={{ fontSize: 12 }}>一度でも 1600 を上回った場合</div>
+            </div>
+            <div className="mono tabular" style={{ fontSize: 20, fontWeight: 700, color: 'var(--tier-diamond)' }}>→ 1600</div>
+          </div>
+          <div className="card" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', padding: '12px 16px' }}>
+            <div>
+              <div style={{ fontWeight: 700 }}>ピークレートが 1500 以上</div>
+              <div className="muted" style={{ fontSize: 12 }}>一度でも 1500 を上回った場合</div>
+            </div>
+            <div className="mono tabular" style={{ fontSize: 20, fontWeight: 700, color: 'var(--tier-platinum)' }}>→ 1500</div>
+          </div>
+          <div className="card" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', padding: '12px 16px' }}>
+            <div>
+              <div style={{ fontWeight: 700 }}>初級者スタート（ピーク 1500 未満）</div>
+              <div className="muted" style={{ fontSize: 12 }}>オンボーディングで「初級者」を選択し、1500 に到達していない場合</div>
+            </div>
+            <div className="mono tabular" style={{ fontSize: 20, fontWeight: 700, color: 'var(--tier-gold)' }}>→ 1400</div>
           </div>
         </div>
       </div>
