@@ -240,12 +240,7 @@ export default function MatchConfirmPage() {
     return () => clearInterval(interval);
   }, [loadAll]);
 
-  useEffect(() => {
-    const el = chatBottomRef.current?.parentElement;
-    if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-    if (nearBottom) chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+  // chat auto-scroll disabled
 
   const alphaTeam = useMemo(() => teams.find((t) => t.side === "alpha") ?? null, [teams]);
   const bravoTeam = useMemo(() => teams.find((t) => t.side === "bravo") ?? null, [teams]);

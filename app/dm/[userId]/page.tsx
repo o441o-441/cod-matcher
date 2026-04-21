@@ -78,12 +78,7 @@ export default function DmConversationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partnerId])
 
-  useEffect(() => {
-    const el = bottomRef.current?.parentElement
-    if (!el) return
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-    if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  // chat auto-scroll disabled
 
   // Realtime + polling
   useEffect(() => {
