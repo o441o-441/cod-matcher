@@ -429,6 +429,20 @@ export default function MatchPage() {
           } else { setMyActiveMatch(null); }
         } else { setMyActiveMatch(null); }
       } else {
+        // Auto-create solo party if none exists
+        if (resolvedProfile && !resolvedProfile.is_banned) {
+          try {
+            const { error: autoErr } = await supabase.rpc("rpc_create_party", { p_source_team_id: null });
+            if (!autoErr) {
+              // Reload to pick up the new party
+              loadBusyRef.current = false;
+              await loadMyState();
+              return;
+            }
+          } catch {
+            // Ignore auto-create failure, show empty state
+          }
+        }
         setMyPartyMembers([]); setMyPartyInvites([]);
         setMyWaitingEntry(null); setMyMatchedEntryIds([]); setMyActiveMatch(null);
       }
