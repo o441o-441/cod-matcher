@@ -343,7 +343,7 @@ export default function BlogPostPage() {
       {/* Body */}
       <div className="section card-strong">
         <div className="markdown-body">
-          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{post.body}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{post.body.replace(/\n\n+/g, (m) => '\n' + '&nbsp;\n'.repeat(m.length - 1))}</ReactMarkdown>
         </div>
       </div>
 
