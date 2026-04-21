@@ -65,7 +65,7 @@ function RulesGate({ onAccept }: { onAccept: () => void }) {
 
 const MATCH_TUTORIAL = [
   { title: "マッチング画面", body: "ここで対戦相手を探します。パーティを作成してキューに参加すると、自動でマッチングが行われます。" },
-  { title: "ソロ参加", body: "パーティを作成して「既存パーティで待機開始」を押すとキューに入ります。1人でもパーティを作れるので、チームメンバーがいなくてもOKです。" },
+  { title: "ソロ参加", body: "パーティを作成して「対戦開始」を押すとキューに入ります。1人でもパーティを作れるので、チームメンバーがいなくてもOKです。" },
   { title: "パーティ参加", body: "チームメンバーやフレンドを招待してパーティを組むこともできます。パーティリーダーがキューに入れます。" },
   { title: "自動マッチング", body: "キューに入ると3秒ごとに自動でマッチングを試みます。マッチが成立するとバンピック画面に自動遷移します。" },
 ];
@@ -1183,7 +1183,7 @@ export default function MatchPage() {
               <div className="row">
                 {canQueueExistingParty && (
                   <button onClick={handleQueueExistingParty} className="btn-primary">
-                    既存パーティで待機開始
+                    対戦開始
                   </button>
                 )}
                 {isPartyLeader ? (
@@ -1284,7 +1284,7 @@ export default function MatchPage() {
           {/* ── Not queued placeholder ── */}
           {!isWaiting && !myActiveMatch && (
             <div className="card" style={{ textAlign: 'center', padding: 32 }}>
-              <span className="muted">待機していません。パーティを作成して「既存パーティで待機開始」を押してください。</span>
+              <span className="muted">待機していません。パーティを作成して「対戦開始」を押してください。</span>
             </div>
           )}
 
@@ -1434,7 +1434,7 @@ export default function MatchPage() {
             <div className="stack-sm" style={{ fontSize: 13 }}>
               <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>1.</span>パーティを作成します（ソロでもOK）</div>
               <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>2.</span>チームメンバーやフレンドを招待</div>
-              <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>3.</span>「既存パーティで待機開始」でキューイン</div>
+              <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>3.</span>「対戦開始」でキューイン</div>
               <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>4.</span>自動マッチング（3秒間隔）</div>
               <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>5.</span>マッチ成立でバンピック画面へ自動遷移</div>
             </div>
