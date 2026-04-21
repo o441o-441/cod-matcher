@@ -26,11 +26,13 @@ type SeasonOption = {
 
 function getTier(rating: number | null): { label: string; color: string } {
   if (rating == null) return { label: 'BRONZE', color: 'var(--tier-bronze)' }
-  if (rating >= 2100) return { label: 'ASCENDANT', color: 'var(--tier-ascendant)' }
-  if (rating >= 1950) return { label: 'DIAMOND', color: 'var(--tier-diamond)' }
-  if (rating >= 1800) return { label: 'PLATINUM', color: 'var(--tier-platinum)' }
-  if (rating >= 1600) return { label: 'GOLD', color: 'var(--tier-gold)' }
-  if (rating >= 1400) return { label: 'SILVER', color: 'var(--tier-silver)' }
+  if (rating >= 2200) return { label: 'ASCENDANT', color: 'var(--tier-ascendant)' }
+  if (rating >= 2000) return { label: 'RAINBOW', color: 'var(--tier-crimson)' }
+  if (rating >= 1800) return { label: 'CRIMSON', color: 'var(--tier-crimson)' }
+  if (rating >= 1600) return { label: 'DIAMOND', color: 'var(--tier-diamond)' }
+  if (rating >= 1400) return { label: 'PLATINUM', color: 'var(--tier-platinum)' }
+  if (rating >= 1200) return { label: 'GOLD', color: 'var(--tier-gold)' }
+  if (rating >= 1000) return { label: 'SILVER', color: 'var(--tier-silver)' }
   return { label: 'BRONZE', color: 'var(--tier-bronze)' }
 }
 

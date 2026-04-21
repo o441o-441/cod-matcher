@@ -34,10 +34,12 @@ type TeamRow = {
 
 function getTierInfo(rating: number): { name: string; color: string } {
   if (rating >= 2200) return { name: 'ASCENDANT', color: 'var(--tier-ascendant)' }
-  if (rating >= 2000) return { name: 'DIAMOND', color: 'var(--tier-diamond)' }
-  if (rating >= 1800) return { name: 'PLATINUM', color: 'var(--tier-platinum)' }
-  if (rating >= 1600) return { name: 'GOLD', color: 'var(--tier-gold)' }
-  if (rating >= 1400) return { name: 'SILVER', color: 'var(--tier-silver)' }
+  if (rating >= 2000) return { name: 'RAINBOW', color: 'var(--tier-crimson)' }
+  if (rating >= 1800) return { name: 'CRIMSON', color: 'var(--tier-crimson)' }
+  if (rating >= 1600) return { name: 'DIAMOND', color: 'var(--tier-diamond)' }
+  if (rating >= 1400) return { name: 'PLATINUM', color: 'var(--tier-platinum)' }
+  if (rating >= 1200) return { name: 'GOLD', color: 'var(--tier-gold)' }
+  if (rating >= 1000) return { name: 'SILVER', color: 'var(--tier-silver)' }
   return { name: 'BRONZE', color: 'var(--tier-bronze)' }
 }
 

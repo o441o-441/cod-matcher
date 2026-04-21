@@ -17,11 +17,13 @@ const MENU_TUTORIAL = [
 
 function getTierInfo(r: number | null): { label: string; color: string } {
   if (r == null) return { label: '—', color: 'var(--text-dim)' }
-  if (r >= 2400) return { label: 'ASCENDANT', color: 'var(--tier-ascendant)' }
-  if (r >= 2000) return { label: 'DIAMOND', color: 'var(--tier-diamond)' }
-  if (r >= 1600) return { label: 'PLATINUM', color: 'var(--tier-platinum)' }
+  if (r >= 2200) return { label: 'ASCENDANT', color: 'var(--tier-ascendant)' }
+  if (r >= 2000) return { label: 'RAINBOW', color: 'var(--tier-crimson)' }
+  if (r >= 1800) return { label: 'CRIMSON', color: 'var(--tier-crimson)' }
+  if (r >= 1600) return { label: 'DIAMOND', color: 'var(--tier-diamond)' }
+  if (r >= 1400) return { label: 'PLATINUM', color: 'var(--tier-platinum)' }
   if (r >= 1200) return { label: 'GOLD', color: 'var(--tier-gold)' }
-  if (r >= 800) return { label: 'SILVER', color: 'var(--tier-silver)' }
+  if (r >= 1000) return { label: 'SILVER', color: 'var(--tier-silver)' }
   return { label: 'BRONZE', color: 'var(--tier-bronze)' }
 }
 

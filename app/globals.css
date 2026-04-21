@@ -60,6 +60,8 @@
   --tier-gold: #ffd166;
   --tier-platinum: #7ae1ff;
   --tier-diamond: #b5a8ff;
+  --tier-crimson: #ff2244;
+  --tier-rainbow: linear-gradient(90deg, #ff0000, #ff8800, #ffff00, #00ff00, #0088ff, #8800ff);
   --tier-ascendant: #ff2bd6;
 
   /* Shadows / glows */
