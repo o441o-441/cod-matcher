@@ -930,28 +930,32 @@ export default function ReportPage() {
                   SR {alphaTeam?.effective_avg_rating ?? "-"}
                 </span>
               </div>
-              <div className="row" style={{ gap: 6 }}>
+              <div className="stack-sm">
                 {groupedMembers.alpha.map((m) => (
                   <div
                     key={m.id}
+                    className="row"
                     onClick={() => router.push(`/users/${m.user_id}`)}
-                    title={m.profiles?.display_name ?? m.user_id}
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      background: 'var(--alpha-soft)',
-                      border: '1px solid rgba(0,229,255,0.3)',
-                      display: 'grid',
-                      placeItems: 'center',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: 'var(--alpha)',
-                      cursor: 'pointer',
-                      transition: 'transform 0.15s',
-                    }}
+                    style={{ gap: 8, cursor: 'pointer' }}
                   >
-                    {(m.profiles?.display_name ?? "?")[0]}
+                    <div
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        background: 'var(--alpha-soft)',
+                        border: '1px solid rgba(0,229,255,0.3)',
+                        display: 'grid',
+                        placeItems: 'center',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: 'var(--alpha)',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {(m.profiles?.display_name ?? "?")[0]}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{m.profiles?.display_name ?? m.user_id.slice(0, 8)}</span>
                   </div>
                 ))}
               </div>
@@ -970,28 +974,32 @@ export default function ReportPage() {
                   SR {bravoTeam?.effective_avg_rating ?? "-"}
                 </span>
               </div>
-              <div className="row" style={{ gap: 6 }}>
+              <div className="stack-sm">
                 {groupedMembers.bravo.map((m) => (
                   <div
                     key={m.id}
+                    className="row"
                     onClick={() => router.push(`/users/${m.user_id}`)}
-                    title={m.profiles?.display_name ?? m.user_id}
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      background: 'var(--bravo-soft)',
-                      border: '1px solid rgba(255,43,214,0.3)',
-                      display: 'grid',
-                      placeItems: 'center',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: 'var(--bravo)',
-                      cursor: 'pointer',
-                      transition: 'transform 0.15s',
-                    }}
+                    style={{ gap: 8, cursor: 'pointer' }}
                   >
-                    {(m.profiles?.display_name ?? "?")[0]}
+                    <div
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        background: 'var(--bravo-soft)',
+                        border: '1px solid rgba(255,43,214,0.3)',
+                        display: 'grid',
+                        placeItems: 'center',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: 'var(--bravo)',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {(m.profiles?.display_name ?? "?")[0]}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{m.profiles?.display_name ?? m.user_id.slice(0, 8)}</span>
                   </div>
                 ))}
               </div>
