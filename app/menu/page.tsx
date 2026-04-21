@@ -430,6 +430,10 @@ export default function MenuPage() {
               ルール一覧
               <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
+            <button className="btn-ghost btn-block" onClick={() => router.push('/tiers')}>
+              ティア一覧
+              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
             <button className="btn-ghost btn-block" onClick={() => router.push('/reports')}>
               通報履歴
               <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>

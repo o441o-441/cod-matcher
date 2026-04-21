@@ -326,6 +326,13 @@ export default function RulesPage() {
           </div>
         </div>
       </div>
+
+      <div className="section" style={{ textAlign: 'center' }}>
+        <button className="btn-ghost" onClick={() => router.push('/tiers')}>
+          ティア一覧を見る
+          <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+      </div>
     </main>
   )
 }

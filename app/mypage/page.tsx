@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RealtimeChannel, User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import { usePageView } from '@/lib/usePageView'
@@ -90,15 +91,22 @@ function CircularRating({ rating, peakRating }: { rating: number | null; peakRat
         gap: 2,
       }}>
         {/* Tier badge */}
-        <span className="badge" style={{
-          fontSize: 9,
-          padding: '2px 8px',
-          borderColor: tier.color,
-          color: tier.color,
-          background: 'rgba(0,0,0,0.3)',
-        }}>
-          {tier.name}
-        </span>
+        <Link href="/tiers" style={{ textDecoration: 'none' }}>
+          <span
+            className="badge"
+            style={{
+              fontSize: 9,
+              padding: '2px 8px',
+              borderColor: tier.color,
+              color: tier.color,
+              background: 'rgba(0,0,0,0.3)',
+              cursor: 'pointer',
+            }}
+            title="ティア一覧を見る"
+          >
+            {tier.name}
+          </span>
+        </Link>
         {/* Rating number */}
         <span className="stat-val huge" style={{ color: 'var(--cyan)', lineHeight: 1 }}>
           {rating != null ? displayRating : '-'}

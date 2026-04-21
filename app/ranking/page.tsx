@@ -344,6 +344,12 @@ export default function RankingPage() {
         >
           プレイ回数別
         </button>
+        <button
+          className="btn-ghost"
+          onClick={() => router.push('/tiers')}
+        >
+          ティア一覧
+        </button>
       </div>
     </main>
   )
