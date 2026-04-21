@@ -167,7 +167,10 @@ export default function UserProfilePage() {
   if (loading) {
     return (
       <main>
-        <h1>プレイヤー</h1>
+        <div className="eyebrow">PLAYER PROFILE</div>
+        <h1 className="display" style={{ marginBottom: 8 }}>
+          <em>Player</em>
+        </h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -176,12 +179,12 @@ export default function UserProfilePage() {
   if (!profile) {
     return (
       <main>
-        <div className="row" style={{ justifyContent: 'space-between' }}>
-          <h1>プレイヤー</h1>
-          <button onClick={() => router.back()}>戻る</button>
-        </div>
+        <div className="eyebrow">PLAYER PROFILE</div>
+        <h1 className="display" style={{ marginBottom: 8 }}>
+          <em>Player</em>
+        </h1>
         <div className="section card-strong">
-          <p>プレイヤー情報が見つかりません。</p>
+          <p className="muted">プレイヤー情報が見つかりません。</p>
         </div>
       </main>
     )
@@ -211,127 +214,147 @@ export default function UserProfilePage() {
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>{profile.display_name || '(名前未設定)'}</h1>
-          {teamName && <p className="muted">{teamName}</p>}
-          {!teamName && <p className="muted">プレイヤープロフィール</p>}
-        </div>
-        <div className="row">
-          <button onClick={() => router.back()}>戻る</button>
-        </div>
-      </div>
+      <div className="eyebrow">PLAYER PROFILE</div>
+      <h1 className="display" style={{ marginBottom: 8 }}>
+        {profile.display_name || <em>Player</em>}
+      </h1>
+      {teamName && <p className="muted">{teamName}</p>}
+      {!teamName && <p className="muted">プレイヤープロフィール</p>}
 
-      <div className="section card-strong">
-        <h2>基本情報</h2>
-        <div className="grid grid-2">
-          <div className="card">
-            <p className="muted">表示名</p>
-            <h3>{profile.display_name || '未設定'}</h3>
-          </div>
-
-          <div className="card">
-            <p className="muted">レート</p>
-            <h3>{profile.current_rating ?? '-'}</h3>
-          </div>
-
-          <div className="card">
-            <p className="muted">使用デバイス</p>
-            <h3>{legacy?.controller || '未設定'}</h3>
-          </div>
-
-          <div className="card">
-            <p className="muted">プラットフォーム</p>
-            <h3>{legacy?.platform || '未設定'}</h3>
-          </div>
-
-          <div className="card">
-            <p className="muted">Activision ID</p>
-            <h3>{legacy?.activision_id || '未設定'}</h3>
-          </div>
-
-          <div className="card">
-            <p className="muted">Discord 名</p>
-            <h3>{legacy?.discord_name || '未設定'}</h3>
-          </div>
-
-          <div className="card">
-            <p className="muted">状態</p>
-            <h3 className={profile.is_banned ? 'danger' : ''}>
-              {profile.is_banned ? 'BAN中' : '通常'}
-            </h3>
-          </div>
-        </div>
-
-        <div className="section card">
-          <p className="muted">自己紹介</p>
-          {profile.bio ? (
-            <p style={{ whiteSpace: 'pre-wrap' }}>{profile.bio}</p>
-          ) : (
-            <p className="muted">未設定</p>
-          )}
-        </div>
-      </div>
-
-      {seasons.length > 0 && (
-        <div className="section card-strong">
-          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h2 style={{ marginTop: 0 }}>シーズン別 戦績 / レート推移</h2>
-            <select
-              value={selectedSeasonId}
-              onChange={(e) => void handleSeasonChange(e.target.value)}
+      {/* Avatar + rating hero */}
+      <div className="section">
+        <div className="card-strong">
+          <div className="row" style={{ gap: 20 }}>
+            <div
+              className="avatar"
+              style={{ width: 64, height: 64, fontSize: 24 }}
             >
-              {seasons.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.start_date} 〜 {s.end_date}){s.is_active ? ' [現在]' : ''}
-                </option>
-              ))}
-            </select>
+              {(profile.display_name || '?')[0].toUpperCase()}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div className="stat">
+                <span className="stat-label">CURRENT RATING</span>
+                <span className="stat-val big">{profile.current_rating ?? '-'}</span>
+              </div>
+            </div>
+            {profile.is_banned && (
+              <span className="badge danger">
+                <span className="badge-dot" />
+                BAN
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Basic info */}
+      <div className="section">
+        <div className="card-strong">
+          <div className="sec-title">基本情報</div>
+          <div className="g3" style={{ marginTop: 12 }}>
+            <div className="stat">
+              <span className="stat-label">DEVICE</span>
+              <span className="stat-val" style={{ fontSize: 16 }}>{legacy?.controller || '未設定'}</span>
+            </div>
+            <div className="stat">
+              <span className="stat-label">PLATFORM</span>
+              <span className="stat-val" style={{ fontSize: 16 }}>{legacy?.platform || '未設定'}</span>
+            </div>
+            <div className="stat">
+              <span className="stat-label">ACTIVISION ID</span>
+              <span className="stat-val" style={{ fontSize: 16 }}>{legacy?.activision_id || '未設定'}</span>
+            </div>
+            <div className="stat">
+              <span className="stat-label">DISCORD</span>
+              <span className="stat-val" style={{ fontSize: 16 }}>{legacy?.discord_name || '未設定'}</span>
+            </div>
+            <div className="stat">
+              <span className="stat-label">STATUS</span>
+              <span className={`stat-val ${profile.is_banned ? 'danger' : ''}`} style={{ fontSize: 16 }}>
+                {profile.is_banned ? 'BAN' : 'ACTIVE'}
+              </span>
+            </div>
           </div>
 
-          {seasonLoading ? (
-            <p className="muted">読み込み中...</p>
-          ) : (
-            <>
-              <div className="grid grid-2">
-                <div className="card">
-                  <p className="muted">シーズン戦績</p>
-                  <h3>{seasonWins ?? 0}勝 {seasonLosses ?? 0}敗</h3>
-                </div>
-                <div className="card">
-                  <p className="muted">シーズン勝率</p>
-                  <h3>
-                    {(seasonWins ?? 0) + (seasonLosses ?? 0) > 0
-                      ? (((seasonWins ?? 0) / ((seasonWins ?? 0) + (seasonLosses ?? 0))) * 100).toFixed(1)
-                      : '0.0'}%
-                  </h3>
-                </div>
-              </div>
+          <div className="div" />
 
-              {seasonRatingHistory.length > 1 ? (
-                <div className="card" style={{ marginTop: 12 }}>
-                  <p className="muted" style={{ marginBottom: 8 }}>シーズン レート推移</p>
-                  <RatingChart data={seasonRatingHistory} />
-                </div>
-              ) : (
-                <p className="muted" style={{ marginTop: 8 }}>
-                  このシーズンのレート推移データはまだありません。
-                </p>
-              )}
-            </>
+          <div className="stat">
+            <span className="stat-label">BIO</span>
+          </div>
+          {profile.bio ? (
+            <p style={{ whiteSpace: 'pre-wrap', marginTop: 8 }}>{profile.bio}</p>
+          ) : (
+            <p className="muted" style={{ marginTop: 8 }}>未設定</p>
           )}
+        </div>
+      </div>
+
+      {/* Season stats */}
+      {seasons.length > 0 && (
+        <div className="section">
+          <div className="card-strong">
+            <div className="rowx" style={{ alignItems: 'center', marginBottom: 12 }}>
+              <div className="sec-title" style={{ margin: 0 }}>シーズン戦績</div>
+              <select
+                value={selectedSeasonId}
+                onChange={(e) => void handleSeasonChange(e.target.value)}
+                style={{ maxWidth: 280 }}
+              >
+                {seasons.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.start_date} ~ {s.end_date}){s.is_active ? ' [NOW]' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {seasonLoading ? (
+              <p className="muted">読み込み中...</p>
+            ) : (
+              <>
+                <div className="g3" style={{ marginTop: 8 }}>
+                  <div className="stat">
+                    <span className="stat-label">RECORD</span>
+                    <span className="stat-val">{seasonWins ?? 0}W {seasonLosses ?? 0}L</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-label">WIN RATE</span>
+                    <span className="stat-val">
+                      {(seasonWins ?? 0) + (seasonLosses ?? 0) > 0
+                        ? (((seasonWins ?? 0) / ((seasonWins ?? 0) + (seasonLosses ?? 0))) * 100).toFixed(1)
+                        : '0.0'}%
+                    </span>
+                  </div>
+                </div>
+
+                {seasonRatingHistory.length > 1 ? (
+                  <div style={{ marginTop: 16 }}>
+                    <div className="stat-label" style={{ marginBottom: 8 }}>RATING HISTORY</div>
+                    <RatingChart data={seasonRatingHistory} />
+                  </div>
+                ) : (
+                  <p className="muted" style={{ marginTop: 8 }}>
+                    このシーズンのレート推移データはまだありません。
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
 
+      {/* Actions */}
       {!isMe && signedIn && (
-        <div className="section card-strong">
-          <h2>このプレイヤーと交流</h2>
-          <div className="section row">
-            <button onClick={handleSendFriendRequest} disabled={sendingFriend}>
-              {sendingFriend ? '送信中...' : 'フレンド申請を送る'}
-            </button>
-            <button onClick={() => router.push(`/dm/${userId}`)}>DMを送る</button>
-            <button onClick={() => router.push(reportHref)}>通報する</button>
+        <div className="section">
+          <div className="card-strong">
+            <div className="sec-title">このプレイヤーと交流</div>
+            <div className="row" style={{ marginTop: 12 }}>
+              <button className="btn-primary" onClick={handleSendFriendRequest} disabled={sendingFriend}>
+                {sendingFriend ? '送信中...' : 'フレンド申請'}
+              </button>
+              <button onClick={() => router.push(`/dm/${userId}`)}>DMを送る</button>
+              <button className="btn-danger" onClick={() => router.push(reportHref)}>通報する</button>
+            </div>
           </div>
         </div>
       )}

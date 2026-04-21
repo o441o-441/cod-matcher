@@ -243,7 +243,10 @@ export default function BlogPostPage() {
   if (loading) {
     return (
       <main>
-        <h1>ASCENT レビュー</h1>
+        <div className="eyebrow">REVIEW</div>
+        <h1 className="display" style={{ marginBottom: 8 }}>
+          <em>Review</em>
+        </h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -252,13 +255,15 @@ export default function BlogPostPage() {
   if (!post) {
     return (
       <main>
-        <h1>ASCENT レビュー</h1>
+        <div className="eyebrow">REVIEW</div>
+        <h1 className="display" style={{ marginBottom: 8 }}>
+          <em>Review</em>
+        </h1>
         <EmptyCard
           title="レビューが見つかりません"
           message="削除されたか、非公開の可能性があります"
         />
-        <div className="section row">
-          <button onClick={() => router.push('/menu')}>メニュー</button>
+        <div className="row" style={{ marginTop: 16 }}>
           <button onClick={() => router.push('/blog')}>レビュー一覧へ</button>
         </div>
       </main>
@@ -270,70 +275,80 @@ export default function BlogPostPage() {
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
+      <div className="eyebrow">REVIEW</div>
+      <h1 className="display" style={{ marginBottom: 8 }}>
+        {post.title}
+      </h1>
+
+      {/* Author info */}
+      <div className="row" style={{ gap: 12, marginBottom: 4 }}>
+        <Link href={`/users/${post.author_user_id}`}>
+          <div className="avatar" style={{ width: 32, height: 32, fontSize: 13 }}>
+            {(authorName || '?')[0].toUpperCase()}
+          </div>
+        </Link>
         <div>
-          <h1>{post.title}</h1>
-          <p className="muted">
-            <Link href={`/users/${post.author_user_id}`}>
-              {authorName || '不明'}
-            </Link>{' '}
-            ・{' '}
+          <Link href={`/users/${post.author_user_id}`} style={{ fontWeight: 700 }}>
+            {authorName || '不明'}
+          </Link>
+          <div className="muted" style={{ fontSize: 12 }}>
             {post.published_at
               ? new Date(post.published_at).toLocaleString('ja-JP')
               : new Date(post.created_at).toLocaleString('ja-JP')}
             {post.status !== 'published' && '（下書き）'}
-          </p>
-          {post.controller_name && (
-            <p style={{ fontSize: '1.1rem' }}>
-              {post.controller_name}
-              {post.rating != null && (
-                <span style={{ marginLeft: 8 }}>
-                  {'★'.repeat(post.rating)}{'☆'.repeat(5 - post.rating)}
-                </span>
-              )}
-            </p>
-          )}
-          <p className="muted">
-            閲覧 {post.view_count} / いいね {likeCount} / コメント {commentCount}
-          </p>
-        </div>
-        <div className="row">
-          <button
-            onClick={handleToggleLike}
-            style={{
-              fontSize: '1.1rem',
-              padding: '10px 24px',
-              background: liked
-                ? 'linear-gradient(180deg, var(--accent-magenta, #ff2bd6), #c020a8)'
-                : 'linear-gradient(180deg, var(--accent-cyan, #00e5ff), var(--accent-strong, #00b3ff))',
-              color: '#fff',
-              boxShadow: liked ? 'var(--glow-violet)' : 'var(--glow-cyan)',
-              fontWeight: 'bold',
-            }}
-          >
-            {liked ? `いいね済み ${likeCount}` : `いいね ${likeCount}`}
-          </button>
-          <button onClick={() => router.push('/menu')}>メニュー</button>
-          <button onClick={() => router.push('/blog')}>レビュー一覧</button>
-          {canEdit && (
-            <>
-              <button onClick={() => router.push(`/blog/${post.slug}/edit`)}>
-                編集
-              </button>
-              <button onClick={handleDeletePost}>削除</button>
-            </>
-          )}
+          </div>
         </div>
       </div>
 
+      {post.controller_name && (
+        <div className="row" style={{ marginTop: 8 }}>
+          <span className="badge">
+            <span className="badge-dot" />
+            {post.controller_name}
+          </span>
+          {post.rating != null && (
+            <span style={{ color: 'var(--amber)', fontSize: '1.1rem' }}>
+              {'★'.repeat(post.rating)}{'☆'.repeat(5 - post.rating)}
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="row" style={{ marginTop: 8 }}>
+        <span className="muted" style={{ fontSize: 12 }}>
+          閲覧 {post.view_count} / いいね {likeCount} / コメント {commentCount}
+        </span>
+      </div>
+
+      {/* Actions */}
+      <div className="row" style={{ marginTop: 12 }}>
+        <button
+          className={liked ? 'btn-primary' : ''}
+          onClick={handleToggleLike}
+          style={liked ? { background: 'linear-gradient(135deg, var(--magenta), var(--violet))' } : undefined}
+        >
+          {liked ? `いいね済み ${likeCount}` : `いいね ${likeCount}`}
+        </button>
+        {canEdit && (
+          <>
+            <button className="btn-ghost btn-sm" onClick={() => router.push(`/blog/${post.slug}/edit`)}>
+              編集
+            </button>
+            <button className="btn-danger btn-sm" onClick={handleDeletePost}>削除</button>
+          </>
+        )}
+      </div>
+
+      {/* Body */}
       <div className="section card-strong">
-        <div className="card markdown-body">
+        <div className="markdown-body">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.body}</ReactMarkdown>
         </div>
       </div>
 
+      {/* Comments */}
       <div className="section card-strong">
-        <h2>コメント</h2>
+        <div className="sec-title">コメント</div>
 
         {comments.length === 0 ? (
           <EmptyCard title="まだコメントがありません" message="" />
@@ -349,42 +364,42 @@ export default function BlogPostPage() {
                 <div
                   key={c.id}
                   className="card"
-                  style={isReply ? { marginLeft: 24, borderLeft: '3px solid var(--accent-cyan, #00e5ff)' } : undefined}
+                  style={isReply ? { marginLeft: 24, borderLeft: '3px solid var(--cyan)' } : undefined}
                 >
-                  <p>
-                    <strong>
+                  <div className="row" style={{ gap: 10, marginBottom: 4 }}>
+                    <div className="avatar" style={{ width: 26, height: 26, fontSize: 11 }}>
+                      {(commentAuthors[c.author_user_id] || '?')[0].toUpperCase()}
+                    </div>
+                    <strong style={{ fontSize: 14 }}>
                       {commentAuthors[c.author_user_id] || c.author_user_id}
                     </strong>
                     {replyTargetName && (
-                      <span className="muted" style={{ marginLeft: 8 }}>
+                      <span className="muted" style={{ fontSize: 12 }}>
                         @{replyTargetName} への返信
                       </span>
                     )}
-                  </p>
+                  </div>
                   <p style={{ whiteSpace: 'pre-wrap' }}>{c.body}</p>
-                  <div
-                    className="row"
-                    style={{ justifyContent: 'space-between', alignItems: 'center' }}
-                  >
+                  <div className="rowx" style={{ alignItems: 'center' }}>
                     <div className="row" style={{ gap: 8 }}>
-                      <span className="muted">
+                      <span className="muted" style={{ fontSize: 12 }}>
                         {new Date(c.created_at).toLocaleString('ja-JP')}
                       </span>
                       {currentUserProfileId && (
                         <button
+                          className="btn-ghost btn-sm"
                           onClick={() => setReplyTo({
                             commentId: c.id,
                             userId: c.author_user_id,
                             name: commentAuthors[c.author_user_id] || c.author_user_id,
                           })}
-                          style={{ fontSize: '0.8rem' }}
                         >
                           返信
                         </button>
                       )}
                     </div>
                     {canDelete && (
-                      <button onClick={() => handleDeleteComment(c.id)}>削除</button>
+                      <button className="btn-danger btn-sm" onClick={() => handleDeleteComment(c.id)}>削除</button>
                     )}
                   </div>
                 </div>
@@ -393,18 +408,18 @@ export default function BlogPostPage() {
           </div>
         )}
 
-        <div className="section card">
+        <div className="card" style={{ marginTop: 16 }}>
           {currentUserProfileId ? (
             <>
-              <h3>{replyTo ? `@${replyTo.name} に返信` : 'コメントを投稿'}</h3>
+              <h3 style={{ marginTop: 0 }}>{replyTo ? `@${replyTo.name} に返信` : 'コメントを投稿'}</h3>
               {replyTo && (
                 <div className="row" style={{ marginBottom: 8, alignItems: 'center' }}>
-                  <span className="muted" style={{ fontSize: '0.85rem' }}>
+                  <span className="muted" style={{ fontSize: 12 }}>
                     @{replyTo.name} への返信
                   </span>
                   <button
+                    className="btn-ghost btn-sm"
                     onClick={() => setReplyTo(null)}
-                    style={{ fontSize: '0.75rem', marginLeft: 8 }}
                   >
                     キャンセル
                   </button>
@@ -415,8 +430,8 @@ export default function BlogPostPage() {
                 onChange={(e) => setCommentBody(e.target.value)}
                 placeholder={replyTo ? `@${replyTo.name} への返信を入力...` : 'コメントを入力...'}
               />
-              <div className="section row" style={{ justifyContent: 'flex-end' }}>
-                <button onClick={handleSubmitComment} disabled={submitting}>
+              <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
+                <button className="btn-primary" onClick={handleSubmitComment} disabled={submitting}>
                   {submitting ? '送信中...' : replyTo ? '返信' : '投稿'}
                 </button>
               </div>

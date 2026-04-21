@@ -106,38 +106,35 @@ export default function TeamJoinPage() {
   if (loading) {
     return (
       <main>
-        <h1>ASCENT チーム参加</h1>
-        <div className="card">
-          <p>読み込み中...</p>
-        </div>
+        <div className="eyebrow">JOIN TEAM</div>
+        <h1 className="display" style={{ marginBottom: 8 }}>
+          <em>Join</em> Team
+        </h1>
+        <p className="muted">読み込み中...</p>
       </main>
     )
   }
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>ASCENT チーム参加</h1>
-          <p className="muted">チームIDを入力して参加します</p>
-        </div>
+      <div className="eyebrow">JOIN TEAM</div>
+      <h1 className="display" style={{ marginBottom: 8 }}>
+        <em>Join</em> Team
+      </h1>
+      <p className="muted">チームIDを入力して参加します</p>
 
-        <div className="row">
-          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
-        </div>
-      </div>
-
-      <div className="section" style={{ maxWidth: '760px', margin: '0 auto' }}>
+      <div className="section" style={{ maxWidth: 760, margin: '0 auto' }}>
         <div className="card-strong">
-          <h2>参加するチームを探す</h2>
+          <div className="sec-title">参加するチームを探す</div>
 
           <div className="stack">
-            <div className="card">
-              <p className="muted">チームID</p>
+            <div>
+              <label className="stat-label">TEAM ID</label>
               <input
                 value={teamIdInput}
                 onChange={(e) => setTeamIdInput(e.target.value)}
                 placeholder="チームIDを貼り付け"
+                style={{ marginTop: 6 }}
               />
             </div>
 
@@ -149,18 +146,32 @@ export default function TeamJoinPage() {
 
             {previewTeam && (
               <div className="card">
-                <p><strong>チーム名:</strong> {previewTeam.name}</p>
-                <p><strong>レート:</strong> {previewTeam.rating}</p>
-                <p>
-                  <strong>戦績:</strong> {previewTeam.wins}勝 {previewTeam.losses}敗
-                </p>
-                <p><strong>試合数:</strong> {previewTeam.matches_played}</p>
-
-                <div className="section row">
-                  <button onClick={handleJoinTeam} disabled={joining}>
-                    {joining ? '参加中...' : 'このチームに参加'}
-                  </button>
+                <div className="g4" style={{ marginBottom: 12 }}>
+                  <div className="stat">
+                    <span className="stat-label">TEAM NAME</span>
+                    <span className="stat-val" style={{ fontSize: 18 }}>{previewTeam.name}</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-label">RATING</span>
+                    <span className="stat-val" style={{ fontSize: 18 }}>{previewTeam.rating}</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-label">RECORD</span>
+                    <span className="stat-val" style={{ fontSize: 18 }}>{previewTeam.wins}W {previewTeam.losses}L</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-label">MATCHES</span>
+                    <span className="stat-val" style={{ fontSize: 18 }}>{previewTeam.matches_played}</span>
+                  </div>
                 </div>
+
+                <button
+                  className="btn-primary btn-block"
+                  onClick={handleJoinTeam}
+                  disabled={joining}
+                >
+                  {joining ? '参加中...' : 'このチームに参加'}
+                </button>
               </div>
             )}
           </div>

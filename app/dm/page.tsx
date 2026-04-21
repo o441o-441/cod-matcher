@@ -85,7 +85,8 @@ export default function DmListPage() {
   if (loading) {
     return (
       <main>
-        <h1>ASCENT DM</h1>
+        <p className="eyebrow">MESSAGES</p>
+        <h1 className="display"><em>メッセージ</em></h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -93,17 +94,11 @@ export default function DmListPage() {
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>ASCENT DM</h1>
-          <p className="muted">やりとりの一覧</p>
-        </div>
-        <div className="row">
-          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
-        </div>
-      </div>
+      <p className="eyebrow">MESSAGES</p>
+      <h1 className="display"><em>メッセージ</em></h1>
+      <p className="muted">やりとりの一覧</p>
 
-      <div className="section card-strong">
+      <div className="section">
         {conversations.length === 0 ? (
           <EmptyCard title="まだメッセージはありません" message="ユーザーのプロフィールからDMを送れます。" />
         ) : (
@@ -111,33 +106,25 @@ export default function DmListPage() {
             {conversations.map((c) => (
               <div
                 key={c.partner_id}
-                className="card"
+                className="card glow-hover"
                 style={{ cursor: 'pointer' }}
                 onClick={() => router.push(`/dm/${c.partner_id}`)}
               >
-                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h3 style={{ marginTop: 0 }}>
-                      {c.partner_name || '(不明)'}
+                <div className="rowx">
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="row" style={{ gap: 8 }}>
+                      <strong>{c.partner_name || '(不明)'}</strong>
                       {c.unread > 0 && (
-                        <span style={{
-                          marginLeft: 8,
-                          fontSize: '0.75rem',
-                          padding: '2px 8px',
-                          borderRadius: 10,
-                          background: 'var(--accent-cyan, #00e5ff)',
-                          color: '#000',
-                          fontWeight: 'bold',
-                        }}>
-                          {c.unread}
+                        <span className="badge magenta">
+                          <span className="mono">{c.unread}</span>
                         </span>
                       )}
-                    </h3>
-                    <p className="muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 400 }}>
+                    </div>
+                    <p className="muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: '4px 0 0' }}>
                       {c.last_body}
                     </p>
                   </div>
-                  <span className="muted" style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                  <span className="dim mono" style={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}>
                     {new Date(c.last_at).toLocaleString('ja-JP')}
                   </span>
                 </div>

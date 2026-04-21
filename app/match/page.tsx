@@ -174,6 +174,14 @@ function extractErrorMessage(e: unknown, fallback: string): string {
   return fallback;
 }
 
+function partyLabelText(size: number): string {
+  if (size === 1) return "SOLO";
+  if (size === 2) return "DUO";
+  if (size === 3) return "TRIO";
+  if (size === 4) return "FULL";
+  return "---";
+}
+
 export default function MatchPage() {
   const router = useRouter();
 
@@ -878,448 +886,551 @@ export default function MatchPage() {
     router.push(`/match/${myActiveMatch.id}/banpick`);
   };
 
+  /* ── Compute avg rating for party ── */
+  const avgRating = useMemo(() => {
+    if (!myWaitingEntry) return profile?.current_rating ?? 0;
+    return myWaitingEntry.avg_rating;
+  }, [myWaitingEntry, profile]);
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-950 px-6 py-8 text-white">
-        <div className="mx-auto max-w-6xl"><LoadingSkeleton cards={3} /></div>
-      </div>
+      <main><LoadingSkeleton cards={3} /></main>
     );
   }
 
+  /* ── Slot rendering helpers ── */
+  const slots = Array.from({ length: 4 }, (_, i) => myPartyMembers[i] ?? null);
+
   return (
-    <div className="min-h-screen bg-neutral-950 text-white">
+    <main className="page">
       {!rulesAccepted && <RulesGate onAccept={handleAcceptRules} />}
-      <div className="mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-6 flex items-start justify-between gap-4 border-b border-white/10 pb-4">
-          <div>
-            <h1 className="text-3xl font-bold">ASCENT マッチング</h1>
-            <p className="mt-2 text-sm text-white/60">招待制パーティ + 自動マッチ生成</p>
-          </div>
-          <div className="flex gap-2">
-            <Tutorial pageKey="match" steps={MATCH_TUTORIAL} />
-            <button
-              type="button"
-              onClick={() => router.push("/menu")}
-              className="rounded border border-white/20 bg-white/5 px-3 py-2 text-sm hover:bg-white/10"
-            >
-              メニューに戻る
-            </button>
-          </div>
+
+      {/* ── Header ── */}
+      <div className="rowx" style={{ marginBottom: 24 }}>
+        <div>
+          <span className="eyebrow">RANKED MATCHMAKING</span>
+          <h1 style={{ marginBottom: 0 }}>ASCENT マッチング</h1>
+          <p className="muted" style={{ marginTop: 4 }}>招待制パーティ + 自動マッチ生成</p>
         </div>
+        <div className="row">
+          <Tutorial pageKey="match" steps={MATCH_TUTORIAL} />
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => router.push("/menu")}
+          >
+            メニューに戻る
+          </button>
+        </div>
+      </div>
 
-        {errorText && (
-          <div className="mb-4 rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-            {errorText}
-          </div>
-        )}
+      {/* ── Alerts ── */}
+      {errorText && (
+        <div className="card" style={{ borderColor: 'rgba(255,77,109,0.35)', background: 'var(--danger-soft)', marginBottom: 16 }}>
+          <span className="danger" style={{ fontSize: 14 }}>{errorText}</span>
+        </div>
+      )}
+      {infoText && (
+        <div className="card" style={{ borderColor: 'rgba(0,245,160,0.35)', background: 'var(--success-soft)', marginBottom: 16 }}>
+          <span className="success" style={{ fontSize: 14 }}>{infoText}</span>
+        </div>
+      )}
 
-        {infoText && (
-          <div className="mb-4 rounded border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-            {infoText}
-          </div>
-        )}
+      {/* ── Onboarding warning ── */}
+      {profile && !profile.is_onboarded && (
+        <div className="card" style={{ borderColor: 'rgba(255,176,32,0.35)', background: 'var(--amber-soft)', marginBottom: 16 }}>
+          <span className="amber" style={{ fontSize: 14 }}>
+            初期設定が未完了のため対戦に参加できません。
+            <button type="button" onClick={() => router.push("/onboarding")} className="btn-ghost btn-sm" style={{ marginLeft: 8 }}>
+              初期設定を完了する
+            </button>
+          </span>
+        </div>
+      )}
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="space-y-4 lg:col-span-2">
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">自分の情報</h2>
+      {/* ── No profile warning ── */}
+      {!profile && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <span className="muted">プロフィールが見つかりません。ログイン状態を確認してください。</span>
+        </div>
+      )}
 
-              {profile ? (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <div className="rounded bg-black/20 p-3">
-                    <div className="text-xs text-white/50">プレイヤー</div>
-                    <div className="mt-1 text-sm font-medium">{profile.display_name}</div>
-                  </div>
+      {/* ── 2-column grid ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20, alignItems: 'start' }}>
 
-                  <div className="rounded bg-black/20 p-3">
-                    <div className="text-xs text-white/50">現在レート</div>
-                    <div className="mt-1 text-sm font-medium">{profile.current_rating}</div>
-                  </div>
+        {/* ════════ LEFT COLUMN ════════ */}
+        <div className="stack">
 
-                  <div className="rounded bg-black/20 p-3">
-                    <div className="text-xs text-white/50">状態</div>
-                    <div className="mt-1 text-sm font-medium">
-                      {profile.is_banned ? "BAN中" : profile.is_onboarded ? "利用可能" : "初期設定未完了"}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-sm text-white/60">
-                  プロフィールが見つかりません。ログイン状態を確認してください。
-                </div>
-              )}
-
-              {profile && !profile.is_onboarded && (
-                <div className="mt-3 rounded border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-                  初期設定が未完了のため対戦に参加できません。
-                  <button
-                    type="button"
-                    onClick={() => router.push("/onboarding")}
-                    className="ml-2 underline"
-                  >
-                    初期設定を完了する
-                  </button>
-                </div>
-              )}
-            </section>
-
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">パーティ作成 / 招待</h2>
-
-              <div className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={handleCreateParty}
-                    disabled={!canCreateParty}
-                    className="rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
-                  >
-                    パーティ作成
-                  </button>
-
-                  {myTeam && (
-                    <button
-                      onClick={handleCreatePartyFromTeam}
-                      disabled={!canCreateParty}
-                      className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      title={`チーム「${myTeam.name}」のメンバー全員に招待を送ります`}
-                    >
-                      チーム「{myTeam.name}」で作成＋全員招待
-                      {myTeam.members.length > 0 && `（${myTeam.members.length}名）`}
-                    </button>
-                  )}
-                </div>
-
-                <div className="rounded border border-white/10 bg-black/20 p-4">
-                  <div className="mb-2 text-sm font-semibold">現在のパーティ</div>
-
-                  {!myParty ? (
-                    <div className="text-sm text-white/60">まだパーティはありません。</div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-                        <div className="rounded bg-white/5 px-3 py-2 text-sm">状態: {myParty.status === 'open' ? '待機可' : myParty.status === 'queued' ? 'キュー中' : myParty.status === 'matched' ? 'マッチ済' : myParty.status === 'cancelled' ? 'キャンセル' : myParty.status}</div>
-                        <div className="rounded bg-white/5 px-3 py-2 text-sm">
-                          種別: {myPartySize === 1 ? 'ソロ' : myPartySize === 2 ? 'デュオ' : myPartySize === 3 ? 'トリオ' : myPartySize === 4 ? 'フル' : myPartyLabel}
+          {/* ── Pending invites (if any) ── */}
+          {myPendingInvites.length > 0 && (
+            <div className="card-strong">
+              <div className="sec-title">自分宛の招待</div>
+              <div className="stack">
+                {myPendingInvites.map((inv) => (
+                  <div key={inv.invite_id} className="card">
+                    <div className="rowx">
+                      <div>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700 }}>
+                          {inv.inviter_display_name}
                         </div>
-                        <div className="rounded bg-white/5 px-3 py-2 text-sm">人数: {myPartySize} 人</div>
-                        <div className="rounded bg-white/5 px-3 py-2 text-sm">
-                          {isPartyLeader ? "あなたはリーダーです" : "参加メンバーです"}
+                        <div className="dim" style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+                          {inv.party_id.slice(0, 8)}... / {new Date(inv.created_at).toLocaleString()}
                         </div>
                       </div>
-
-                      <div className="rounded bg-white/5 p-3">
-                        <div className="mb-2 text-xs text-white/50">メンバー</div>
-                        <div className="space-y-1 text-sm text-white/80">
-                          {myPartyMembers.map((m) => (
-                            <div key={m.id} className="flex items-center justify-between">
-                              <span>
-                                {m.profiles?.display_name ?? m.user_id}
-                                {m.user_id === myParty.leader_user_id ? "（リーダー）" : ""}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => router.push(`/users/${m.user_id}`)}
-                                className="rounded border border-white/20 bg-white/5 px-2 py-0.5 text-xs hover:bg-white/10"
-                              >
-                                プロフィール
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {isPartyLeader && myPartySize < 4 && !isWaiting && (
-                        <div className="rounded border border-white/10 bg-neutral-900 p-3">
-                          <div className="mb-2 flex items-center justify-between">
-                            <div className="text-sm font-medium">メンバー招待</div>
-                            <button
-                              type="button"
-                              onClick={() => router.push("/friends")}
-                              className="text-xs text-white/60 underline"
-                            >
-                              フレンド管理
-                            </button>
-                          </div>
-
-                          {friends.length === 0 ? (
-                            <div className="text-sm text-white/60">
-                              招待できるフレンドがいません。
-                              <button
-                                type="button"
-                                onClick={() => router.push("/friends")}
-                                className="ml-2 underline"
-                              >
-                                フレンドを追加する
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col gap-2 md:flex-row">
-                              <select
-                                value={selectedFriendId}
-                                onChange={(e) => setSelectedFriendId(e.target.value)}
-                                className="flex-1 rounded border border-white/15 bg-black px-3 py-2 text-sm outline-none"
-                                disabled={busy}
-                              >
-                                <option value="">フレンドを選択...</option>
-                                {friends
-                                  .filter(
-                                    (f) =>
-                                      !myPartyMembers.some((m) => m.user_id === f.friend_user_id)
-                                  )
-                                  .map((f) => (
-                                    <option key={f.friend_user_id} value={f.friend_user_id}>
-                                      {f.friend_display_name ?? f.friend_user_id}
-                                    </option>
-                                  ))}
-                              </select>
-                              <button
-                                onClick={handleInviteToParty}
-                                disabled={busy || !selectedFriendId}
-                                className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                              >
-                                招待送信
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="rounded bg-white/5 p-3">
-                        <div className="mb-2 text-xs text-white/50">招待履歴</div>
-                        {myPartyInvites.length === 0 ? (
-                          <div className="text-sm text-white/50">招待はありません。</div>
-                        ) : (
-                          <div className="space-y-2 text-sm text-white/80">
-                            {myPartyInvites.map((inv) => (
-                              <div key={inv.id} className="rounded bg-black/30 px-3 py-2">
-                                <div>招待先: {inv.invitee_user_id}</div>
-                                <div className="mt-1 text-xs text-white/50">
-                                  状態: {inv.status === 'pending' ? '承認待ち' : inv.status === 'accepted' ? '承認済み' : inv.status === 'rejected' ? '拒否' : inv.status === 'cancelled' ? 'キャンセル' : inv.status} / {new Date(inv.created_at).toLocaleString()}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        {isPartyLeader ? (
-                          <button
-                            onClick={handleDisbandParty}
-                            disabled={busy || isWaiting}
-                            className="rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                          >
-                            パーティ解散
-                          </button>
-                        ) : (
-                          <button
-                            onClick={handleLeaveParty}
-                            disabled={busy || isWaiting}
-                            className="rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                          >
-                            パーティ脱退
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">待機 / 自動マッチング</h2>
-
-              <div className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={handleQueueExistingParty}
-                    disabled={!canQueueExistingParty}
-                    className="rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
-                  >
-                    既存パーティで待機開始
-                  </button>
-
-                  {isWaiting && (
-                    <>
-                      <button
-                        onClick={handleCancelQueue}
-                        disabled={busy}
-                        className="rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      >
-                        待機解除
-                      </button>
-                    </>
-                  )}
-
-                  {isMatched && (
-                    <button
-                      onClick={handleGoToMyMatch}
-                      disabled={busy}
-                      className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                    >
-                      成立した試合へ移動
-                    </button>
-                  )}
-                </div>
-
-                {isWaiting && (() => {
-                  const pct = Math.min(waitingSeconds / 330, 1)
-                  const phase =
-                    waitingSeconds < 90 ? 0
-                    : waitingSeconds < 120 ? 1
-                    : waitingSeconds < 240 ? 2
-                    : 3
-                  const messages = [
-                    "近いレートの同じ構成の相手を探しています...",
-                    "検索範囲を広げています...",
-                    "さらに検索範囲を広げています...",
-                    "幅広い相手を検索中です...",
-                  ]
-                  return (
-                    <div className="rounded border border-white/10 bg-black/20 p-4">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-                        <QueueRadar size={160} />
-                        <div style={{ flex: 1 }}>
-                          <div className="mb-2 flex items-center justify-between">
-                            <div className="text-sm font-semibold">
-                              {autoMatching ? "対戦相手を探しています" : "待機中"}
-                            </div>
-                            <div className="text-xs text-white/50">
-                              {Math.floor(waitingSeconds / 60)}:{String(waitingSeconds % 60).padStart(2, "0")}
-                            </div>
-                          </div>
-                          <div
-                            style={{
-                              height: 8,
-                              borderRadius: 4,
-                              background: "rgba(140,160,220,0.15)",
-                              overflow: "hidden",
-                              marginBottom: 8,
-                            }}
-                          >
-                            <div
-                              style={{
-                                height: "100%",
-                                width: `${Math.max(pct * 100, 5)}%`,
-                                borderRadius: 4,
-                                background: "linear-gradient(90deg, var(--accent-cyan, #00e5ff), var(--accent-violet, #8b5cf6))",
-                                transition: "width 1s ease",
-                              }}
-                            />
-                          </div>
-                          <p className="text-sm text-white/70">{messages[phase]}</p>
-                          <p className="mt-2 text-xs text-white/40">
-                            待ち時間が長いほど検索範囲が広がります。キャンセルすると最初からやり直しになります。
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })()}
-
-                {!isWaiting && !myActiveMatch && (
-                  <div className="rounded bg-black/20 p-3 text-sm text-white/50">
-                    待機していません。パーティを作成して「既存パーティで待機開始」を押してください。
-                  </div>
-                )}
-
-                {myActiveMatch && (
-                  <div className="enter rounded border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm">
-                    <div className="font-semibold" style={{ fontFamily: 'var(--font-display)', fontSize: 44, fontWeight: 800, background: 'linear-gradient(135deg, #fff, var(--cyan))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>マッチ成立</div>
-                  </div>
-                )}
-              </div>
-            </section>
-          </div>
-
-          <div className="space-y-4">
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">自分宛の招待</h2>
-
-              {myPendingInvites.length === 0 ? (
-                <div className="text-sm text-white/50">現在受け取っている招待はありません。</div>
-              ) : (
-                <div className="space-y-3">
-                  {myPendingInvites.map((inv) => (
-                    <div key={inv.invite_id} className="rounded border border-white/10 bg-black/20 p-3">
-                      <div className="text-sm">
-                        招待者: <span className="font-semibold">{inv.inviter_display_name}</span>
-                      </div>
-                      <div className="mt-1 text-xs text-white/50">パーティ: {inv.party_id.slice(0, 8)}...</div>
-                      <div className="mt-1 text-xs text-white/50">
-                        {new Date(inv.created_at).toLocaleString()}
-                      </div>
-
-                      <div className="mt-3 flex gap-2">
+                      <div className="row">
                         <button
                           onClick={() => handleAcceptInvite(inv.invite_id)}
                           disabled={busy}
-                          className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                          className="btn-primary btn-sm"
                         >
                           承認
                         </button>
                         <button
                           onClick={() => handleRejectInvite(inv.invite_id)}
                           disabled={busy}
-                          className="rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                          className="btn-danger btn-sm"
                         >
                           拒否
                         </button>
                       </div>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Party panel ── */}
+          <div className="card-strong">
+            <div className="sec-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              パーティ編成
+            </div>
+
+            {/* Party header row */}
+            <div className="rowx" style={{ marginBottom: 16 }}>
+              <div className="row">
+                <span className="badge">
+                  <span className="badge-dot" />
+                  {partyLabelText(myPartySize)} {myPartySize}/4
+                </span>
+                {myParty && (
+                  <span className="badge" style={{ borderColor: 'var(--line)', background: 'rgba(255,255,255,0.03)', color: 'var(--text-soft)' }}>
+                    {myParty.status === 'open' ? '待機可' : myParty.status === 'queued' ? 'キュー中' : myParty.status === 'matched' ? 'マッチ済' : myParty.status === 'cancelled' ? 'キャンセル' : myParty.status}
+                  </span>
+                )}
+              </div>
+              <span className="mono muted" style={{ fontSize: 13 }}>AVG {avgRating}</span>
+            </div>
+
+            {/* 4-slot grid */}
+            <div className="g4" style={{ marginBottom: 16 }}>
+              {slots.map((member, i) => {
+                if (member) {
+                  const isLeader = myParty && member.user_id === myParty.leader_user_id;
+                  const name = member.profiles?.display_name ?? member.user_id.slice(0, 8);
+                  return (
+                    <div
+                      key={member.id}
+                      className="card glow-hover"
+                      style={{ position: 'relative', textAlign: 'center', padding: '16px 8px', cursor: 'pointer' }}
+                      onClick={() => router.push(`/users/${member.user_id}`)}
+                    >
+                      {/* Crown for leader */}
+                      {isLeader && (
+                        <div style={{ position: 'absolute', top: 6, left: 8, color: 'var(--amber)', fontSize: 14 }} title="リーダー">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.5 19h19v2h-19zM22.7 7.3l-4.6 5.2-5.1-7.2L8 12.5 2.3 7.3 4.1 18h15.8z"/></svg>
+                        </div>
+                      )}
+                      {/* Avatar */}
+                      <div className="avatar" style={{ width: 48, height: 48, fontSize: 16, margin: '0 auto 8px' }}>
+                        {name.charAt(0).toUpperCase()}
+                      </div>
+                      {/* Name */}
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {name}
+                      </div>
+                      {/* Tag */}
+                      <div className="mono muted" style={{ fontSize: 10, marginTop: 2 }}>
+                        {member.user_id.slice(0, 8)}
+                      </div>
+                      {/* SR row */}
+                      <div className="row" style={{ justifyContent: 'center', marginTop: 6, gap: 6 }}>
+                        <span className="mono" style={{ fontSize: 12, color: 'var(--cyan)' }}>SR --</span>
+                      </div>
+                    </div>
+                  );
+                }
+                // Empty slot
+                return (
+                  <div
+                    key={`empty-${i}`}
+                    className="card"
+                    style={{
+                      borderStyle: 'dashed',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '24px 8px',
+                      opacity: 0.6,
+                      transition: 'opacity 0.15s',
+                      cursor: 'default',
+                      minHeight: 140,
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.opacity = '1'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.opacity = '0.6'; }}
+                  >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    <span className="dim" style={{ fontSize: 12, marginTop: 6 }}>招待</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Party create / invite / manage buttons */}
+            {!myParty && (
+              <div className="row" style={{ marginBottom: 12 }}>
+                <button onClick={handleCreateParty} disabled={!canCreateParty} className="btn-primary">
+                  パーティ作成
+                </button>
+                {myTeam && (
+                  <button
+                    onClick={handleCreatePartyFromTeam}
+                    disabled={!canCreateParty}
+                    title={`チーム「${myTeam.name}」のメンバー全員に招待を送ります`}
+                  >
+                    チーム「{myTeam.name}」で作成＋全員招待
+                    {myTeam.members.length > 0 && `（${myTeam.members.length}名）`}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Invite section (when party exists, leader, not full, not queued) */}
+            {myParty && isPartyLeader && myPartySize < 4 && !isWaiting && (
+              <div className="card" style={{ marginBottom: 12 }}>
+                <div className="rowx" style={{ marginBottom: 10 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>メンバー招待</span>
+                  <button type="button" className="btn-ghost btn-sm" onClick={() => router.push("/friends")}>
+                    フレンド管理
+                  </button>
+                </div>
+                {friends.length === 0 ? (
+                  <div className="muted" style={{ fontSize: 13 }}>
+                    招待できるフレンドがいません。
+                    <button type="button" className="btn-ghost btn-sm" onClick={() => router.push("/friends")} style={{ marginLeft: 6 }}>
+                      フレンドを追加する
+                    </button>
+                  </div>
+                ) : (
+                  <div className="row">
+                    <select
+                      value={selectedFriendId}
+                      onChange={(e) => setSelectedFriendId(e.target.value)}
+                      disabled={busy}
+                      style={{ flex: 1 }}
+                    >
+                      <option value="">フレンドを選択...</option>
+                      {friends
+                        .filter((f) => !myPartyMembers.some((m) => m.user_id === f.friend_user_id))
+                        .map((f) => (
+                          <option key={f.friend_user_id} value={f.friend_user_id}>
+                            {f.friend_display_name ?? f.friend_user_id}
+                          </option>
+                        ))}
+                    </select>
+                    <button onClick={handleInviteToParty} disabled={busy || !selectedFriendId} className="btn-primary btn-sm">
+                      招待送信
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Invite history */}
+            {myParty && myPartyInvites.length > 0 && (
+              <div className="card" style={{ marginBottom: 12 }}>
+                <div className="stat-label" style={{ marginBottom: 8 }}>招待履歴</div>
+                <div className="stack-sm">
+                  {myPartyInvites.map((inv) => (
+                    <div key={inv.id} className="rowx" style={{ fontSize: 12 }}>
+                      <span className="mono dim">{inv.invitee_user_id.slice(0, 12)}...</span>
+                      <span className={`badge ${inv.status === 'accepted' ? 'success' : inv.status === 'rejected' ? 'danger' : inv.status === 'cancelled' ? 'amber' : ''}`} style={{ fontSize: 9 }}>
+                        {inv.status === 'pending' ? '承認待ち' : inv.status === 'accepted' ? '承認済み' : inv.status === 'rejected' ? '拒否' : inv.status === 'cancelled' ? 'キャンセル' : inv.status}
+                      </span>
+                    </div>
                   ))}
                 </div>
-              )}
-            </section>
+              </div>
+            )}
 
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">マッチングの仕組み</h2>
-              <div className="space-y-3 text-sm text-white/75">
-                <div className="rounded bg-black/20 p-3">
-                  <p style={{ fontWeight: 600, marginBottom: 4 }}>パーティ人数によるレート補正</p>
-                  <p>パーティの人数が多いほど「強い」と見なされ、レート計算で補正がかかります。ソロで参加した場合、パーティに勝つとより多くのレートを獲得でき、負けても失うレートは少なくなります。</p>
+            {/* Queue / disband / leave buttons */}
+            {myParty && (
+              <div className="row">
+                {canQueueExistingParty && (
+                  <button onClick={handleQueueExistingParty} className="btn-primary">
+                    既存パーティで待機開始
+                  </button>
+                )}
+                {isPartyLeader ? (
+                  <button onClick={handleDisbandParty} disabled={busy || isWaiting} className="btn-danger">
+                    パーティ解散
+                  </button>
+                ) : (
+                  <button onClick={handleLeaveParty} disabled={busy || isWaiting} className="btn-danger">
+                    パーティ脱退
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Queue waiting state ── */}
+          {isWaiting && (() => {
+            const pct = Math.min(waitingSeconds / 330, 1);
+            const phase =
+              waitingSeconds < 90 ? 0
+              : waitingSeconds < 120 ? 1
+              : waitingSeconds < 240 ? 2
+              : 3;
+            const messages = [
+              "近いレートの同じ構成の相手を探しています...",
+              "検索範囲を広げています...",
+              "さらに検索範囲を広げています...",
+              "幅広い相手を検索中です...",
+            ];
+            return (
+              <div className="card-strong">
+                {/* SEARCHING badge with pulsing dot */}
+                <div style={{ marginBottom: 16 }}>
+                  <span className="badge magenta">
+                    <span className="badge-dot" style={{ animation: 'pulse-glow 1.5s ease-in-out infinite' }} />
+                    SEARCHING
+                  </span>
                 </div>
-                <div className="rounded bg-black/20 p-3">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                    <div style={{ textAlign: 'center', flex: 1 }}>
-                      <div className="text-xs text-white/50">ソロ</div>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--accent-cyan, #00e5ff)' }}>補正なし</div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+                  <QueueRadar size={160} />
+                  <div style={{ flex: 1 }}>
+                    {/* Large searching text */}
+                    <div className="flicker" style={{
+                      fontFamily: 'var(--font-display)',
+                      fontSize: 44,
+                      fontWeight: 800,
+                      lineHeight: 1.1,
+                      background: 'linear-gradient(135deg, #fff, var(--cyan))',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      marginBottom: 16,
+                    }}>
+                      対戦相手を探索中<span style={{ animation: 'flicker 1.2s infinite' }}>...</span>
                     </div>
-                    <div style={{ textAlign: 'center', flex: 1 }}>
-                      <div className="text-xs text-white/50">デュオ</div>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>やや不利</div>
+
+                    {/* Progress bar */}
+                    <div className="bar" style={{ marginBottom: 16 }}>
+                      <div className="bar-fill" style={{ width: `${Math.max(pct * 100, 5)}%` }} />
                     </div>
-                    <div style={{ textAlign: 'center', flex: 1 }}>
-                      <div className="text-xs text-white/50">トリオ</div>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>不利</div>
+
+                    {/* Stats row */}
+                    <div className="row" style={{ gap: 24 }}>
+                      <div className="stat">
+                        <span className="stat-label">キュー時間</span>
+                        <span className="mono" style={{ fontSize: 28, fontWeight: 700, color: 'var(--cyan)' }}>
+                          {Math.floor(waitingSeconds / 60)}:{String(waitingSeconds % 60).padStart(2, "0")}
+                        </span>
+                      </div>
+                      <div className="stat">
+                        <span className="stat-label">パーティ</span>
+                        <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>
+                          {partyLabelText(myPartySize)} ({myPartySize})
+                        </span>
+                      </div>
+                      <div className="stat">
+                        <span className="stat-label">範囲拡大 LV</span>
+                        <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>
+                          {myWaitingEntry?.wait_expand_level ?? phase}
+                        </span>
+                      </div>
                     </div>
-                    <div style={{ textAlign: 'center', flex: 1 }}>
-                      <div className="text-xs text-white/50">フルパ</div>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--danger, #ff4d6d)' }}>最も不利</div>
-                    </div>
+
+                    <p className="muted" style={{ fontSize: 13, marginTop: 12 }}>{messages[phase]}</p>
                   </div>
                 </div>
-                <p className="text-xs text-white/40">
-                  ソロプレイヤーが不利にならないよう、パーティ側にレートハンデが設定されています。フルパーティ同士なら補正は相殺されます。
-                </p>
-              </div>
-            </section>
 
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">使い方</h2>
-              <div className="space-y-2 text-sm text-white/75">
-                <div>1. パーティを作成します（ソロでもOK）</div>
-                <div>2. チームメンバーやフレンドを招待して参加してもらいます</div>
-                <div>3. 「既存パーティで待機開始」を押してキューに入ります</div>
-                <div>4. 待機中は自動でマッチングを試みます（3秒間隔）</div>
-                <div>5. マッチが成立したらバンピック画面に自動で移動します</div>
+                {/* Cancel button */}
+                <div style={{ marginTop: 16 }}>
+                  <button onClick={handleCancelQueue} disabled={busy} className="btn-danger">
+                    待機解除
+                  </button>
+                </div>
               </div>
-            </section>
+            );
+          })()}
 
+          {/* ── Not queued placeholder ── */}
+          {!isWaiting && !myActiveMatch && (
+            <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+              <span className="muted">待機していません。パーティを作成して「既存パーティで待機開始」を押してください。</span>
+            </div>
+          )}
+
+          {/* ── Match found ── */}
+          {myActiveMatch && (
+            <div className="card-strong enter" style={{ textAlign: 'center' }}>
+              <span className="badge success" style={{ marginBottom: 16 }}>
+                <span className="badge-dot" />
+                MATCH FOUND
+              </span>
+              <div style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 44,
+                fontWeight: 800,
+                background: 'linear-gradient(135deg, #fff, var(--cyan))',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                marginBottom: 16,
+              }}>
+                マッチ成立
+              </div>
+
+              {/* Team comparison */}
+              <div className="row" style={{ justifyContent: 'center', gap: 24, marginBottom: 16 }}>
+                <div className="row" style={{ gap: 8 }}>
+                  <span className="side-chip alpha">ALPHA</span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--alpha)' }}>TEAM A</span>
+                </div>
+                <span className="dim" style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800 }}>VS</span>
+                <div className="row" style={{ gap: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--bravo)' }}>TEAM B</span>
+                  <span className="side-chip bravo">BRAVO</span>
+                </div>
+              </div>
+
+              <button onClick={handleGoToMyMatch} disabled={busy} className="btn-primary btn-lg">
+                成立した試合へ移動
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ════════ RIGHT COLUMN (sidebar) ════════ */}
+        <div className="stack">
+
+          {/* Queue status */}
+          <div className="card-strong">
+            <div className="sec-title">現在のキュー状況</div>
+            <div className="stack">
+              <div className="rowx">
+                <span className="stat-label">ステータス</span>
+                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14 }}>
+                  {isMatched ? '成立' : isWaiting ? 'キュー中' : myParty ? '待機可' : '未参加'}
+                </span>
+              </div>
+              <div className="div" />
+              <div className="rowx">
+                <span className="stat-label">パーティ</span>
+                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14 }}>
+                  {myParty ? `${partyLabelText(myPartySize)} (${myPartySize}/4)` : '--'}
+                </span>
+              </div>
+              <div className="div" />
+              <div className="rowx">
+                <span className="stat-label">AVG レート</span>
+                <span className="mono" style={{ fontWeight: 700, fontSize: 14 }}>
+                  {myParty ? avgRating : '--'}
+                </span>
+              </div>
+              <div className="div" />
+              <div className="rowx">
+                <span className="stat-label">キュータイプ</span>
+                <span className="badge" style={{ fontSize: 9 }}>RANKED</span>
+              </div>
+              {isWaiting && (
+                <>
+                  <div className="div" />
+                  <div className="rowx">
+                    <span className="stat-label">待機時間</span>
+                    <span className="mono" style={{ fontWeight: 700, fontSize: 14, color: 'var(--cyan)' }}>
+                      {Math.floor(waitingSeconds / 60)}:{String(waitingSeconds % 60).padStart(2, "0")}
+                    </span>
+                  </div>
+                </>
+              )}
+              <div className="div" />
+              <div className="rowx">
+                <span className="stat-label">リーダー</span>
+                <span style={{ fontSize: 13 }}>
+                  {isPartyLeader ? 'あなた' : myParty ? 'メンバー' : '--'}
+                </span>
+              </div>
+            </div>
           </div>
+
+          {/* Rules card */}
+          <div className="card">
+            <div className="sec-title">ルール</div>
+            <div className="stack-sm" style={{ fontSize: 13 }}>
+              <div className="muted">
+                <span style={{ color: 'var(--cyan)', marginRight: 6 }}>&#8226;</span>
+                パーティ人数が多いほどレート補正あり
+              </div>
+              <div className="muted">
+                <span style={{ color: 'var(--cyan)', marginRight: 6 }}>&#8226;</span>
+                ソロ参加者は補正なし（有利）
+              </div>
+              <div className="muted">
+                <span style={{ color: 'var(--cyan)', marginRight: 6 }}>&#8226;</span>
+                フルパーティ同士なら補正相殺
+              </div>
+              <div className="muted">
+                <span style={{ color: 'var(--cyan)', marginRight: 6 }}>&#8226;</span>
+                待ち時間が長いほど検索範囲拡大
+              </div>
+              <div className="muted">
+                <span style={{ color: 'var(--cyan)', marginRight: 6 }}>&#8226;</span>
+                3秒間隔で自動マッチング試行
+              </div>
+            </div>
+
+            {/* Rating correction breakdown */}
+            <div className="div" />
+            <div className="g4" style={{ gap: 8 }}>
+              <div style={{ textAlign: 'center' }}>
+                <div className="stat-label">ソロ</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--cyan)', marginTop: 4 }}>補正なし</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div className="stat-label">デュオ</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>やや不利</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div className="stat-label">トリオ</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>不利</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div className="stat-label">フルパ</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--danger)', marginTop: 4 }}>最も不利</div>
+              </div>
+            </div>
+          </div>
+
+          {/* How-to card */}
+          <div className="card">
+            <div className="sec-title">使い方</div>
+            <div className="stack-sm" style={{ fontSize: 13 }}>
+              <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>1.</span>パーティを作成します（ソロでもOK）</div>
+              <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>2.</span>チームメンバーやフレンドを招待</div>
+              <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>3.</span>「既存パーティで待機開始」でキューイン</div>
+              <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>4.</span>自動マッチング（3秒間隔）</div>
+              <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>5.</span>マッチ成立でバンピック画面へ自動遷移</div>
+            </div>
+          </div>
+
         </div>
       </div>
-    </div>
+    </main>
   );
 }

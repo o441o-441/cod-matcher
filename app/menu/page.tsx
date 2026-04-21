@@ -15,6 +15,16 @@ const MENU_TUTORIAL = [
   { title: 'マイページ', body: '右上の「マイページ」からプロフィール編集や自己紹介の設定ができます。' },
 ]
 
+function getTierInfo(r: number | null): { label: string; color: string } {
+  if (r == null) return { label: '—', color: 'var(--text-dim)' }
+  if (r >= 2400) return { label: 'ASCENDANT', color: 'var(--tier-ascendant)' }
+  if (r >= 2000) return { label: 'DIAMOND', color: 'var(--tier-diamond)' }
+  if (r >= 1600) return { label: 'PLATINUM', color: 'var(--tier-platinum)' }
+  if (r >= 1200) return { label: 'GOLD', color: 'var(--tier-gold)' }
+  if (r >= 800) return { label: 'SILVER', color: 'var(--tier-silver)' }
+  return { label: 'BRONZE', color: 'var(--tier-bronze)' }
+}
+
 export default function MenuPage() {
   const router = useRouter()
 
@@ -184,6 +194,10 @@ export default function MenuPage() {
     )
   }
 
+  const totalGames = (wins ?? 0) + (losses ?? 0)
+  const winRate = totalGames > 0 ? Math.round(((wins ?? 0) / totalGames) * 100) : 0
+  const tier = getTierInfo(rating)
+
   return (
     <main>
       <div className="eyebrow">MAIN / MENU</div>
@@ -192,163 +206,334 @@ export default function MenuPage() {
       </h1>
       <Tutorial pageKey="menu" steps={MENU_TUTORIAL} />
 
+      {/* ── Primary CTA ── */}
+      <div className="card-strong mt-l" style={{ padding: 0, overflow: 'hidden' }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr auto',
+            gap: 32,
+            alignItems: 'center',
+            padding: 32,
+          }}
+        >
+          {/* Left: text + stats */}
+          <div>
+            <div className="eyebrow">PRIMARY ACTION</div>
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 44,
+                fontWeight: 800,
+                lineHeight: 1.1,
+                marginTop: 8,
+              }}
+            >
+              対戦を<span style={{ color: 'var(--cyan)', textShadow: '0 0 24px rgba(0,229,255,0.5)' }}>開始</span>。
+            </div>
+            <p className="muted" style={{ marginTop: 8, fontSize: 13 }}>
+              ソロまたはチームでマッチメイキングに参加します
+            </p>
+
+            <div className="row" style={{ marginTop: 20, gap: 16, flexWrap: 'wrap' }}>
+              <button
+                className="btn-primary btn-xl"
+                onClick={() => router.push('/match')}
+              >
+                対戦開始
+              </button>
+
+              <div className="row" style={{ gap: 20 }}>
+                <div className="stack-sm">
+                  <span className="stat-label">SR</span>
+                  <span className="mono tabular" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' }}>
+                    {rating ?? '—'}
+                  </span>
+                </div>
+                <div className="stack-sm">
+                  <span className="stat-label">戦績</span>
+                  <span className="mono tabular" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' }}>
+                    {wins ?? 0}W {losses ?? 0}L
+                  </span>
+                </div>
+                <div className="stack-sm">
+                  <span className="stat-label">勝率</span>
+                  <span className="mono tabular" style={{ fontSize: 18, fontWeight: 700, color: winRate >= 50 ? 'var(--success)' : 'var(--text-strong)' }}>
+                    {winRate}%
+                  </span>
+                </div>
+                <div className="stack-sm">
+                  <span className="stat-label">連勝</span>
+                  <span className="mono tabular" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' }}>
+                    —
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: circular rating display */}
+          <div style={{ position: 'relative', width: 220, height: 220, flexShrink: 0 }}>
+            {/* Conic-gradient blur ring */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                borderRadius: '50%',
+                background: `conic-gradient(from 180deg, ${tier.color}, var(--violet), ${tier.color})`,
+                opacity: 0.35,
+                filter: 'blur(20px)',
+              }}
+            />
+            {/* Outer ring */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 4,
+                borderRadius: '50%',
+                background: `conic-gradient(from 180deg, ${tier.color}, var(--violet), ${tier.color})`,
+                opacity: 0.6,
+              }}
+            />
+            {/* Inner circle */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 8,
+                borderRadius: '50%',
+                background: 'var(--bg)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 2,
+              }}
+            >
+              {/* Tier badge */}
+              <span
+                className="badge"
+                style={{
+                  color: tier.color,
+                  borderColor: tier.color,
+                  background: 'rgba(0,0,0,0.4)',
+                  fontSize: 9,
+                  padding: '3px 8px',
+                }}
+              >
+                <span className="badge-dot" style={{ background: tier.color, boxShadow: `0 0 10px ${tier.color}` }} />
+                {tier.label}
+              </span>
+              {/* Rating number */}
+              <span
+                className="mono tabular"
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 42,
+                  fontWeight: 800,
+                  color: 'var(--text-strong)',
+                  lineHeight: 1,
+                  marginTop: 4,
+                }}
+              >
+                {rating ?? '—'}
+              </span>
+              {/* Peak */}
+              <span className="muted" style={{ fontSize: 10, letterSpacing: '0.1em' }}>
+                PEAK {rating ?? '—'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Secondary sections (3-col) ── */}
+      <div className="grid-3 mt-l">
+        {/* Team */}
+        <div className="card-strong">
+          <div style={{ width: 32, height: 32, borderRadius: 'var(--r-sm)', background: 'var(--cyan-dim)', display: 'grid', placeItems: 'center', marginBottom: 12 }}>
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="var(--cyan)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>チーム</div>
+          <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>チームの作成・管理</div>
+          <div className="stack" style={{ marginTop: 16 }}>
+            {hasTeam ? (
+              <button className="btn-ghost btn-block" onClick={() => router.push('/team/edit')}>
+                チーム編集
+                <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            ) : (
+              <>
+                <button className="btn-ghost btn-block" onClick={() => router.push('/team/create')}>
+                  チームを作成
+                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
+                <button className="btn-ghost btn-block" onClick={() => router.push('/team/join')}>
+                  チームに参加
+                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Community */}
+        <div className="card-strong">
+          <div style={{ width: 32, height: 32, borderRadius: 'var(--r-sm)', background: 'var(--cyan-dim)', display: 'grid', placeItems: 'center', marginBottom: 12 }}>
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+              <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" stroke="var(--cyan)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>コミュニティ</div>
+          <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>フレンド・DM・ランキング</div>
+          <div className="stack" style={{ marginTop: 16 }}>
+            <button className="btn-ghost btn-block" onClick={() => router.push('/friends')}>
+              フレンド管理
+              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            <button className="btn-ghost btn-block" onClick={() => router.push('/dm')}>
+              DM
+              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            <button className="btn-ghost btn-block" onClick={() => router.push('/blog')}>
+              レビュー
+              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            <button className="btn-ghost btn-block" onClick={() => router.push('/ranking')}>
+              ランキング
+              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            <button className="btn-ghost btn-block" onClick={() => router.push('/history')}>
+              マッチ履歴
+              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Competitive / その他 */}
+        <div className="card-strong">
+          <div style={{ width: 32, height: 32, borderRadius: 'var(--r-sm)', background: 'var(--cyan-dim)', display: 'grid', placeItems: 'center', marginBottom: 12 }}>
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="var(--cyan)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>競技</div>
+          <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>ルール・通報・管理</div>
+          <div className="stack" style={{ marginTop: 16 }}>
+            <button className="btn-ghost btn-block" onClick={() => router.push('/rules')}>
+              ルール一覧
+              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            <button className="btn-ghost btn-block" onClick={() => router.push('/reports')}>
+              通報履歴
+              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            {isAdmin && (
+              <button className="btn-ghost btn-block" onClick={() => router.push('/admin/reports')}>
+                通報管理
+                <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            )}
+            {isAdmin && (
+              <button className="btn-ghost btn-block" onClick={() => router.push('/admin/announcements')}>
+                お知らせ管理
+                <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            )}
+            {isAdmin && (
+              <button className="btn-ghost btn-block" onClick={() => router.push('/admin/tournaments')}>
+                大会告知管理
+                <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            )}
+            {isAdmin && (
+              <button className="btn-ghost btn-block" onClick={() => router.push('/admin/seasons')}>
+                シーズン管理
+                <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            )}
+            {isAdmin && (
+              <button className="btn-ghost btn-block" onClick={() => router.push('/admin/roles')}>
+                ロール管理
+                <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            )}
+            {isAdmin && (
+              <button className="btn-ghost btn-block" onClick={() => router.push('/admin/dashboard')}>
+                ダッシュボード
+                <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            )}
+            {isAdmin && (
+              <button className="btn-ghost btn-block" onClick={() => router.push('/admin/affiliates')}>
+                購入リンク管理
+                <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Notifications ── */}
       {notifications.length > 0 && (
-        <div className="section card-strong" style={{ borderColor: 'var(--accent-cyan, #00e5ff)' }}>
-          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="card-strong mt-l">
+          <div className="rowx" style={{ marginBottom: 14 }}>
             <div className="sec-title" style={{ margin: 0 }}>
               <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M6 9a6 6 0 1112 0v4l2 3H4l2-3V9zM10 19a2 2 0 004 0" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
               通知（{notifications.length}）
             </div>
-            <button onClick={handleDismissAll} style={{ fontSize: '0.8rem' }}>すべて既読</button>
+            <button className="btn-ghost btn-sm" onClick={handleDismissAll}>すべて既読</button>
           </div>
           <div className="stack">
-            {notifications.map((n) => (
-              <div
-                key={n.id}
-                className="card"
-                style={{ cursor: n.link ? 'pointer' : undefined }}
-                onClick={() => handleNotificationClick(n)}
-              >
-                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                  <p>
-                    {n.type === 'blog_comment'
-                      ? n.body.replace('commented on your post', 'があなたの記事にコメントしました')
-                      : n.type === 'comment_reply'
-                      ? n.body.replace('replied to your comment', 'があなたのコメントに返信しました')
-                      : n.type === 'direct_message'
-                      ? n.body.replace('sent you a message', 'からDMが届きました')
-                      : n.body}
-                  </p>
-                  <span className="muted" style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
-                    {new Date(n.created_at).toLocaleString('ja-JP')}
-                  </span>
+            {notifications.map((n) => {
+              const isHot = n.type === 'direct_message'
+              return (
+                <div
+                  key={n.id}
+                  className="card"
+                  style={{ cursor: n.link ? 'pointer' : undefined, padding: '14px 16px' }}
+                  onClick={() => handleNotificationClick(n)}
+                >
+                  <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 12, alignItems: 'center' }}>
+                    {/* Dot indicator */}
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        background: isHot ? 'var(--magenta)' : 'var(--cyan)',
+                        boxShadow: isHot ? '0 0 10px var(--magenta)' : '0 0 10px var(--cyan)',
+                        flexShrink: 0,
+                      }}
+                    />
+                    {/* Text */}
+                    <p style={{ margin: 0, fontSize: 13 }}>
+                      {n.type === 'blog_comment'
+                        ? n.body.replace('commented on your post', 'があなたの記事にコメントしました')
+                        : n.type === 'comment_reply'
+                        ? n.body.replace('replied to your comment', 'があなたのコメントに返信しました')
+                        : n.type === 'direct_message'
+                        ? n.body.replace('sent you a message', 'からDMが届きました')
+                        : n.body}
+                    </p>
+                    {/* Time */}
+                    <span className="muted mono" style={{ fontSize: 10, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                      {new Date(n.created_at).toLocaleString('ja-JP')}
+                    </span>
+                    {/* Action */}
+                    {n.link && (
+                      <button className="btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); handleNotificationClick(n) }}>
+                        表示
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
-
-      <div className="section card-strong">
-        <div className="sec-title" style={{ marginTop: 0, textAlign: 'center', justifyContent: 'center' }}>
-          <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M5 3l14 9-14 9V3z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
-          対戦を始める
-        </div>
-        <div
-          className="row"
-          style={{
-            justifyContent: 'center',
-            alignItems: 'center',
-            gap: 32,
-            marginTop: 16,
-            flexWrap: 'wrap',
-          }}
-        >
-          <button
-            onClick={() => router.push('/match')}
-            style={{
-              fontSize: '1.5rem',
-              padding: '20px 48px',
-              boxShadow: 'var(--glow-cyan)',
-            }}
-          >
-            対戦開始
-          </button>
-          <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
-            <div className="card" style={{ minWidth: 120, textAlign: 'center' }}>
-              <p className="muted" style={{ margin: 0 }}>レート</p>
-              <h3 style={{ margin: '4px 0 0' }}>{rating ?? '-'}</h3>
-            </div>
-            <div className="card" style={{ minWidth: 140, textAlign: 'center' }}>
-              <p className="muted" style={{ margin: 0 }}>個人戦績</p>
-              <h3 style={{ margin: '4px 0 0' }}>
-                {wins ?? 0}勝 {losses ?? 0}敗
-              </h3>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="section card-strong">
-        <div className="sec-title">
-          <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          チーム
-        </div>
-        <div className="row">
-          {hasTeam ? (
-            <button onClick={() => router.push('/team/edit')}>チーム編集</button>
-          ) : (
-            <>
-              <button onClick={() => router.push('/team/create')}>
-                チームを作成
-              </button>
-              <button onClick={() => router.push('/team/join')}>
-                チームに参加
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="section card-strong">
-        <div className="sec-title">
-          <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          コミュニティ
-        </div>
-        <div className="row">
-          <button onClick={() => router.push('/friends')}>フレンド管理</button>
-          <button onClick={() => router.push('/dm')}>DM</button>
-          <button onClick={() => router.push('/blog')}>レビュー</button>
-          <button onClick={() => router.push('/ranking')}>ランキング</button>
-          <button onClick={() => router.push('/history')}>マッチ履歴</button>
-        </div>
-      </div>
-
-      <div className="section card-strong">
-        <div className="sec-title">
-          <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="1" stroke="currentColor" strokeWidth="1.6" /><circle cx="19" cy="12" r="1" stroke="currentColor" strokeWidth="1.6" /><circle cx="5" cy="12" r="1" stroke="currentColor" strokeWidth="1.6" /></svg>
-          その他
-        </div>
-        <div className="row">
-          <button onClick={() => router.push('/rules')}>ルール一覧</button>
-          <button onClick={() => router.push('/reports')}>通報履歴</button>
-          {isAdmin && (
-            <button onClick={() => router.push('/admin/reports')}>
-              通報管理
-            </button>
-          )}
-          {isAdmin && (
-            <button onClick={() => router.push('/admin/announcements')}>
-              お知らせ管理
-            </button>
-          )}
-          {isAdmin && (
-            <button onClick={() => router.push('/admin/tournaments')}>
-              大会告知管理
-            </button>
-          )}
-          {isAdmin && (
-            <button onClick={() => router.push('/admin/seasons')}>
-              シーズン管理
-            </button>
-          )}
-          {isAdmin && (
-            <button onClick={() => router.push('/admin/roles')}>
-              ロール管理
-            </button>
-          )}
-          {isAdmin && (
-            <button onClick={() => router.push('/admin/dashboard')}>
-              ダッシュボード
-            </button>
-          )}
-          {isAdmin && (
-            <button onClick={() => router.push('/admin/affiliates')}>
-              購入リンク管理
-            </button>
-          )}
-        </div>
-      </div>
     </main>
   )
 }

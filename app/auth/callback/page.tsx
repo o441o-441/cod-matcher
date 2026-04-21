@@ -49,10 +49,13 @@ function CallbackContent() {
   if (errorMessage) {
     return (
       <main>
-        <h1>ログインに失敗しました</h1>
+        <div className="eyebrow">AUTH</div>
+        <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginTop: 6 }}>
+          <em>ログインに失敗しました</em>
+        </h1>
         <div className="section card-strong">
           <p className="danger">{errorMessage}</p>
-          <div className="section row">
+          <div className="section">
             <button onClick={() => router.replace('/login')}>
               ログイン画面へ戻る
             </button>
@@ -64,7 +67,10 @@ function CallbackContent() {
 
   return (
     <main>
-      <h1>ログイン処理中...</h1>
+      <div className="eyebrow">AUTH</div>
+      <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginTop: 6 }}>
+        <em>ログイン処理中...</em>
+      </h1>
       <p className="muted">少々お待ちください</p>
     </main>
   )
@@ -75,7 +81,7 @@ export default function CallbackPage() {
     <Suspense
       fallback={
         <main>
-          <h1>ログイン処理中...</h1>
+          <p className="muted">ログイン処理中...</p>
         </main>
       }
     >

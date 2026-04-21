@@ -71,16 +71,12 @@ export default function ControllerRankingPage() {
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>ASCENT コントローラーランキング</h1>
-          <p className="muted">使用者の平均レートが高い順</p>
-        </div>
-        <div className="row">
-          <button onClick={() => router.push('/ranking')}>レートランキング</button>
-          <button onClick={() => router.push('/ranking/games-played')}>プレイ回数</button>
-          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
-        </div>
+      <div>
+        <div className="eyebrow">CONTROLLER RANKING</div>
+        <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginTop: 6 }}>
+          ASCENT <em>コントローラーランキング</em>
+        </h1>
+        <p className="muted">使用者の平均レートが高い順</p>
       </div>
 
       <div className="section row" style={{ alignItems: 'center' }}>
@@ -88,6 +84,7 @@ export default function ControllerRankingPage() {
         <select
           value={minGames}
           onChange={(e) => setMinGames(Number(e.target.value))}
+          style={{ width: 'auto' }}
         >
           <option value={1}>1試合以上</option>
           <option value={3}>3試合以上</option>
@@ -96,7 +93,7 @@ export default function ControllerRankingPage() {
         </select>
       </div>
 
-      <div className="section card-strong">
+      <div className="section">
         {loading ? (
           <LoadingCard message="ランキングを読み込み中..." />
         ) : data.length === 0 ? (
@@ -125,19 +122,15 @@ export default function ControllerRankingPage() {
                 </div>
                 <div className="row" style={{ marginTop: 8, gap: 8 }}>
                   <button
+                    className="btn-sm"
                     onClick={() => router.push(`/blog?controller=${encodeURIComponent(row.controller)}`)}
                   >
                     レビューを見る
                   </button>
                   {affiliateUrls[row.controller] && (
                     <button
+                      className="btn-primary btn-sm"
                       onClick={() => handleClickLink(row.controller, affiliateUrls[row.controller])}
-                      style={{
-                        background: 'linear-gradient(180deg, var(--accent-cyan, #00e5ff), var(--accent-strong, #00b3ff))',
-                        color: '#fff',
-                        fontWeight: 'bold',
-                        boxShadow: 'var(--glow-cyan)',
-                      }}
                     >
                       購入リンク
                     </button>

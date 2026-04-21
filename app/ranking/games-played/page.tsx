@@ -112,29 +112,31 @@ export default function GamesPlayedRankingPage() {
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>ASCENT プレイ回数ランキング</h1>
-          <p className="muted">{selectedSeasonName}</p>
-        </div>
-        <div className="row">
-          <select
-            value={selectedSeasonId}
-            onChange={(e) => void handleSeasonChange(e.target.value)}
-          >
-            <option value={ALL_SEASONS_ID}>全シーズン</option>
-            {seasons.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.start_date} 〜 {s.end_date}){s.is_active ? ' [現在]' : ''}
-              </option>
-            ))}
-          </select>
-          <button onClick={() => router.push('/ranking')}>レートランキング</button>
-          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
-        </div>
+      <div>
+        <div className="eyebrow">GAMES PLAYED</div>
+        <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginTop: 6 }}>
+          ASCENT <em>プレイ回数ランキング</em>
+        </h1>
+        <p className="muted">{selectedSeasonName}</p>
       </div>
 
-      <div className="section card-strong">
+      <div className="section row" style={{ alignItems: 'center' }}>
+        <span className="muted">シーズン:</span>
+        <select
+          value={selectedSeasonId}
+          onChange={(e) => void handleSeasonChange(e.target.value)}
+          style={{ width: 'auto' }}
+        >
+          <option value={ALL_SEASONS_ID}>全シーズン</option>
+          {seasons.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name} ({s.start_date} 〜 {s.end_date}){s.is_active ? ' [現在]' : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="section">
         {loading ? (
           <LoadingCard message="ランキングを読み込み中..." />
         ) : players.length === 0 ? (
@@ -167,7 +169,7 @@ export default function GamesPlayedRankingPage() {
                   </div>
                 </div>
                 <div className="row" style={{ marginTop: 8 }}>
-                  <button onClick={() => router.push(`/users/${p.user_id}`)}>
+                  <button className="btn-sm" onClick={() => router.push(`/users/${p.user_id}`)}>
                     プロフィール
                   </button>
                 </div>

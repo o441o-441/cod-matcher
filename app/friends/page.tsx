@@ -168,7 +168,8 @@ export default function FriendsPage() {
   if (loading) {
     return (
       <main>
-        <h1>ASCENT フレンド</h1>
+        <p className="eyebrow">FRIENDS</p>
+        <h1 className="display"><em>フレンド</em></h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -176,19 +177,13 @@ export default function FriendsPage() {
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>ASCENT フレンド</h1>
-          <p className="muted">フレンドの追加・管理ができます</p>
-        </div>
-        <div className="row">
-          <button onClick={() => router.push('/menu')}>メニューに戻る</button>
-        </div>
-      </div>
+      <p className="eyebrow">FRIENDS</p>
+      <h1 className="display"><em>フレンド</em></h1>
+      <p className="muted">フレンドの追加・管理ができます</p>
 
       <div className="section">
+        <p className="sec-title">フレンド申請を送る</p>
         <div className="card-strong">
-          <h2>フレンド申請を送る</h2>
           <div className="row">
             <input
               value={searchName}
@@ -196,39 +191,48 @@ export default function FriendsPage() {
               placeholder="相手の表示名"
               disabled={sending}
             />
-            <button onClick={handleSendRequest} disabled={sending}>
+            <button className="btn-primary" onClick={handleSendRequest} disabled={sending}>
               {sending ? '送信中...' : '申請を送る'}
             </button>
           </div>
-          <p className="muted" style={{ marginTop: 8 }}>
+          <p className="muted mt-xs">
             表示名の完全一致で検索します
           </p>
         </div>
       </div>
 
       <div className="section">
+        <p className="sec-title">受信した申請（<span className="mono">{incoming.length}</span>）</p>
         <div className="card-strong">
-          <h2>受信した申請（{incoming.length}）</h2>
           {incoming.length === 0 ? (
             <EmptyCard title="受信した申請はありません" message="" />
           ) : (
             <div className="stack">
               {incoming.map((r) => (
-                <div key={r.friendship_id} className="card">
-                  <p>
-                    <strong>{r.requester_display_name || '(名前未設定)'}</strong>
-                  </p>
-                  <p className="muted">
-                    {new Date(r.created_at).toLocaleString('ja-JP')}
-                  </p>
-                  <div className="row" style={{ marginTop: 8 }}>
+                <div key={r.friendship_id} className="card glow-hover">
+                  <div className="rowx">
+                    <div>
+                      <p style={{ margin: 0 }}>
+                        <strong>{r.requester_display_name || '(名前未設定)'}</strong>
+                      </p>
+                      <p className="dim mono" style={{ fontSize: '0.75rem' }}>
+                        {new Date(r.created_at).toLocaleString('ja-JP')}
+                      </p>
+                    </div>
+                    <div className="row">
+                      <span className="badge">承認待ち</span>
+                    </div>
+                  </div>
+                  <div className="row mt-s">
                     <button
+                      className="btn-primary btn-sm"
                       onClick={() => handleAccept(r.friendship_id)}
                       disabled={busyId === r.friendship_id}
                     >
                       承認
                     </button>
                     <button
+                      className="btn-ghost btn-sm"
                       onClick={() => handleReject(r.friendship_id)}
                       disabled={busyId === r.friendship_id}
                     >
@@ -243,20 +247,25 @@ export default function FriendsPage() {
       </div>
 
       <div className="section">
+        <p className="sec-title">送信した申請（<span className="mono">{sent.length}</span>）</p>
         <div className="card-strong">
-          <h2>送信した申請（{sent.length}）</h2>
           {sent.length === 0 ? (
             <EmptyCard title="送信した申請はありません" message="" />
           ) : (
             <div className="stack">
               {sent.map((r) => (
-                <div key={r.friendship_id} className="card">
-                  <p>
-                    <strong>{r.target_display_name || '(名前未設定)'}</strong>
-                  </p>
-                  <p className="muted">
-                    {new Date(r.created_at).toLocaleString('ja-JP')} / 承認待ち
-                  </p>
+                <div key={r.friendship_id} className="card glow-hover">
+                  <div className="rowx">
+                    <div>
+                      <p style={{ margin: 0 }}>
+                        <strong>{r.target_display_name || '(名前未設定)'}</strong>
+                      </p>
+                      <p className="dim mono" style={{ fontSize: '0.75rem' }}>
+                        {new Date(r.created_at).toLocaleString('ja-JP')}
+                      </p>
+                    </div>
+                    <span className="badge amber">承認待ち</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -265,29 +274,36 @@ export default function FriendsPage() {
       </div>
 
       <div className="section">
+        <p className="sec-title">フレンド一覧（<span className="mono">{friends.length}</span>）</p>
         <div className="card-strong">
-          <h2>フレンド一覧（{friends.length}）</h2>
           {friends.length === 0 ? (
             <EmptyCard title="フレンドがいません" message="表示名で検索して申請を送ってみましょう" />
           ) : (
             <div className="stack">
               {friends.map((f) => (
-                <div key={f.friendship_id} className="card">
-                  <p>
-                    <strong>{f.friend_display_name || '(名前未設定)'}</strong>
-                  </p>
-                  {f.accepted_at && (
-                    <p className="muted">
-                      {new Date(f.accepted_at).toLocaleString('ja-JP')} に承認
-                    </p>
-                  )}
-                  <div className="row" style={{ marginTop: 8 }}>
+                <div key={f.friendship_id} className="card glow-hover">
+                  <div className="rowx">
+                    <div>
+                      <p style={{ margin: 0 }}>
+                        <strong>{f.friend_display_name || '(名前未設定)'}</strong>
+                      </p>
+                      {f.accepted_at && (
+                        <p className="dim mono" style={{ fontSize: '0.75rem' }}>
+                          {new Date(f.accepted_at).toLocaleString('ja-JP')} に承認
+                        </p>
+                      )}
+                    </div>
+                    <span className="badge success">フレンド</span>
+                  </div>
+                  <div className="row mt-s">
                     <button
+                      className="btn-ghost btn-sm"
                       onClick={() => router.push(`/users/${f.friend_user_id}`)}
                     >
                       プロフィール
                     </button>
                     <button
+                      className="btn-ghost btn-sm btn-danger"
                       onClick={() => handleRemove(f.friend_user_id)}
                       disabled={busyId === f.friend_user_id}
                     >

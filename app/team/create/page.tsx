@@ -85,39 +85,61 @@ export default function CreateTeamPage() {
 
   if (checking) {
     return (
-      <main style={{ padding: '40px' }}>
-        <h1>ASCENT チーム作成</h1>
-        <p>確認中...</p>
+      <main>
+        <div className="eyebrow">CREATE TEAM</div>
+        <h1 className="display" style={{ marginBottom: 8 }}>
+          <em>Create</em> Team
+        </h1>
+        <p className="muted">確認中...</p>
       </main>
     )
   }
 
   if (!canCreate) {
     return (
-      <main style={{ padding: '40px' }}>
-        <h1>ASCENT チーム作成</h1>
-        <p>チームを作成できません。</p>
+      <main>
+        <div className="eyebrow">CREATE TEAM</div>
+        <h1 className="display" style={{ marginBottom: 8 }}>
+          <em>Create</em> Team
+        </h1>
+        <p className="muted">チームを作成できません。</p>
       </main>
     )
   }
 
   return (
-    <main style={{ padding: '40px' }}>
-      <h1>チーム作成</h1>
+    <main>
+      <div className="eyebrow">CREATE TEAM</div>
+      <h1 className="display" style={{ marginBottom: 8 }}>
+        <em>Create</em> Team
+      </h1>
+      <p className="muted">新しいチームを作成します</p>
 
-      <div style={{ marginTop: '20px' }}>
-        <p>チーム名</p>
-        <input
-          value={teamName}
-          onChange={e => setTeamName(e.target.value)}
-          placeholder="チーム名を入力"
-        />
-      </div>
+      <div className="section" style={{ maxWidth: 600, margin: '0 auto' }}>
+        <div className="card-strong">
+          <div className="sec-title">チーム情報</div>
 
-      <div style={{ marginTop: '20px' }}>
-        <button onClick={handleCreateTeam} disabled={loading}>
-          {loading ? '作成中...' : 'チームを作成'}
-        </button>
+          <div className="stack">
+            <div>
+              <label className="stat-label">TEAM NAME</label>
+              <input
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                placeholder="チーム名を入力"
+                style={{ marginTop: 6 }}
+              />
+            </div>
+
+            <button
+              className="btn-primary btn-block btn-lg"
+              onClick={handleCreateTeam}
+              disabled={loading}
+              style={{ marginTop: 8 }}
+            >
+              {loading ? '作成中...' : 'チームを作成'}
+            </button>
+          </div>
+        </div>
       </div>
     </main>
   )

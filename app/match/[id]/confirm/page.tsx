@@ -319,60 +319,36 @@ export default function MatchConfirmPage() {
     }
   };
 
-  if (!matchId) return <div className="p-6 text-sm text-red-400">match id が見つかりません。</div>;
-  if (loading) return <div className="p-6"><LoadingSkeleton cards={3} /></div>;
+  if (!matchId) return <main><p className="danger">match id が見つかりません。</p></main>;
+  if (loading) return <main><LoadingSkeleton cards={3} /></main>;
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white">
+    <main>
+      {/* Host popup modal */}
       {showHostPopup && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 50,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "rgba(0,0,0,0.7)",
-          }}
-          onClick={() => setShowHostPopup(false)}
-        >
-          <div
-            style={{
-              background: "#1a1a2e",
-              border: "1px solid rgba(0,229,255,0.4)",
-              borderRadius: 12,
-              padding: "32px 40px",
-              maxWidth: 440,
-              width: "90%",
-              textAlign: "center",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: 12 }}>
-              あなたがホストに選ばれました。
-            </h2>
-            <p style={{ fontSize: "0.875rem", color: "rgba(255,255,255,0.8)", marginBottom: 8 }}>
-              プライベートマッチロビーを作成してください。
-            </p>
-            <p style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", marginBottom: 24 }}>
-              やり方がわからない場合はロビー作成方法ボタンを押してください。
-            </p>
-            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+        <div className="modal-root" onClick={() => setShowHostPopup(false)}>
+          <div className="modal-scrim" />
+          <div className="modal-card" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-body" style={{ textAlign: "center", padding: "32px 24px" }}>
+              <h2 style={{ marginTop: 0 }}>あなたがホストに選ばれました。</h2>
+              <p>プライベートマッチロビーを作成してください。</p>
+              <p className="muted">
+                やり方がわからない場合はロビー作成方法ボタンを押してください。
+              </p>
+            </div>
+            <div className="modal-foot" style={{ justifyContent: "center" }}>
               <button
-                type="button"
+                className="btn-primary"
                 onClick={() => setShowHostPopup(false)}
-                className="rounded bg-cyan-500 px-6 py-2 text-sm font-semibold text-white"
               >
                 OK
               </button>
               <button
-                type="button"
+                className="btn-ghost"
                 onClick={() => {
                   setShowHostPopup(false);
                   router.push("/rules#lobby-guide");
                 }}
-                className="rounded border border-white/30 bg-white/10 px-6 py-2 text-sm font-semibold text-white hover:bg-white/20"
               >
                 ロビー作成方法
               </button>
@@ -380,222 +356,242 @@ export default function MatchConfirmPage() {
           </div>
         </div>
       )}
-      <div className="mx-auto max-w-5xl px-4 py-6">
-        <div className="mb-6 flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">ASCENT 試合条件最終確認</h1>
-            <p className="mt-1 text-sm text-white/60">
-              メンバーが揃い次第、以下の内容でプライベートマッチを開始してください。
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => router.push(`/match/${matchId}/report`)}
-              className="rounded bg-cyan-500 px-4 py-2 text-sm font-semibold text-white"
-            >
-              試合結果を報告する
-            </button>
-            <button
-              onClick={() => router.push("/rules")}
-              className="rounded border border-white/20 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
-            >
-              ルール一覧
-            </button>
-            <button
-              onClick={() => void loadAll()}
-              disabled={busy}
-              className="rounded border border-white/20 px-4 py-2 text-sm text-white/90 disabled:opacity-50"
-            >
-              再読み込み
-            </button>
-          </div>
+
+      {/* Header */}
+      <div>
+        <div className="eyebrow">MATCH CONFIRM</div>
+        <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginTop: 6 }}>
+          <em>試合条件最終確認</em>
+        </h1>
+        <p className="muted">
+          メンバーが揃い次第、以下の内容でプライベートマッチを開始してください。
+        </p>
+      </div>
+
+      {/* Action buttons */}
+      <div className="section row">
+        <button
+          className="btn-primary"
+          onClick={() => router.push(`/match/${matchId}/report`)}
+        >
+          試合結果を報告する
+        </button>
+        <button
+          className="btn-ghost"
+          onClick={() => router.push("/rules")}
+        >
+          ルール一覧
+        </button>
+        <button
+          className="btn-ghost"
+          onClick={() => void loadAll()}
+          disabled={busy}
+        >
+          再読み込み
+        </button>
+      </div>
+
+      {errorText && (
+        <div className="section card" style={{ borderColor: "rgba(255, 77, 109, 0.3)", background: "var(--danger-soft)" }}>
+          <p className="danger">{errorText}</p>
         </div>
+      )}
 
-        {errorText && (
-          <div className="mb-4 rounded border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
-            {errorText}
+      <div className="section grid-2">
+        {/* Left column */}
+        <div className="stack">
+          {/* Host & Lobby Code */}
+          <div className="card-strong">
+            <h2 style={{ marginTop: 0 }}>ホスト / ロビーコード</h2>
+            <div className="grid-2" style={{ marginTop: 12 }}>
+              <div className="card">
+                <div className="stat-label">ホスト</div>
+                <div className="stat-val" style={{ fontSize: 16, marginTop: 4 }}>{hostDisplayName ?? "未決定"}</div>
+              </div>
+              <div className="card">
+                <div className="stat-label">ロビーコード</div>
+                <div className="stat-val mono" style={{ fontSize: 16, marginTop: 4, wordBreak: "break-all" }}>{match?.lobby_code ?? "未設定"}</div>
+                {match?.lobby_code_set_at && (
+                  <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
+                    更新: {new Date(match.lobby_code_set_at).toLocaleString("ja-JP")}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="card" style={{ marginTop: 12 }}>
+              <div className="stat-label" style={{ marginBottom: 8 }}>ロビーコード送信</div>
+              <input
+                value={lobbyCodeInput}
+                onChange={(e) => setLobbyCodeInput(e.target.value)}
+                placeholder={isHost ? "例: ABCDE" : "ホストのみ送信可能"}
+                disabled={busy || !isHost}
+              />
+              <button
+                className="btn-primary btn-block"
+                style={{ marginTop: 8 }}
+                onClick={handleSendLobbyCode}
+                disabled={busy || !isHost}
+              >
+                ロビーコード送信
+              </button>
+            </div>
           </div>
-        )}
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-6">
-            {/* Host & Lobby Code */}
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">ホスト / ロビーコード</h2>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded bg-black/20 p-3">
-                  <div className="text-xs text-white/50">ホスト</div>
-                  <div className="mt-1 text-sm font-medium">{hostDisplayName ?? "未決定"}</div>
+          {/* Trophy Users */}
+          <div className="card-strong">
+            <h2 style={{ marginTop: 0 }}>トロフィー使用者</h2>
+            {(["alpha", "bravo"] as const).map((side) => {
+              const team = side === "alpha" ? alphaTeam : bravoTeam;
+              const teamMembers = groupedMembers[side];
+              const trophyList: string[] = Array.isArray(team?.trophy_users) ? team.trophy_users : [];
+              return (
+                <div key={side} className="card" style={{ marginTop: 12 }}>
+                  <div className="row" style={{ marginBottom: 8 }}>
+                    <span className={`side-chip ${side}`}>{side.toUpperCase()}</span>
+                  </div>
+                  <div className="stack-sm">
+                    {teamMembers.map((m) => {
+                      const isTrophy = trophyList.includes(m.user_id);
+                      return (
+                        <div key={m.id} className="row" style={{ justifyContent: "space-between", padding: "6px 10px", borderRadius: "var(--r-sm)", background: "rgba(255,255,255,0.03)" }}>
+                          <span style={{ fontSize: 14 }}>
+                            {m.profiles?.display_name ?? m.user_id}
+                          </span>
+                          {isTrophy && (
+                            <span className="badge" style={{ fontSize: 9 }}>トロフィー</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="dim" style={{ fontSize: 11, marginTop: 8 }}>選択済み: {trophyList.length} / 2</p>
                 </div>
-                <div className="rounded bg-black/20 p-3">
-                  <div className="text-xs text-white/50">ロビーコード</div>
-                  <div className="mt-1 break-all text-sm font-medium">{match?.lobby_code ?? "未設定"}</div>
-                  {match?.lobby_code_set_at && (
-                    <div className="mt-1 text-[11px] text-white/40">
-                      更新: {new Date(match.lobby_code_set_at).toLocaleString("ja-JP")}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="mt-3 rounded border border-white/10 bg-black/20 p-3">
-                <div className="mb-2 text-sm font-semibold">ロビーコード送信</div>
-                <input
-                  value={lobbyCodeInput}
-                  onChange={(e) => setLobbyCodeInput(e.target.value)}
-                  placeholder={isHost ? "例: ABCDE" : "ホストのみ送信可能"}
-                  className="mb-2 w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                  disabled={busy || !isHost}
-                />
-                <button
-                  onClick={handleSendLobbyCode}
-                  disabled={busy || !isHost}
-                  className="w-full rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                >
-                  ロビーコード送信
-                </button>
-              </div>
-            </section>
+              );
+            })}
+          </div>
 
-            {/* Trophy Users */}
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">トロフィー使用者</h2>
-              {(["alpha", "bravo"] as const).map((side) => {
-                const team = side === "alpha" ? alphaTeam : bravoTeam;
-                const teamMembers = groupedMembers[side];
-                const trophyList: string[] = Array.isArray(team?.trophy_users) ? team.trophy_users : [];
+          {/* Banpick Results */}
+          <div className="card-strong">
+            <h2 style={{ marginTop: 0 }}>バンピック結果</h2>
+            <div className="stack" style={{ marginTop: 12 }}>
+              {(["hp", "snd", "ovl"] as const).map((phaseKey) => {
+                const state = phaseStates[phaseKey];
                 return (
-                  <div key={side} className="mb-3 rounded border border-white/10 bg-black/20 p-3">
-                    <div className="mb-2 font-semibold">{side.toUpperCase()}</div>
-                    <div className="space-y-1">
-                      {teamMembers.map((m) => {
-                        const isTrophy = trophyList.includes(m.user_id);
+                  <div key={phaseKey} className="card">
+                    <div className="stat-label" style={{ marginBottom: 6 }}>
+                      {phaseKey === "hp" && "HARDPOINT"}
+                      {phaseKey === "snd" && "SEARCH & DESTROY"}
+                      {phaseKey === "ovl" && "OVERLOAD"}
+                    </div>
+                    <div className="row" style={{ gap: 16 }}>
+                      <div>
+                        <span className="muted">マップ: </span>
+                        <span className="success" style={{ fontWeight: 600 }}>{state.map ?? "-"}</span>
+                      </div>
+                      {state.side ? (() => {
+                        const pickerIsTeamA = phaseKey === "snd" || phaseKey === "ovl";
+                        const teamAIsAlpha = teamAssignment.teamA === alphaTeam?.id;
+                        const pickerIsAlpha = pickerIsTeamA ? teamAIsAlpha : !teamAIsAlpha;
+                        const alphaSide = pickerIsAlpha ? state.side : (state.side === "JSOC" ? "ギルド" : "JSOC");
+                        const bravoSide = alphaSide === "JSOC" ? "ギルド" : "JSOC";
                         return (
-                          <div key={m.id} className="flex items-center justify-between rounded bg-white/5 px-3 py-2 text-sm">
-                            <span>
-                              {m.profiles?.display_name ?? m.user_id}
-                              {isTrophy && (
-                                <span style={{ marginLeft: 8, color: "var(--accent-cyan, #0ff)" }}>[トロフィー]</span>
-                              )}
-                            </span>
+                          <div>
+                            <span className="muted">サイド: </span>
+                            <span style={{ color: "var(--cyan)", fontWeight: 600 }}>Alpha: {alphaSide} / Bravo: {bravoSide}</span>
                           </div>
                         );
-                      })}
-                    </div>
-                    <div className="mt-2 text-xs text-white/50">選択済み: {trophyList.length} / 2</div>
-                  </div>
-                );
-              })}
-            </section>
-
-            {/* Banpick Results */}
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">バンピック結果</h2>
-              <div className="space-y-3">
-                {(["hp", "snd", "ovl"] as const).map((phaseKey) => {
-                  const state = phaseStates[phaseKey];
-                  return (
-                    <div key={phaseKey} className="rounded border border-white/10 bg-black/20 p-3">
-                      <div className="mb-2 font-semibold text-sm">
-                        {phaseKey === "hp" && "HARDPOINT"}
-                        {phaseKey === "snd" && "SEARCH & DESTROY"}
-                        {phaseKey === "ovl" && "OVERLOAD"}
-                      </div>
-                      <div className="flex flex-wrap gap-2 text-sm">
+                      })() : (
                         <div>
-                          マップ: <span className="text-emerald-300 font-medium">{state.map ?? "-"}</span>
-                        </div>
-                        {state.side ? (() => {
-                          const pickerIsTeamA = phaseKey === "snd" || phaseKey === "ovl";
-                          const teamAIsAlpha = teamAssignment.teamA === alphaTeam?.id;
-                          const pickerIsAlpha = pickerIsTeamA ? teamAIsAlpha : !teamAIsAlpha;
-                          const alphaSide = pickerIsAlpha ? state.side : (state.side === "JSOC" ? "ギルド" : "JSOC");
-                          const bravoSide = alphaSide === "JSOC" ? "ギルド" : "JSOC";
-                          return (
-                            <div>
-                              サイド: <span className="text-cyan-300 font-medium">Alpha: {alphaSide} / Bravo: {bravoSide}</span>
-                            </div>
-                          );
-                        })() : (
-                          <div>サイド: <span className="text-cyan-300 font-medium">-</span></div>
-                        )}
-                      </div>
-                      {state.bans.length > 0 && (
-                        <div className="mt-1 text-xs text-white/50">
-                          BAN: {state.bans.join(", ")}
+                          <span className="muted">サイド: </span>
+                          <span style={{ color: "var(--cyan)", fontWeight: 600 }}>-</span>
                         </div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            </section>
-          </div>
-
-          {/* Chat */}
-          <div>
-            <section className="rounded border border-white/10 bg-white/5 p-4">
-              <h2 className="mb-3 text-lg font-semibold">試合チャット</h2>
-              <div className="mb-3 h-[520px] overflow-y-auto rounded border border-white/10 bg-black/20 p-3">
-                <div className="space-y-2">
-                  {messages.length === 0 ? (
-                    <div className="text-sm text-white/50">まだメッセージはありません。</div>
-                  ) : (
-                    messages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`rounded px-3 py-2 text-sm ${
-                          msg.message_type === "system"
-                            ? "bg-white/5 text-white/70"
-                            : msg.message_type === "lobby_code"
-                            ? "bg-emerald-500/15 text-emerald-200"
-                            : "bg-white/10 text-white"
-                        }`}
-                      >
-                        <div className="mb-1 flex items-center justify-between gap-3 text-[11px] opacity-70">
-                          <span>
-                            [{messageTypeLabel(msg.message_type)}]{" "}
-                            {msg.profiles?.display_name ?? (msg.sender_user_id ? msg.sender_user_id : "system")}
-                          </span>
-                          <span>{new Date(msg.created_at).toLocaleString("ja-JP")}</span>
-                        </div>
-                        <div className="break-words whitespace-pre-wrap">{translateBody(msg.body)}</div>
-                      </div>
-                    ))
-                  )}
-                  <div ref={chatBottomRef} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <textarea
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="メッセージを入力"
-                  rows={4}
-                  maxLength={300}
-                  className="w-full rounded border border-white/15 bg-neutral-900 px-3 py-2 text-sm outline-none"
-                  disabled={busy}
-                />
-                <button
-                  onClick={handleSendChat}
-                  disabled={busy}
-                  className="w-full rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
-                >
-                  メッセージ送信
-                </button>
-              </div>
-            </section>
+                    {state.bans.length > 0 && (
+                      <p className="dim" style={{ fontSize: 12, marginTop: 4 }}>
+                        BAN: {state.bans.join(", ")}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        <section className="mt-6 rounded border border-white/10 bg-white/5 p-4">
-          <h2 className="mb-3 text-lg font-semibold">ロビー画面の見方</h2>
-          <img
-            src="/tutorial.png"
-            alt="プライベートマッチロビーの見方 - ロビーコード、JSOC（チーム1）、ギルド（チーム2）の位置"
-            className="w-full rounded border border-white/10"
-          />
-        </section>
+        {/* Right column — Chat */}
+        <div>
+          <div className="card-strong" style={{ display: "flex", flexDirection: "column" }}>
+            <h2 style={{ marginTop: 0 }}>試合チャット</h2>
+            <div style={{ height: 520, overflowY: "auto", borderRadius: "var(--r-md)", border: "1px solid var(--line)", background: "rgba(0,0,0,0.2)", padding: 12, marginTop: 12 }}>
+              <div className="stack-sm">
+                {messages.length === 0 ? (
+                  <p className="dim" style={{ fontSize: 14 }}>まだメッセージはありません。</p>
+                ) : (
+                  messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className="card"
+                      style={{
+                        padding: "8px 12px",
+                        background:
+                          msg.message_type === "system"
+                            ? "rgba(255,255,255,0.03)"
+                            : msg.message_type === "lobby_code"
+                            ? "var(--success-soft)"
+                            : "rgba(255,255,255,0.05)",
+                        borderColor:
+                          msg.message_type === "lobby_code"
+                            ? "rgba(0, 245, 160, 0.3)"
+                            : "var(--line)",
+                      }}
+                    >
+                      <div className="row" style={{ justifyContent: "space-between", fontSize: 11, opacity: 0.7 }}>
+                        <span>
+                          [{messageTypeLabel(msg.message_type)}]{" "}
+                          {msg.profiles?.display_name ?? (msg.sender_user_id ? msg.sender_user_id : "system")}
+                        </span>
+                        <span className="mono">{new Date(msg.created_at).toLocaleString("ja-JP")}</span>
+                      </div>
+                      <div style={{ marginTop: 4, wordBreak: "break-word", whiteSpace: "pre-wrap", fontSize: 14 }}>
+                        {translateBody(msg.body)}
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div ref={chatBottomRef} />
+              </div>
+            </div>
+            <div className="stack-sm" style={{ marginTop: 12 }}>
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="メッセージを入力"
+                rows={4}
+                maxLength={300}
+                disabled={busy}
+              />
+              <button
+                className="btn-block"
+                onClick={handleSendChat}
+                disabled={busy}
+              >
+                メッセージ送信
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+
+      {/* Lobby tutorial image */}
+      <div className="section card-strong">
+        <h2 style={{ marginTop: 0 }}>ロビー画面の見方</h2>
+        <img
+          src="/tutorial.png"
+          alt="プライベートマッチロビーの見方 - ロビーコード、JSOC（チーム1）、ギルド（チーム2）の位置"
+          style={{ width: "100%", borderRadius: "var(--r-md)", border: "1px solid var(--line)", marginTop: 12 }}
+        />
+      </div>
+    </main>
   );
 }

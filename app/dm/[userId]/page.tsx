@@ -139,7 +139,8 @@ export default function DmConversationPage() {
   if (loading) {
     return (
       <main>
-        <h1>ASCENT DM</h1>
+        <p className="eyebrow">DIRECT MESSAGE</p>
+        <h1 className="display"><em>DM</em></h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -147,15 +148,13 @@ export default function DmConversationPage() {
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>{partnerName || '(不明)'}</h1>
-          <p className="muted">ダイレクトメッセージ</p>
-        </div>
-        <div className="row">
-          <button onClick={() => router.push(`/users/${partnerId}`)}>プロフィール</button>
-          <button onClick={() => router.push('/dm')}>一覧に戻る</button>
-        </div>
+      <p className="eyebrow">DIRECT MESSAGE</p>
+      <h1 className="display"><em>{partnerName || '(不明)'}</em></h1>
+      <p className="muted">ダイレクトメッセージ</p>
+
+      <div className="row mt-s" style={{ gap: 8 }}>
+        <button className="btn-ghost btn-sm" onClick={() => router.push(`/users/${partnerId}`)}>プロフィール</button>
+        <button className="btn-ghost btn-sm" onClick={() => router.push('/dm')}>一覧に戻る</button>
       </div>
 
       <div className="section card-strong">
@@ -164,7 +163,7 @@ export default function DmConversationPage() {
             height: 450,
             overflowY: 'auto',
             padding: 12,
-            borderRadius: 8,
+            borderRadius: 'var(--r-lg)',
             background: 'rgba(0,0,0,0.2)',
             border: '1px solid var(--line)',
           }}
@@ -199,7 +198,7 @@ export default function DmConversationPage() {
                       <p style={{ whiteSpace: 'pre-wrap', margin: 0, fontSize: '0.9rem' }}>
                         {m.body}
                       </p>
-                      <p className="muted" style={{ fontSize: '0.7rem', margin: '4px 0 0', textAlign: 'right' }}>
+                      <p className="dim mono" style={{ fontSize: '0.65rem', margin: '4px 0 0', textAlign: 'right' }}>
                         {new Date(m.created_at).toLocaleString('ja-JP')}
                       </p>
                     </div>
@@ -211,7 +210,7 @@ export default function DmConversationPage() {
           )}
         </div>
 
-        <div style={{ marginTop: 12 }}>
+        <div className="mt-s">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -221,8 +220,8 @@ export default function DmConversationPage() {
             disabled={sending}
             style={{ width: '100%' }}
           />
-          <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
-            <button onClick={handleSend} disabled={sending}>
+          <div className="row mt-xs" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn-primary" onClick={handleSend} disabled={sending}>
               {sending ? '送信中...' : '送信'}
             </button>
           </div>

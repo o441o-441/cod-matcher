@@ -36,6 +36,13 @@ const STATUS_LABEL: Record<string, string> = {
   dismissed: '却下',
 }
 
+const STATUS_BADGE: Record<string, string> = {
+  open: '',
+  reviewing: 'amber',
+  resolved: 'success',
+  dismissed: 'danger',
+}
+
 export default function MyReportsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -67,7 +74,8 @@ export default function MyReportsPage() {
   if (loading) {
     return (
       <main>
-        <h1>ASCENT 通報履歴</h1>
+        <p className="eyebrow">REPORTS</p>
+        <h1 className="display"><em>通報履歴</em></h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -75,38 +83,39 @@ export default function MyReportsPage() {
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>ASCENT 通報履歴</h1>
-          <p className="muted">自分が送信した通報の一覧</p>
-        </div>
-        <div className="row">
-          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
-        </div>
-      </div>
+      <p className="eyebrow">REPORTS</p>
+      <h1 className="display"><em>通報履歴</em></h1>
+      <p className="muted">自分が送信した通報の一覧</p>
 
-      <div className="section card-strong">
+      <div className="section">
         {reports.length === 0 ? (
           <EmptyCard title="通報履歴がありません" message="" />
         ) : (
           <div className="stack">
             {reports.map((r) => (
-              <div key={r.id} className="card">
-                <p>
-                  <strong>対象:</strong> {r.reported_display_name || r.reported_user_id}
-                </p>
-                <p>
-                  <strong>種別:</strong> {CATEGORY_LABEL[r.category] ?? r.category}
-                </p>
-                <p>
-                  <strong>状態:</strong> {STATUS_LABEL[r.status] ?? r.status}
-                </p>
+              <div key={r.id} className="card glow-hover">
+                <div className="rowx">
+                  <div>
+                    <p style={{ margin: 0 }}>
+                      <strong>{r.reported_display_name || r.reported_user_id}</strong>
+                    </p>
+                    <p className="muted" style={{ margin: '4px 0 0' }}>
+                      {CATEGORY_LABEL[r.category] ?? r.category}
+                    </p>
+                  </div>
+                  <span className={`badge ${STATUS_BADGE[r.status] ?? ''}`}>
+                    <span className="badge-dot" />
+                    {STATUS_LABEL[r.status] ?? r.status}
+                  </span>
+                </div>
                 {r.description && (
-                  <p>
-                    <strong>詳細:</strong> {r.description}
+                  <p className="muted mt-xs" style={{ fontSize: '0.8rem' }}>
+                    {r.description}
                   </p>
                 )}
-                <p className="muted">{new Date(r.created_at).toLocaleString('ja-JP')}</p>
+                <p className="dim mono mt-xs" style={{ fontSize: '0.7rem' }}>
+                  {new Date(r.created_at).toLocaleString('ja-JP')}
+                </p>
               </div>
             ))}
           </div>

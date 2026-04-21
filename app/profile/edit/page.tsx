@@ -142,61 +142,54 @@ export default function ProfileEditPage() {
   if (loading) {
     return (
       <main>
-        <h1>ASCENT プロフィール編集</h1>
-        <div className="card">
-          <p>読み込み中...</p>
-        </div>
+        <div className="eyebrow">EDIT PROFILE</div>
+        <h1 className="display" style={{ marginBottom: 8 }}>
+          <em>Edit</em> Profile
+        </h1>
+        <p className="muted">読み込み中...</p>
       </main>
     )
   }
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>ASCENT プロフィール編集</h1>
-          <p className="muted">表示名と Activision ID を編集できます</p>
-        </div>
+      <div className="eyebrow">EDIT PROFILE</div>
+      <h1 className="display" style={{ marginBottom: 8 }}>
+        <em>Edit</em> Profile
+      </h1>
+      <p className="muted">表示名と Activision ID を編集できます</p>
 
-        <div className="row">
-          <button onClick={() => router.push('/mypage')}>マイページへ戻る</button>
-        </div>
-      </div>
-
-      <div
-        className="section"
-        style={{
-          maxWidth: '760px',
-          margin: '0 auto',
-        }}
-      >
+      <div className="section" style={{ maxWidth: 760, margin: '0 auto' }}>
         <div className="card-strong">
-          <h2>アカウント情報</h2>
+          <div className="sec-title">アカウント情報</div>
 
           <div className="stack">
-            <div className="card">
-              <p className="muted">表示名</p>
+            <div>
+              <label className="stat-label">DISPLAY NAME</label>
               <input
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="表示名を入力"
+                style={{ marginTop: 6 }}
               />
             </div>
 
-            <div className="card">
-              <p className="muted">Activision ID</p>
+            <div>
+              <label className="stat-label">ACTIVISION ID</label>
               <input
                 value={activisionId}
                 onChange={(e) => setActivisionId(e.target.value)}
                 placeholder="Activision IDを入力"
+                style={{ marginTop: 6 }}
               />
             </div>
 
-            <div className="card">
-              <p className="muted">使用デバイス</p>
+            <div>
+              <label className="stat-label">DEVICE</label>
               <select
                 value={controller}
                 onChange={(e) => setController(e.target.value)}
+                style={{ marginTop: 6 }}
               >
                 <option value="">選択してください</option>
                 {CONTROLLER_GROUPS.map((g) => (
@@ -211,11 +204,12 @@ export default function ProfileEditPage() {
               </select>
             </div>
 
-            <div className="card">
-              <p className="muted">プラットフォーム</p>
+            <div>
+              <label className="stat-label">PLATFORM</label>
               <select
                 value={platform}
                 onChange={(e) => setPlatform(e.target.value)}
+                style={{ marginTop: 6 }}
               >
                 <option value="">選択してください</option>
                 <option value="Battle.net">Battle.net</option>
@@ -225,31 +219,33 @@ export default function ProfileEditPage() {
               </select>
             </div>
 
-            <div className="card">
-              <p className="muted">Discord ID</p>
-              <h3>{discordId || '未設定'}</h3>
-              <p className="muted">Discord ID はログイン情報のため編集できません</p>
+            <div>
+              <label className="stat-label">DISCORD ID</label>
+              <div style={{ marginTop: 6, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, color: 'var(--text-strong)' }}>
+                {discordId || '未設定'}
+              </div>
+              <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>
+                Discord ID はログイン情報のため編集できません
+              </p>
             </div>
 
-            <div className="card">
-              <p className="muted">自己紹介</p>
+            <div>
+              <label className="stat-label">BIO</label>
               <textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="プレイスタイルや得意な役割など、自由に書いてください"
                 rows={5}
+                style={{ marginTop: 6 }}
               />
             </div>
           </div>
 
-          <div
-            className="section row"
-            style={{
-              justifyContent: 'flex-end',
-            }}
-          >
-            <button onClick={() => router.push('/mypage')}>キャンセル</button>
-            <button onClick={handleSave} disabled={saving}>
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: 20 }}>
+            <button className="btn-ghost" onClick={() => router.push('/mypage')}>
+              キャンセル
+            </button>
+            <button className="btn-primary" onClick={handleSave} disabled={saving}>
               {saving ? '保存中...' : '保存する'}
             </button>
           </div>

@@ -24,6 +24,21 @@ type SeasonOption = {
   is_active: boolean
 }
 
+function getTier(rating: number | null): { label: string; color: string } {
+  if (rating == null) return { label: 'BRONZE', color: 'var(--tier-bronze)' }
+  if (rating >= 2100) return { label: 'ASCENDANT', color: 'var(--tier-ascendant)' }
+  if (rating >= 1950) return { label: 'DIAMOND', color: 'var(--tier-diamond)' }
+  if (rating >= 1800) return { label: 'PLATINUM', color: 'var(--tier-platinum)' }
+  if (rating >= 1600) return { label: 'GOLD', color: 'var(--tier-gold)' }
+  if (rating >= 1400) return { label: 'SILVER', color: 'var(--tier-silver)' }
+  return { label: 'BRONZE', color: 'var(--tier-bronze)' }
+}
+
+function getInitials(name: string | null): string {
+  if (!name) return '?'
+  return name.slice(0, 2).toUpperCase()
+}
+
 export default function RankingPage() {
   const router = useRouter()
 
@@ -134,20 +149,25 @@ export default function RankingPage() {
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <div className="eyebrow">LEADERBOARD</div>
-          <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginTop: 6 }}>
-            ASCENT <em>ランキング</em>
-          </h1>
-          <p className="muted">
-            {selectedSeasonName || 'シーズンを選択してください'}
-          </p>
-        </div>
-        <div className="row">
+      {/* Header */}
+      <div>
+        <div className="eyebrow">LEADERBOARD</div>
+        <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginTop: 6 }}>
+          ASCENT <em>ランキング</em>
+        </h1>
+        <p className="muted">
+          {selectedSeasonName || 'シーズンを選択してください'}
+        </p>
+      </div>
+
+      {/* Season / filter controls */}
+      <div className="section card-strong">
+        <div className="sec-title">FILTERS</div>
+        <div className="row" style={{ gap: 12 }}>
           <select
             value={selectedSeasonId}
             onChange={(e) => void handleSeasonChange(e.target.value)}
+            style={{ maxWidth: 360 }}
           >
             {seasons.map((s) => (
               <option key={s.id} value={s.id}>
@@ -155,85 +175,173 @@ export default function RankingPage() {
               </option>
             ))}
           </select>
-          <button onClick={() => router.push('/ranking/games-played')}>プレイ回数</button>
-          <button onClick={() => router.push('/ranking/controllers')}>コントローラー</button>
+          <button
+            className="btn-ghost"
+            onClick={() => router.push('/ranking/controllers')}
+          >
+            コントローラー別
+          </button>
+          <button
+            className="btn-ghost"
+            onClick={() => router.push('/ranking/games-played')}
+          >
+            プレイ回数別
+          </button>
         </div>
       </div>
 
+      {/* Player list */}
       <div className="section card-strong">
+        <div className="sec-title">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tier-gold)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2l3 7h7l-5.5 4.5 2 7L12 16l-6.5 4.5 2-7L2 9h7z" />
+            </svg>
+            SEASON RANKING
+          </span>
+        </div>
+
         {loading ? (
           <LoadingCard message="ランキングを読み込み中..." />
         ) : seasons.length === 0 ? (
-          <EmptyCard title="シーズンが未設定です" message="管理者がシーズンを作成してください。" />
+          <div className="empty">
+            <p style={{ fontWeight: 700, marginBottom: 6 }}>シーズンが未設定です</p>
+            <p className="muted">管理者がシーズンを作成してください。</p>
+          </div>
         ) : players.length === 0 ? (
-          <EmptyCard
-            title={`${selectedSeasonName} のデータがありません`}
-            message="この期間に完了した試合がありません。"
-          />
+          <div className="empty">
+            <p style={{ fontWeight: 700, marginBottom: 6 }}>{selectedSeasonName} のデータがありません</p>
+            <p className="muted">この期間に完了した試合がありません。</p>
+          </div>
         ) : (
           <div className="stack">
             {players.map((p, index) => {
-              const total = p.wins + p.losses
-              const winRate = total > 0 ? ((p.wins / total) * 100).toFixed(1) : '0.0'
-              const changeSign = p.rating_change > 0 ? '+' : ''
+              const tier = getTier(p.end_rating)
+              const rankColor =
+                index === 0
+                  ? 'var(--tier-gold)'
+                  : index === 1
+                    ? 'var(--tier-silver)'
+                    : index === 2
+                      ? 'var(--tier-bronze)'
+                      : 'var(--text-dim)'
 
               return (
-                <div key={p.user_id} className="card">
-                  <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <p
-                        className="muted"
-                        style={{
-                          color:
-                            index === 0
-                              ? 'var(--tier-gold)'
-                              : index === 1
-                                ? 'var(--tier-silver)'
-                                : index === 2
-                                  ? 'var(--tier-bronze)'
-                                  : undefined,
-                          fontWeight: index < 3 ? 700 : undefined,
-                        }}
-                      >
-                        #{index + 1}
-                      </p>
-                      <h3 style={{ marginTop: 0 }}>{p.display_name || '(名前未設定)'}</h3>
-                      {teamNames[p.user_id] && (
-                        <p className="muted" style={{ marginTop: 2 }}>{teamNames[p.user_id]}</p>
-                      )}
-                      {controllers[p.user_id] && (
-                        <p className="muted" style={{ marginTop: 2 }}>{controllers[p.user_id]}</p>
-                      )}
+                <div
+                  key={p.user_id}
+                  className="card glow-hover"
+                  style={{ padding: '12px 18px', cursor: 'pointer' }}
+                  onClick={() => router.push(`/users/${p.user_id}`)}
+                >
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '36px 32px 1fr auto auto auto',
+                      alignItems: 'center',
+                      gap: 14,
+                    }}
+                  >
+                    {/* Rank */}
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-display)',
+                        fontSize: 20,
+                        fontWeight: 700,
+                        color: rankColor,
+                        textAlign: 'center',
+                      }}
+                    >
+                      {index + 1}
+                    </span>
+
+                    {/* Avatar */}
+                    <div className="avatar" style={{ width: 32, height: 32, fontSize: 11 }}>
+                      {getInitials(p.display_name)}
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <h3 style={{ marginTop: 0 }}>
-                        {p.end_rating ?? '-'}
+
+                    {/* Name + tag */}
+                    <div style={{ minWidth: 0 }}>
+                      <span style={{ fontWeight: 700 }}>
+                        {p.display_name || '(名前未設定)'}
+                      </span>
+                      {teamNames[p.user_id] && (
                         <span
-                          className="muted"
                           style={{
-                            fontSize: '0.75rem',
-                            marginLeft: 6,
-                            color: p.rating_change > 0 ? 'var(--success)' : p.rating_change < 0 ? 'var(--danger)' : undefined,
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 11,
+                            color: 'var(--text-soft)',
+                            marginLeft: 8,
                           }}
                         >
-                          ({changeSign}{p.rating_change})
+                          {teamNames[p.user_id]}
                         </span>
-                      </h3>
-                      <p className="muted">
-                        {p.wins}勝 {p.losses}敗 / 勝率 {winRate}% / {p.games_played}試合
-                      </p>
+                      )}
                     </div>
-                  </div>
-                  <div className="row" style={{ marginTop: 8 }}>
-                    <button onClick={() => router.push(`/users/${p.user_id}`)}>
-                      プロフィール
-                    </button>
+
+                    {/* Tier badge */}
+                    <span
+                      className="badge"
+                      style={{
+                        color: tier.color,
+                        borderColor: tier.color,
+                        background: `color-mix(in srgb, ${tier.color} 12%, transparent)`,
+                        fontSize: 9,
+                        padding: '3px 8px',
+                      }}
+                    >
+                      <span className="badge-dot" style={{ background: tier.color, boxShadow: `0 0 10px ${tier.color}` }} />
+                      {tier.label}
+                    </span>
+
+                    {/* Win / Loss */}
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontVariantNumeric: 'tabular-nums',
+                        fontSize: 13,
+                        color: 'var(--text-soft)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {p.wins}W {p.losses}L
+                    </span>
+
+                    {/* Rating */}
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontVariantNumeric: 'tabular-nums',
+                        fontSize: 18,
+                        fontWeight: 700,
+                        color: 'var(--cyan)',
+                        minWidth: 60,
+                        textAlign: 'right',
+                      }}
+                    >
+                      {p.end_rating ?? '-'}
+                    </span>
                   </div>
                 </div>
               )
             })}
           </div>
         )}
+      </div>
+
+      {/* Navigation buttons */}
+      <div className="row section" style={{ justifyContent: 'center', gap: 12 }}>
+        <button
+          className="btn-ghost"
+          onClick={() => router.push('/ranking/controllers')}
+        >
+          コントローラー別
+        </button>
+        <button
+          className="btn-ghost"
+          onClick={() => router.push('/ranking/games-played')}
+        >
+          プレイ回数別
+        </button>
       </div>
     </main>
   )

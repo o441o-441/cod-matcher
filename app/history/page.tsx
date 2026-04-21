@@ -113,7 +113,8 @@ export default function HistoryPage() {
   if (loading) {
     return (
       <main>
-        <h1>ASCENT マッチ履歴</h1>
+        <p className="eyebrow">MATCH HISTORY</p>
+        <h1 className="display"><em>マッチ履歴</em></h1>
         <LoadingCard message="履歴を読み込み中です..." />
       </main>
     )
@@ -121,17 +122,11 @@ export default function HistoryPage() {
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>ASCENT マッチ履歴</h1>
-          <p className="muted">完了した試合の履歴です</p>
-        </div>
-        <div className="row">
-          <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
-        </div>
-      </div>
+      <p className="eyebrow">MATCH HISTORY</p>
+      <h1 className="display"><em>マッチ履歴</em></h1>
+      <p className="muted">完了した試合の履歴です</p>
 
-      <div className="section card-strong">
+      <div className="section">
         {matches.length === 0 ? (
           <EmptyCard title="履歴がありません" message="完了した試合がまだありません。" />
         ) : (
@@ -140,29 +135,42 @@ export default function HistoryPage() {
               const teams = matchTeams.filter((t) => t.match_id === m.id)
               const alpha = teams.find((t) => t.side === 'alpha')
               const bravo = teams.find((t) => t.side === 'bravo')
+              const alphaWon = alpha && m.winner_match_team_id === alpha.id
+              const bravoWon = bravo && m.winner_match_team_id === bravo.id
 
               return (
-                <div key={m.id} className="card">
+                <div
+                  key={m.id}
+                  className="card glow-hover"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => router.push(`/match/${m.id}/report`)}
+                >
                   <div className="grid grid-2">
                     <div>
-                      <p className="muted">ALPHA</p>
-                      <p><strong>{alpha ? getMemberNames(alpha.id) : '不明'}</strong></p>
+                      <div className="row" style={{ gap: 8 }}>
+                        <span className="side-chip alpha">ALPHA</span>
+                        {alphaWon && <span className="badge" style={{ color: 'var(--cyan)' }}>W</span>}
+                        {alpha && m.loser_match_team_id === alpha.id && <span className="badge magenta">L</span>}
+                      </div>
+                      <p style={{ margin: '6px 0 0' }}><strong>{alpha ? getMemberNames(alpha.id) : '不明'}</strong></p>
                     </div>
                     <div>
-                      <p className="muted">BRAVO</p>
-                      <p><strong>{bravo ? getMemberNames(bravo.id) : '不明'}</strong></p>
+                      <div className="row" style={{ gap: 8 }}>
+                        <span className="side-chip bravo">BRAVO</span>
+                        {bravoWon && <span className="badge" style={{ color: 'var(--cyan)' }}>W</span>}
+                        {bravo && m.loser_match_team_id === bravo.id && <span className="badge magenta">L</span>}
+                      </div>
+                      <p style={{ margin: '6px 0 0' }}><strong>{bravo ? getMemberNames(bravo.id) : '不明'}</strong></p>
                     </div>
                   </div>
-                  <p style={{ marginTop: 8 }}>
-                    <strong>勝者:</strong> {getWinnerNames(m.winner_match_team_id)}
-                  </p>
-                  <p className="muted">
-                    {new Date(m.matched_at).toLocaleString('ja-JP')}
-                  </p>
-                  <div className="section row">
-                    <button onClick={() => router.push(`/match/${m.id}/report`)}>
-                      試合詳細
-                    </button>
+                  <div className="div" />
+                  <div className="rowx">
+                    <p className="dim mono" style={{ fontSize: '0.75rem', margin: 0 }}>
+                      {new Date(m.matched_at).toLocaleString('ja-JP')}
+                    </p>
+                    <p className="muted" style={{ margin: 0 }}>
+                      <strong>勝者:</strong> {getWinnerNames(m.winner_match_team_id)}
+                    </p>
                   </div>
                 </div>
               )

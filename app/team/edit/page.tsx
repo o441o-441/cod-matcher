@@ -124,41 +124,42 @@ export default function TeamEditPage() {
   if (loading) {
     return (
       <main>
-        <h1>ASCENT チーム編集</h1>
-        <div className="card">
-          <p>読み込み中...</p>
-        </div>
+        <div className="eyebrow">EDIT TEAM</div>
+        <h1 className="display" style={{ marginBottom: 8 }}>
+          <em>Edit</em> Team
+        </h1>
+        <p className="muted">読み込み中...</p>
       </main>
     )
   }
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <h1>ASCENT チーム編集</h1>
-        <button onClick={() => router.push('/menu')}>
-          戻る
-        </button>
-      </div>
+      <div className="eyebrow">EDIT TEAM</div>
+      <h1 className="display" style={{ marginBottom: 8 }}>
+        <em>Edit</em> Team
+      </h1>
+      <p className="muted">チーム名を変更できます</p>
 
       <div className="section" style={{ maxWidth: 600, margin: '0 auto' }}>
         <div className="card-strong">
-          <h2>チーム名変更</h2>
+          <div className="sec-title">チーム名変更</div>
 
           <div className="stack">
-            <div className="card">
-              <p className="muted">チーム名</p>
+            <div>
+              <label className="stat-label">TEAM NAME</label>
               <input
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
+                style={{ marginTop: 6 }}
               />
             </div>
 
-            <div className="row" style={{ justifyContent: 'flex-end' }}>
-              <button onClick={() => router.push('/menu')}>
+            <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
+              <button className="btn-ghost" onClick={() => router.push('/menu')}>
                 キャンセル
               </button>
-              <button onClick={handleSave} disabled={saving}>
+              <button className="btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? '保存中...' : '保存する'}
               </button>
             </div>

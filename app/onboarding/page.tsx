@@ -112,86 +112,92 @@ export default function OnboardingPage() {
 
   if (initialLoading) {
     return (
-      <main style={{ padding: '40px' }}>
-        <h1>ASCENT プロフィール登録</h1>
+      <main>
+        <div className="eyebrow">ONBOARDING</div>
+        <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginTop: 6 }}>
+          ASCENT <em>プロフィール登録</em>
+        </h1>
         <p className="muted">読み込み中...</p>
       </main>
     )
   }
 
   return (
-    <main style={{ padding: '40px' }}>
-      <h1>ASCENT プロフィール登録</h1>
+    <main>
+      <div className="eyebrow">ONBOARDING</div>
+      <h1 className="display" style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', marginTop: 6 }}>
+        ASCENT <em>プロフィール登録</em>
+      </h1>
 
-      <div style={{ marginTop: '20px' }}>
-        <p>表示名</p>
-        <input
-          value={displayName}
-          onChange={e => setDisplayName(e.target.value)}
-          placeholder="表示名を入力"
-        />
-      </div>
+      <div className="section card-strong stack">
+        <div>
+          <div className="stat-label">表示名</div>
+          <input
+            value={displayName}
+            onChange={e => setDisplayName(e.target.value)}
+            placeholder="表示名を入力"
+          />
+        </div>
 
-      <div style={{ marginTop: '20px' }}>
-        <p>Activision ID</p>
-        <input
-          value={activisionId}
-          onChange={e => setActivisionId(e.target.value)}
-          placeholder="Activision IDを入力"
-        />
-      </div>
+        <div>
+          <div className="stat-label">ACTIVISION ID</div>
+          <input
+            value={activisionId}
+            onChange={e => setActivisionId(e.target.value)}
+            placeholder="Activision IDを入力"
+          />
+        </div>
 
-      <div style={{ marginTop: '20px' }}>
-        <p>使用デバイス</p>
-        <select
-          value={controller}
-          onChange={(e) => setController(e.target.value)}
-        >
-          <option value="">選択してください</option>
-          {CONTROLLER_GROUPS.map((g) => (
-            <optgroup key={g.manufacturer} label={g.manufacturer}>
-              {g.options.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </div>
+        <div>
+          <div className="stat-label">使用デバイス</div>
+          <select
+            value={controller}
+            onChange={(e) => setController(e.target.value)}
+          >
+            <option value="">選択してください</option>
+            {CONTROLLER_GROUPS.map((g) => (
+              <optgroup key={g.manufacturer} label={g.manufacturer}>
+                {g.options.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
 
-      <div style={{ marginTop: '20px' }}>
-        <p>プラットフォーム</p>
-        <select
-          value={platform}
-          onChange={(e) => setPlatform(e.target.value)}
-        >
-          <option value="">選択してください</option>
-          <option value="Battle.net">Battle.net</option>
-          <option value="Steam">Steam</option>
-          <option value="PlayStation">PlayStation</option>
-          <option value="Xbox">Xbox</option>
-        </select>
-      </div>
+        <div>
+          <div className="stat-label">プラットフォーム</div>
+          <select
+            value={platform}
+            onChange={(e) => setPlatform(e.target.value)}
+          >
+            <option value="">選択してください</option>
+            <option value="Battle.net">Battle.net</option>
+            <option value="Steam">Steam</option>
+            <option value="PlayStation">PlayStation</option>
+            <option value="Xbox">Xbox</option>
+          </select>
+        </div>
 
-      <div style={{ marginTop: '20px' }}>
-        <p>スキルレベル</p>
-        <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
-          ランクマッチでの最高ランクを基準に選択してください。初期レートに反映されます。
-        </p>
-        <select
-          value={skillLevel}
-          onChange={(e) => setSkillLevel(e.target.value)}
-        >
-          <option value="">選択してください</option>
-          <option value="1400">初級者（プラチナ以下）</option>
-          <option value="1500">中級者（ダイヤ）</option>
-          <option value="1600">上級者（クリムゾン以上）</option>
-        </select>
-      </div>
+        <div>
+          <div className="stat-label">スキルレベル</div>
+          <p className="muted" style={{ marginTop: 4 }}>
+            ランクマッチでの最高ランクを基準に選択してください。初期レートに反映されます。
+          </p>
+          <select
+            value={skillLevel}
+            onChange={(e) => setSkillLevel(e.target.value)}
+          >
+            <option value="">選択してください</option>
+            <option value="1400">初級者（プラチナ以下）</option>
+            <option value="1500">中級者（ダイヤ）</option>
+            <option value="1600">上級者（クリムゾン以上）</option>
+          </select>
+        </div>
 
-      <div style={{ marginTop: '20px' }}>
-        <button onClick={handleSave} disabled={loading}>
+        <button className="btn-primary btn-block btn-lg" onClick={handleSave} disabled={loading}>
           {loading ? '保存中...' : '保存'}
         </button>
       </div>

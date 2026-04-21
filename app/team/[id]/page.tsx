@@ -453,8 +453,11 @@ export default function TeamDetailPage() {
   if (loading) {
     return (
       <main>
-        <h1>チーム詳細</h1>
-        <p>読み込み中...</p>
+        <div className="eyebrow">TEAM DETAIL</div>
+        <h1 className="display" style={{ marginBottom: 8 }}>
+          <em>Team</em>
+        </h1>
+        <p className="muted">読み込み中...</p>
       </main>
     )
   }
@@ -462,94 +465,90 @@ export default function TeamDetailPage() {
   return (
     <>
       <main>
-        <div className="row" style={{ justifyContent: 'space-between' }}>
-          <div>
-            <h1>チーム詳細</h1>
-            <p className="muted">チーム情報、メンバー、最近の試合を確認できます</p>
-          </div>
+        <div className="eyebrow">TEAM DETAIL</div>
+        <h1 className="display" style={{ marginBottom: 8 }}>
+          {team?.name ?? <em>Team</em>}
+        </h1>
+        <p className="muted">チーム情報、メンバー、最近の試合を確認できます</p>
 
-          <div className="row">
-            <button onClick={() => router.push('/menu')}>
-              メニューへ戻る
-            </button>
-          </div>
-        </div>
-
+        {/* Team stats */}
         <div className="section">
           <div className="card-strong">
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h2>チーム情報</h2>
-              <span className={canManageTeam ? 'success' : 'muted'}>
-                {canManageTeam ? 'owner権限あり' : '閲覧のみ'}
+            <div className="rowx">
+              <div className="sec-title">チーム情報</div>
+              <span className={canManageTeam ? 'badge success' : 'badge'}>
+                <span className="badge-dot" />
+                {canManageTeam ? 'OWNER' : 'VIEW'}
               </span>
             </div>
 
-            <div className="grid grid-2">
-              <div className="card">
-                <p className="muted">チーム名</p>
-                <h3>{team?.name}</h3>
+            <div className="g4" style={{ marginTop: 16 }}>
+              <div className="stat">
+                <span className="stat-label">TEAM NAME</span>
+                <span className="stat-val">{team?.name}</span>
               </div>
-
-              <div className="card">
-                <p className="muted">レート</p>
-                <h3>{team?.rating ?? '-'}</h3>
+              <div className="stat">
+                <span className="stat-label">RATING</span>
+                <span className="stat-val">{team?.rating ?? '-'}</span>
               </div>
-
-              <div className="card">
-                <p className="muted">戦績</p>
-                <h3>
-                  {team?.wins ?? 0}勝 {team?.losses ?? 0}敗
-                </h3>
+              <div className="stat">
+                <span className="stat-label">RECORD</span>
+                <span className="stat-val">{team?.wins ?? 0}W {team?.losses ?? 0}L</span>
               </div>
-
-              <div className="card">
-                <p className="muted">試合数</p>
-                <h3>{team?.matches_played ?? 0}</h3>
+              <div className="stat">
+                <span className="stat-label">MATCHES</span>
+                <span className="stat-val">{team?.matches_played ?? 0}</span>
               </div>
             </div>
 
-            <div className="section">
-              <p className="muted">チームID</p>
-              <h3>{team?.id}</h3>
+            <div className="div" />
 
-              <div className="row" style={{ marginTop: '12px' }}>
-                <button
-                  onClick={async () => {
-                    if (!team?.id) return
-                    await navigator.clipboard.writeText(team.id)
-                    showToast('チームIDをコピーしました', 'success')
-                  }}
-                >
-                  チームIDをコピー
-                </button>
+            <div className="stat">
+              <span className="stat-label">TEAM ID</span>
+              <span className="mono" style={{ fontSize: 13, color: 'var(--text-soft)', wordBreak: 'break-all' }}>
+                {team?.id}
+              </span>
+            </div>
 
-                {canManageTeam && (
-                  <>
-                    <button onClick={() => router.push('/team/edit')}>
-                      チーム名を編集
-                    </button>
-                    <button onClick={() => setDisbandDialogOpen(true)}>
-                      チームを解散
-                    </button>
-                  </>
-                )}
+            <div className="row" style={{ marginTop: 16 }}>
+              <button
+                className="btn-sm"
+                onClick={async () => {
+                  if (!team?.id) return
+                  await navigator.clipboard.writeText(team.id)
+                  showToast('チームIDをコピーしました', 'success')
+                }}
+              >
+                IDをコピー
+              </button>
 
-                {canLeaveTeam && (
-                  <button onClick={() => setLeaveDialogOpen(true)}>
-                    チームから脱退
+              {canManageTeam && (
+                <>
+                  <button className="btn-sm" onClick={() => router.push('/team/edit')}>
+                    チーム名を編集
                   </button>
-                )}
-              </div>
+                  <button className="btn-sm btn-danger" onClick={() => setDisbandDialogOpen(true)}>
+                    チームを解散
+                  </button>
+                </>
+              )}
+
+              {canLeaveTeam && (
+                <button className="btn-sm btn-danger" onClick={() => setLeaveDialogOpen(true)}>
+                  チームから脱退
+                </button>
+              )}
             </div>
           </div>
         </div>
 
+        {/* Members */}
         <div className="section">
           <div className="card-strong">
-            <h2>メンバー</h2>
+            <div className="sec-title">メンバー</div>
 
             {members.length === 0 ? (
-              <p>メンバーがいません</p>
+              <p className="muted">メンバーがいません</p>
             ) : (
               <div className="stack">
                 {members.map((member) => {
@@ -561,38 +560,48 @@ export default function TeamDetailPage() {
 
                   return (
                     <div key={member.id} className="card">
-                      <p>
-                        <strong>名前:</strong> {member.profiles?.display_name || '未設定'}
-                      </p>
-                      <p>
-                        <strong>役割:</strong> {member.role}
-                      </p>
-
-                      {(canTransfer || canRemove) && (
-                        <div className="row" style={{ marginTop: '12px' }}>
-                          {canTransfer && (
-                            <button
-                              onClick={() => setTransferTarget(member)}
-                              disabled={transferLoadingId === member.id}
-                            >
-                              {transferLoadingId === member.id
-                                ? '譲渡中...'
-                                : 'ownerを譲渡'}
-                            </button>
-                          )}
-
-                          {canRemove && (
-                            <button
-                              onClick={() => handleRemoveMember(member)}
-                              disabled={removeLoadingId === member.id}
-                            >
-                              {removeLoadingId === member.id
-                                ? '削除中...'
-                                : 'メンバー削除'}
-                            </button>
-                          )}
+                      <div className="row">
+                        <div className="avatar">
+                          {(member.profiles?.display_name || '?')[0].toUpperCase()}
                         </div>
-                      )}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700 }}>
+                            {member.profiles?.display_name || '未設定'}
+                          </div>
+                          <span className="badge" style={{ marginTop: 4 }}>
+                            <span className="badge-dot" />
+                            {member.role.toUpperCase()}
+                          </span>
+                        </div>
+
+                        {(canTransfer || canRemove) && (
+                          <div className="row">
+                            {canTransfer && (
+                              <button
+                                className="btn-sm btn-ghost"
+                                onClick={() => setTransferTarget(member)}
+                                disabled={transferLoadingId === member.id}
+                              >
+                                {transferLoadingId === member.id
+                                  ? '譲渡中...'
+                                  : 'owner譲渡'}
+                              </button>
+                            )}
+
+                            {canRemove && (
+                              <button
+                                className="btn-sm btn-danger"
+                                onClick={() => handleRemoveMember(member)}
+                                disabled={removeLoadingId === member.id}
+                              >
+                                {removeLoadingId === member.id
+                                  ? '削除中...'
+                                  : '削除'}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -601,16 +610,18 @@ export default function TeamDetailPage() {
           </div>
         </div>
 
+        {/* Add member */}
         {canManageTeam && (
           <div className="section">
             <div className="card-strong">
-              <h2>メンバー追加</h2>
+              <div className="sec-title">メンバー追加</div>
 
               <div className="row">
                 <input
                   value={searchName}
                   onChange={(e) => setSearchName(e.target.value)}
                   placeholder="追加したいユーザーの表示名"
+                  style={{ flex: 1 }}
                 />
                 <button onClick={handleSearchUser} disabled={searchLoading}>
                   {searchLoading ? '検索中...' : '検索'}
@@ -618,13 +629,16 @@ export default function TeamDetailPage() {
               </div>
 
               {searchedUser && (
-                <div className="card" style={{ marginTop: '12px' }}>
-                  <p>
-                    <strong>名前:</strong> {searchedUser.display_name}
-                  </p>
-                  <div className="row" style={{ marginTop: '12px' }}>
-                    <button onClick={handleAddMember} disabled={addLoading}>
-                      {addLoading ? '追加中...' : 'このユーザーを追加'}
+                <div className="card" style={{ marginTop: 12 }}>
+                  <div className="row">
+                    <div className="avatar">
+                      {(searchedUser.display_name || '?')[0].toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, fontWeight: 700 }}>
+                      {searchedUser.display_name}
+                    </div>
+                    <button className="btn-primary btn-sm" onClick={handleAddMember} disabled={addLoading}>
+                      {addLoading ? '追加中...' : '追加'}
                     </button>
                   </div>
                 </div>
@@ -633,12 +647,13 @@ export default function TeamDetailPage() {
           </div>
         )}
 
+        {/* Recent matches */}
         <div className="section">
           <div className="card-strong">
-            <h2>最近の試合</h2>
+            <div className="sec-title">最近の試合</div>
 
             {matches.length === 0 ? (
-              <p>まだ試合履歴がありません</p>
+              <p className="muted">まだ試合履歴がありません</p>
             ) : (
               <div className="stack">
                 {matches.map((match) => {
@@ -652,34 +667,40 @@ export default function TeamDetailPage() {
                     myBefore != null && myAfter != null ? myAfter - myBefore : null
 
                   return (
-                    <div key={match.id} className="card">
-                      <p>
-                        <strong>対戦相手:</strong> {opponentName}
-                      </p>
-                      <p className={resultClass}>
-                        <strong>結果:</strong> {resultText}
-                      </p>
-                      <p>
-                        <strong>状態:</strong> {match.status}
-                      </p>
-                      <p>
-                        <strong>日時:</strong>{' '}
-                        {new Date(match.created_at).toLocaleString()}
-                      </p>
-                      <p>
-                        <strong>レート:</strong> {myBefore ?? '-'} → {myAfter ?? '-'}{' '}
-                        {ratingDiff !== null && (
-                          <>
-                            ({ratingDiff >= 0 ? '+' : ''}
-                            {ratingDiff})
-                          </>
-                        )}
-                      </p>
-
-                      <div className="row" style={{ marginTop: '12px' }}>
-                        <button onClick={() => router.push(`/match/${match.id}`)}>
-                          試合詳細を見る
-                        </button>
+                    <div
+                      key={match.id}
+                      className="card glow-hover"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => router.push(`/match/${match.id}`)}
+                    >
+                      <div className="rowx">
+                        <div>
+                          <div style={{ fontWeight: 700 }}>vs {opponentName}</div>
+                          <span className={`badge ${resultClass === 'success' ? 'success' : resultClass === 'danger' ? 'danger' : ''}`} style={{ marginTop: 4 }}>
+                            <span className="badge-dot" />
+                            {resultText}
+                          </span>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div className="stat">
+                            <span className="stat-label">RATING</span>
+                            <span className="stat-val" style={{ fontSize: 18 }}>
+                              {myAfter ?? '-'}
+                              {ratingDiff !== null && (
+                                <span style={{
+                                  fontSize: 13,
+                                  marginLeft: 6,
+                                  color: ratingDiff >= 0 ? 'var(--success)' : 'var(--danger)',
+                                }}>
+                                  {ratingDiff >= 0 ? '+' : ''}{ratingDiff}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                            {new Date(match.created_at).toLocaleString()}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )

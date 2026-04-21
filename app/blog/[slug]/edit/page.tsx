@@ -186,7 +186,10 @@ export default function EditBlogPostPage() {
   if (loading) {
     return (
       <main>
-        <h1>ASCENT レビューを編集</h1>
+        <div className="eyebrow">EDIT REVIEW</div>
+        <h1 className="display" style={{ marginBottom: 8 }}>
+          <em>Edit</em> Review
+        </h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -195,9 +198,12 @@ export default function EditBlogPostPage() {
   if (notFound) {
     return (
       <main>
-        <h1>ASCENT レビューを編集</h1>
+        <div className="eyebrow">EDIT REVIEW</div>
+        <h1 className="display" style={{ marginBottom: 8 }}>
+          <em>Edit</em> Review
+        </h1>
         <EmptyCard title="レビューが見つかりません" message="" />
-        <div className="section row">
+        <div className="row" style={{ marginTop: 16 }}>
           <button onClick={() => router.push('/blog')}>レビュー一覧へ</button>
         </div>
       </main>
@@ -206,122 +212,104 @@ export default function EditBlogPostPage() {
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>ASCENT レビューを編集</h1>
-          <p className="muted">Markdown 形式で記述できます</p>
-        </div>
-        <div className="row">
-          <button onClick={() => router.push(`/blog/${originalSlug}`)}>
-            キャンセル
-          </button>
+      <div className="eyebrow">EDIT REVIEW</div>
+      <h1 className="display" style={{ marginBottom: 8 }}>
+        <em>Edit</em> Review
+      </h1>
+      <p className="muted">Markdown 形式で記述できます</p>
+
+      <div className="section card-strong">
+        <div className="sec-title">タイトル</div>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="コントローラーレビューのタイトル"
+        />
+      </div>
+
+      <div className="section card-strong">
+        <div className="sec-title">コントローラー</div>
+        <select
+          value={controllerName}
+          onChange={(e) => setControllerName(e.target.value)}
+        >
+          <option value="">選択してください</option>
+          {CONTROLLER_GROUPS.map((g) => (
+            <optgroup key={g.manufacturer} label={g.manufacturer}>
+              {g.options.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </div>
+
+      <div className="section card-strong">
+        <div className="sec-title">評価</div>
+        <div className="row" style={{ gap: 4 }}>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setRatingValue(n)}
+              style={{
+                fontSize: '1.5rem',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                boxShadow: 'none',
+                color: n <= ratingValue ? 'var(--cyan)' : 'var(--text-dim)',
+              }}
+            >
+              {n <= ratingValue ? '★' : '☆'}
+            </button>
+          ))}
         </div>
       </div>
 
       <div className="section card-strong">
-        <h2>タイトル</h2>
-        <div className="card">
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="コントローラーレビューのタイトル"
-          />
-        </div>
+        <div className="sec-title">抜粋（任意）</div>
+        <textarea
+          value={excerpt}
+          onChange={(e) => setExcerpt(e.target.value)}
+        />
       </div>
 
       <div className="section card-strong">
-        <h2>コントローラー</h2>
-        <div className="card">
-          <select
-            value={controllerName}
-            onChange={(e) => setControllerName(e.target.value)}
-          >
-            <option value="">選択してください</option>
-            {CONTROLLER_GROUPS.map((g) => (
-              <optgroup key={g.manufacturer} label={g.manufacturer}>
-                {g.options.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+        <div className="sec-title">本文 (Markdown)</div>
+        <textarea
+          ref={bodyRef}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={16}
+        />
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+          <label className="muted">
+            画像を挿入:{' '}
+            <input
+              type="file"
+              accept="image/*"
+              disabled={uploading}
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) void handleUploadImage(f)
+                e.target.value = ''
+              }}
+            />
+          </label>
+          {uploading && <span className="muted">アップロード中...</span>}
         </div>
       </div>
 
-      <div className="section card-strong">
-        <h2>評価</h2>
-        <div className="card">
-          <div className="row" style={{ gap: 4 }}>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setRatingValue(n)}
-                style={{
-                  fontSize: '1.5rem',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '4px 8px',
-                  color: n <= ratingValue ? 'var(--accent-cyan, #00e5ff)' : 'var(--text-muted, #888)',
-                }}
-              >
-                {n <= ratingValue ? '★' : '☆'}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="section card-strong">
-        <h2>抜粋（任意）</h2>
-        <div className="card">
-          <textarea
-            value={excerpt}
-            onChange={(e) => setExcerpt(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="section card-strong">
-        <h2>本文 (Markdown)</h2>
-        <div className="card">
-          <textarea
-            ref={bodyRef}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={16}
-          />
-          <div
-            className="row"
-            style={{ justifyContent: 'space-between', alignItems: 'center' }}
-          >
-            <label className="muted">
-              画像を挿入:{' '}
-              <input
-                type="file"
-                accept="image/*"
-                disabled={uploading}
-                onChange={(e) => {
-                  const f = e.target.files?.[0]
-                  if (f) void handleUploadImage(f)
-                  e.target.value = ''
-                }}
-              />
-            </label>
-            {uploading && <span className="muted">アップロード中...</span>}
-          </div>
-        </div>
-      </div>
-
-      <div className="section row" style={{ justifyContent: 'flex-end' }}>
-        <button onClick={() => router.push(`/blog/${originalSlug}`)}>
+      <div className="row" style={{ justifyContent: 'flex-end', marginTop: 24 }}>
+        <button className="btn-ghost" onClick={() => router.push(`/blog/${originalSlug}`)}>
           キャンセル
         </button>
-        <button onClick={handleSubmit} disabled={submitting}>
+        <button className="btn-primary" onClick={handleSubmit} disabled={submitting}>
           {submitting ? '保存中...' : '保存'}
         </button>
       </div>

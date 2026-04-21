@@ -132,7 +132,8 @@ function ReportNewContent() {
   if (loading) {
     return (
       <main>
-        <h1>ASCENT 通報</h1>
+        <p className="eyebrow">NEW REPORT</p>
+        <h1 className="display"><em>通報</em></h1>
         <LoadingCard message="読み込み中..." />
       </main>
     )
@@ -140,46 +141,30 @@ function ReportNewContent() {
 
   return (
     <main>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h1>
-            ASCENT 通報
-            {isMonitor && (
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  marginLeft: 8,
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                  background: 'var(--accent-cyan, #0ff)',
-                  color: '#000',
-                  verticalAlign: 'middle',
-                }}
-              >
-                監視ユーザー
-              </span>
-            )}
-          </h1>
-          <p className="muted">ルール違反などを運営に通報します</p>
-        </div>
-        <div className="row">
-          <button onClick={() => router.back()}>戻る</button>
+      <p className="eyebrow">NEW REPORT</p>
+      <div className="row" style={{ gap: 12, alignItems: 'baseline' }}>
+        <h1 className="display"><em>通報</em></h1>
+        {isMonitor && (
+          <span className="badge violet">監視ユーザー</span>
+        )}
+      </div>
+      <p className="muted">ルール違反などを運営に通報します</p>
+
+      <div className="section">
+        <p className="sec-title">通報対象</p>
+        <div className="card-strong">
+          <div className="card">
+            <p style={{ margin: 0 }}>
+              <strong>{reportedName || reportedId}</strong>
+            </p>
+            {matchId && <p className="dim mono mt-xs" style={{ fontSize: '0.75rem' }}>関連マッチ ID: {matchId}</p>}
+          </div>
         </div>
       </div>
 
-      <div className="section card-strong">
-        <h2>通報対象</h2>
-        <div className="card">
-          <p>
-            <strong>{reportedName || reportedId}</strong>
-          </p>
-          {matchId && <p className="muted">関連マッチ ID: {matchId}</p>}
-        </div>
-      </div>
-
-      <div className="section card-strong">
-        <h2>違反種別</h2>
-        <div className="card">
+      <div className="section">
+        <p className="sec-title">違反種別</p>
+        <div className="card-strong">
           <select value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">選択してください</option>
             {CATEGORIES.map((c) => (
@@ -192,16 +177,18 @@ function ReportNewContent() {
       </div>
 
       {isMonitor && isInstantCategory && (
-        <div className="section card" style={{ borderColor: 'var(--warning, orange)' }}>
-          <p style={{ color: 'var(--warning, orange)' }}>
-            <strong>注意:</strong> この通報は監視ユーザーとして送信されます。2人目の監視通報で対象者が24時間一時停止されます。
-          </p>
+        <div className="section">
+          <div className="card" style={{ borderColor: 'rgba(255,176,32,0.4)' }}>
+            <p style={{ color: 'var(--amber)', margin: 0 }}>
+              <strong>注意:</strong> この通報は監視ユーザーとして送信されます。2人目の監視通報で対象者が24時間一時停止されます。
+            </p>
+          </div>
         </div>
       )}
 
-      <div className="section card-strong">
-        <h2>通報相手のゲーム内ID（必須）</h2>
-        <div className="card">
+      <div className="section">
+        <p className="sec-title">通報相手のゲーム内ID（必須）</p>
+        <div className="card-strong">
           <input
             type="text"
             value={reportedGameId}
@@ -211,22 +198,22 @@ function ReportNewContent() {
         </div>
       </div>
 
-      <div className="section card-strong">
-        <h2>証拠動画URL（必須）</h2>
-        <div className="card">
+      <div className="section">
+        <p className="sec-title">証拠動画URL（必須）</p>
+        <div className="card-strong">
           <input
             type="url"
             value={evidenceUrl}
             onChange={(e) => setEvidenceUrl(e.target.value)}
             placeholder="例: https://youtube.com/watch?v=..."
           />
-          <p className="muted" style={{ marginTop: 4 }}>YouTube、X（Twitter）、Streamable などの動画URL</p>
+          <p className="muted mt-xs">YouTube、X（Twitter）、Streamable などの動画URL</p>
         </div>
       </div>
 
-      <div className="section card-strong">
-        <h2>詳細（任意）</h2>
-        <div className="card">
+      <div className="section">
+        <p className="sec-title">詳細（任意）</p>
+        <div className="card-strong">
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -236,8 +223,8 @@ function ReportNewContent() {
       </div>
 
       <div className="section row" style={{ justifyContent: 'flex-end' }}>
-        <button onClick={() => router.back()}>キャンセル</button>
-        <button onClick={handleSubmit} disabled={submitting}>
+        <button className="btn-ghost" onClick={() => router.back()}>キャンセル</button>
+        <button className="btn-primary" onClick={handleSubmit} disabled={submitting}>
           {submitting ? '送信中...' : '通報を送信'}
         </button>
       </div>
@@ -250,7 +237,8 @@ export default function ReportNewPage() {
     <Suspense
       fallback={
         <main>
-          <h1>ASCENT 通報</h1>
+          <p className="eyebrow">NEW REPORT</p>
+          <h1 className="display"><em>通報</em></h1>
           <LoadingCard message="読み込み中..." />
         </main>
       }
