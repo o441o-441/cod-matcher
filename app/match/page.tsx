@@ -1186,15 +1186,15 @@ export default function MatchPage() {
                     対戦開始
                   </button>
                 )}
-                {isPartyLeader ? (
+                {isPartyLeader && myPartyMembers.length > 1 ? (
                   <button onClick={handleDisbandParty} disabled={busy || isWaiting} className="btn-danger">
                     パーティ解散
                   </button>
-                ) : (
+                ) : !isPartyLeader ? (
                   <button onClick={handleLeaveParty} disabled={busy || isWaiting} className="btn-danger">
                     パーティ脱退
                   </button>
-                )}
+                ) : null}
               </div>
             )}
           </div>

@@ -1271,6 +1271,20 @@ export default function BanpickPage() {
                         SR {team.effective_avg_rating}
                       </span>
                     </div>
+                    <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {(team.side === "alpha" ? groupedMembers.alpha : groupedMembers.bravo).map((m) => (
+                        <span key={m.id} style={{
+                          fontSize: 11,
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          background: team.side === "alpha" ? "var(--alpha-soft)" : "var(--bravo-soft)",
+                          color: team.side === "alpha" ? "var(--alpha)" : "var(--bravo)",
+                          fontWeight: 600,
+                        }}>
+                          {m.profiles?.display_name ?? m.user_id.slice(0, 6)}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 );
               })}

@@ -131,11 +131,13 @@ export default function MatchConfirmPage() {
   const [chatInput, setChatInput] = useState("");
   const [showHostPopup, setShowHostPopup] = useState(false);
   const [showNonHostPopup, setShowNonHostPopup] = useState(false);
+  const [showLobbyCodePopup, setShowLobbyCodePopup] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const prevMsgCountRef = useRef(0);
   const loadBusyRef = useRef(false);
   const cachedUidRef = useRef<string | null>(null);
   const hostPopupShownRef = useRef(false);
+  const lobbyCodePopupShownRef = useRef(false);
 
   const clearMessages = () => setErrorText(null);
 
@@ -271,6 +273,14 @@ export default function MatchConfirmPage() {
     }
   }, [isHost, match?.host_user_id, myUserId]);
 
+  // Show popup when lobby code is set
+  useEffect(() => {
+    if (!match?.lobby_code) return;
+    if (lobbyCodePopupShownRef.current) return;
+    lobbyCodePopupShownRef.current = true;
+    setShowLobbyCodePopup(true);
+  }, [match?.lobby_code]);
+
   const [lobbyCodeInput, setLobbyCodeInput] = useState("");
 
   const handleSendLobbyCode = async () => {
@@ -376,6 +386,36 @@ export default function MatchConfirmPage() {
               <button
                 className="btn-primary"
                 onClick={() => setShowNonHostPopup(false)}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lobby code sent popup */}
+      {showLobbyCodePopup && (
+        <div className="modal-root" onClick={() => setShowLobbyCodePopup(false)}>
+          <div className="modal-scrim" />
+          <div className="modal-card" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-body" style={{ padding: "32px 24px" }}>
+              <h2 style={{ marginTop: 0, textAlign: "center" }}>ロビーコードが送信されました。</h2>
+              <p style={{ lineHeight: 1.8 }}>
+                プレイヤーがロビーに揃い、ルール設定が完了したら試合を開始してください。
+              </p>
+              <p style={{ lineHeight: 1.8 }}>
+                HARDPOINT, SEARCH&amp;DESTROY, OVERLOADの順に行い、先に2勝したチームが勝者となります。
+              </p>
+              <p className="muted" style={{ fontSize: 13, lineHeight: 1.8, marginTop: 12 }}>
+                ※勢力はチーム1がJSOC、チーム2がギルドとなります。<br />
+                &nbsp;&nbsp;プレイヤーにカーソルを合わせてリロードボタンで勢力を移動できます。
+              </p>
+            </div>
+            <div className="modal-foot" style={{ justifyContent: "center" }}>
+              <button
+                className="btn-primary"
+                onClick={() => setShowLobbyCodePopup(false)}
               >
                 OK
               </button>
