@@ -1,0 +1,477 @@
+/* ==========================================================================
+   WIN STREAK CELEBRATION v2 — SEASON BEST
+   Pachinko hold gauge + rank promotion + glass shards + heartbeat + looping stingers
+   ========================================================================== */
+
+.ws-root {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  overflow: hidden;
+  font-family: var(--font-display);
+  color: #fff;
+  isolation: isolate;
+}
+
+body.ws-active { overflow: hidden; }
+
+/* Backdrop */
+.ws-backdrop {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, rgba(10,14,32,0.65) 0%, rgba(0,0,0,0.96) 80%);
+  opacity: 0;
+  animation: ws-backdrop-in 0.3s ease forwards;
+}
+@keyframes ws-backdrop-in {
+  to { opacity: 1; }
+}
+
+/* ==========================================================================
+   PHASE 1 — HOLD GAUGE
+   ========================================================================== */
+.ws-hold {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(80vw, 640px);
+  height: 64px;
+  border-radius: 32px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.18);
+  overflow: hidden;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.5), 0 40px 80px rgba(0,0,0,0.7);
+}
+.ws-hold-fill {
+  position: absolute;
+  inset: 2px;
+  border-radius: 30px;
+  width: 0%;
+  transition: width 0.2s linear, background 0.25s ease;
+}
+.ws-hold-label {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 0.4em;
+  color: rgba(255,255,255,0.9);
+  text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+  z-index: 2;
+  pointer-events: none;
+}
+.ws-hold-ping {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  transform: translate(-50%, -50%) scale(0);
+  animation: ws-ping 0.6s ease-out;
+}
+@keyframes ws-ping {
+  0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(8); opacity: 0; }
+}
+
+/* ==========================================================================
+   COLOR LEVEL INDICATORS
+   ========================================================================== */
+.ws-levels {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 60px);
+  transform: translate(-50%, 0);
+  display: flex;
+  gap: 10px;
+  opacity: 0;
+  animation: ws-fade-in 0.3s ease forwards;
+}
+.ws-level-chip {
+  width: 46px;
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  transition: all 0.3s ease;
+}
+.ws-level-chip.on {
+  box-shadow: 0 0 14px var(--chip-color), 0 0 28px var(--chip-color);
+  transform: scaleY(1.6);
+}
+.ws-level-chip.current {
+  animation: ws-chip-pulse 0.4s ease infinite alternate;
+}
+@keyframes ws-chip-pulse {
+  0%   { transform: scaleY(1.6) scaleX(1); }
+  100% { transform: scaleY(2.2) scaleX(1.15); }
+}
+
+/* ==========================================================================
+   PHASE 2 — EXPLOSION
+   ========================================================================== */
+.ws-explosion {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.ws-explosion.active {
+  animation: ws-expl-flash 0.8s ease-out forwards;
+}
+@keyframes ws-expl-flash {
+  0%   { opacity: 0; }
+  5%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.ws-rainbow-burst {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 40px; height: 40px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    #ff3355, #ffaa00, #ffee00, #00ff88, #00aaff, #aa00ff, #ff00aa, #ff3355
+  );
+  filter: blur(4px);
+  opacity: 0;
+}
+.ws-rainbow-burst.active {
+  animation: ws-rainbow-expand 1.2s ease-out forwards;
+}
+@keyframes ws-rainbow-expand {
+  0%   { transform: translate(-50%, -50%) scale(0); opacity: 1; filter: blur(2px); }
+  40%  { transform: translate(-50%, -50%) scale(40); opacity: 0.6; filter: blur(30px); }
+  100% { transform: translate(-50%, -50%) scale(80); opacity: 0; filter: blur(60px); }
+}
+
+/* Shockwave rings */
+.ws-ring {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 40px; height: 40px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 3px solid #fff;
+  opacity: 0;
+}
+.ws-ring.active {
+  animation: ws-ring-out 1.2s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+.ws-ring.r2 { animation-delay: 0.15s; border-color: rgba(255,255,255,0.6); }
+.ws-ring.r3 { animation-delay: 0.3s;  border-color: rgba(255,255,255,0.3); }
+@keyframes ws-ring-out {
+  0%   { transform: translate(-50%, -50%) scale(0); opacity: 1; border-width: 8px; }
+  100% { transform: translate(-50%, -50%) scale(60); opacity: 0; border-width: 1px; }
+}
+
+/* ==========================================================================
+   PHASE 3 — MAIN TEXT
+   ========================================================================== */
+.ws-stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+}
+.ws-stage.active {
+  animation: ws-stage-in 0.5s cubic-bezier(0.2, 0.9, 0.2, 1.1) forwards;
+}
+@keyframes ws-stage-in {
+  0%   { opacity: 0; transform: scale(2.5); filter: blur(24px); }
+  60%  { opacity: 1; transform: scale(1.08); filter: blur(0); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+.ws-eyebrow {
+  font-size: clamp(11px, 1.6vw, 14px);
+  letter-spacing: 0.5em;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
+  margin-bottom: 14px;
+}
+.ws-bigtext {
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 0.85;
+  font-size: clamp(3.5rem, 14vw, 13rem);
+  text-transform: uppercase;
+}
+.ws-bigtext.rainbow {
+  background: linear-gradient(120deg,
+    #ff3355 0%, #ffaa00 14%, #ffee00 28%, #00ff88 42%,
+    #00aaff 56%, #aa00ff 70%, #ff00aa 84%, #ff3355 100%);
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 40px rgba(0,229,255,0.8)) drop-shadow(0 0 80px rgba(255,43,214,0.5));
+  animation: ws-rainbow-shimmer 2s linear infinite;
+}
+@keyframes ws-rainbow-shimmer {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+.ws-bigtext.solid {
+  color: #fff;
+  text-shadow: 0 0 40px var(--tier-glow, #fff), 0 0 80px var(--tier-glow, #fff);
+}
+.ws-count {
+  margin-top: 18px;
+  font-size: clamp(14px, 2vw, 20px);
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  color: rgba(255,255,255,0.9);
+}
+.ws-count-num {
+  font-size: clamp(32px, 5vw, 60px);
+  margin: 0 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tier-glow, #fff);
+  text-shadow: 0 0 20px currentColor;
+}
+.ws-sub {
+  margin-top: 10px;
+  font-size: clamp(10px, 1.3vw, 12px);
+  letter-spacing: 0.4em;
+  color: rgba(255,255,255,0.6);
+}
+
+/* ==========================================================================
+   PHASE 4 — RANK PROMOTION
+   ========================================================================== */
+.ws-promo {
+  position: absolute;
+  left: 50%;
+  bottom: 10%;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: auto auto auto auto;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 28px;
+  background: linear-gradient(135deg, rgba(0,0,0,0.75), rgba(20,10,30,0.85));
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 14px;
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.4), 0 30px 60px rgba(0,0,0,0.6), 0 0 60px var(--tier-glow, transparent);
+  opacity: 0;
+  min-width: 320px;
+}
+.ws-promo.active {
+  animation: ws-promo-slam 0.5s cubic-bezier(0.2, 0.9, 0.2, 1.3) forwards;
+}
+@keyframes ws-promo-slam {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(40px) scale(0.5); filter: blur(12px); }
+  60%  { opacity: 1; transform: translateX(-50%) translateY(-6px) scale(1.04); filter: blur(0); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); filter: blur(0); }
+}
+.ws-promo-label {
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  color: rgba(255,255,255,0.55);
+  font-family: var(--font-display);
+  text-align: left;
+  grid-column: 1 / -1;
+  margin-bottom: -6px;
+}
+.ws-promo-from {
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 32px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.55);
+  text-decoration: line-through;
+  text-decoration-color: rgba(255,80,80,0.8);
+  text-decoration-thickness: 3px;
+}
+.ws-promo-arrow {
+  font-size: 24px;
+  color: var(--tier-glow, #fff);
+  font-weight: 800;
+  filter: drop-shadow(0 0 8px currentColor);
+}
+.ws-promo-to {
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 44px;
+  font-weight: 900;
+  color: var(--tier-glow, #fff);
+  text-shadow: 0 0 16px currentColor;
+  letter-spacing: -0.02em;
+}
+.ws-promo-delta {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: #00ff88;
+  text-shadow: 0 0 12px #00ff88;
+  padding: 4px 10px;
+  border: 1.5px solid #00ff88;
+  border-radius: 6px;
+}
+
+/* ==========================================================================
+   GLASS SHARDS
+   ========================================================================== */
+.ws-shards {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ws-shard {
+  position: absolute;
+  width: 2px;
+  height: 24px;
+  background: linear-gradient(180deg, transparent, #fff 30%, #fff 70%, transparent);
+  filter: drop-shadow(0 0 6px #fff);
+  transform-origin: center;
+  opacity: 0;
+}
+.ws-shard.active {
+  animation: ws-shard-fly 1s cubic-bezier(0.2, 0.7, 0.4, 1) forwards;
+}
+@keyframes ws-shard-fly {
+  0%   { opacity: 1; transform: translate(0, 0) rotate(var(--tr)) scale(1); }
+  100% { opacity: 0; transform: translate(var(--tx), var(--ty)) rotate(calc(var(--tr) + 90deg)) scale(0.3); }
+}
+
+/* ==========================================================================
+   AMBIENT — VIGNETTE + SCANLINES
+   ========================================================================== */
+.ws-scan {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(255,255,255,0.04) 0px,
+    rgba(255,255,255,0.04) 1px,
+    transparent 2px,
+    transparent 4px
+  );
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  opacity: 0.5;
+}
+.ws-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.9) 100%);
+  pointer-events: none;
+}
+.ws-frame-edge {
+  position: absolute;
+  inset: 0;
+  border: 3px solid transparent;
+  pointer-events: none;
+  box-sizing: border-box;
+  opacity: 0;
+}
+.ws-frame-edge.active {
+  border-image: linear-gradient(135deg, #ff3355, #ffaa00, #ffee00, #00ff88, #00aaff, #aa00ff, #ff3355) 1;
+  box-shadow: inset 0 0 80px rgba(0,229,255,0.2), inset 0 0 30px rgba(255,43,214,0.15);
+  animation: ws-fade-in 0.4s ease forwards;
+}
+
+/* ==========================================================================
+   HEARTBEAT PULSE
+   ========================================================================== */
+.ws-heartbeat {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(255,0,80,0.12), transparent 60%);
+  pointer-events: none;
+  opacity: 0;
+}
+.ws-heartbeat.active {
+  animation: ws-hb 0.9s ease-in-out infinite;
+}
+@keyframes ws-hb {
+  0%, 100% { opacity: 0; }
+  15%      { opacity: 1; }
+  30%      { opacity: 0.3; }
+  45%      { opacity: 0.8; }
+  60%      { opacity: 0; }
+}
+
+/* ==========================================================================
+   SHARED UTILS
+   ========================================================================== */
+@keyframes ws-fade-in {
+  to { opacity: 1; }
+}
+.ws-fade-out {
+  animation: ws-fade-out 0.6s ease forwards !important;
+}
+@keyframes ws-fade-out {
+  to { opacity: 0 !important; }
+}
+
+/* ==========================================================================
+   DEV PAGE
+   ========================================================================== */
+.ws-dev-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+.ws-dev-card {
+  padding: 20px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line-strong);
+  background: rgba(10,14,32,0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  overflow: hidden;
+}
+.ws-dev-card::before {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(135deg, var(--tier-color, transparent), transparent 60%);
+  opacity: 0.1;
+}
+.ws-dev-card h4 {
+  margin: 0;
+  font-family: var(--font-display);
+  letter-spacing: 0.18em;
+  font-size: 13px;
+  text-transform: uppercase;
+  color: var(--tier-color, var(--accent));
+}
+.ws-dev-meta {
+  font-size: 11px;
+  line-height: 1.6;
+}
+.ws-dev-desc {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  min-height: 3.2em;
+}
+.ws-dev-custom {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 16px;
+  border-radius: var(--r-md);
+  background: rgba(0,229,255,0.04);
+  border: 1px solid var(--line);
+  margin-top: 16px;
+}
+@media (max-width: 560px) {
+  .ws-dev-custom { grid-template-columns: 1fr; }
+  .ws-promo { grid-template-columns: auto auto auto; gap: 10px; padding: 14px 18px; min-width: auto; }
+  .ws-promo-from { font-size: 22px; }
+  .ws-promo-to   { font-size: 30px; }
+  .ws-promo-delta{ font-size: 13px; }
+  .ws-promo-label{ font-size: 9px; }
+}

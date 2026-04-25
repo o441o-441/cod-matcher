@@ -198,7 +198,7 @@ export default function BlogPostPage() {
   const handleDeleteComment = async (commentId: string) => {
     if (!post) return
     if (!confirm('このコメントを削除しますか?')) return
-    const { error } = await supabase.from('post_comments').delete().eq('id', commentId)
+    const { error } = await supabase.from('post_comments').delete().eq('id', commentId).eq('author_user_id', currentUserProfileId!)
     if (error) {
       console.error('comment delete error:', error)
       showToast(error.message || '削除に失敗しました', 'error')
@@ -231,7 +231,7 @@ export default function BlogPostPage() {
   const handleDeletePost = async () => {
     if (!post) return
     if (!confirm('この記事を削除しますか?')) return
-    const { error } = await supabase.from('posts').delete().eq('id', post.id)
+    const { error } = await supabase.from('posts').delete().eq('id', post.id).eq('author_user_id', currentUserProfileId!)
     if (error) {
       console.error('post delete error:', error)
       showToast(error.message || '削除に失敗しました', 'error')

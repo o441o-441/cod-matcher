@@ -47,17 +47,20 @@ type MatchRow = {
 
 type TeamNameMap = Record<string, string>
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export default function TeamDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { showToast } = useToast()
 
-  const teamId =
+  const rawId =
     typeof params.id === 'string'
       ? params.id
       : Array.isArray(params.id)
       ? params.id[0]
       : ''
+  const teamId = UUID_RE.test(rawId) ? rawId : ''
 
   const [team, setTeam] = useState<TeamRow | null>(null)
   const [members, setMembers] = useState<TeamMemberRow[]>([])

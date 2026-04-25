@@ -13,6 +13,7 @@ type UserRow = {
   discord_id: string | null
   activision_id: string | null
   controller: string | null
+  platform: string | null
   is_profile_complete: boolean | null
 }
 
@@ -46,7 +47,7 @@ export default function ProfileEditPage() {
 
       const { data, error } = await supabase
         .from('users')
-        .select('*')
+        .select('id, auth_user_id, display_name, discord_id, activision_id, controller, platform, is_profile_complete')
         .eq('auth_user_id', session.user.id)
         .single()
 

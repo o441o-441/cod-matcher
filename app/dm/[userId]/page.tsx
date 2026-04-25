@@ -16,10 +16,13 @@ type MessageRow = {
   created_at: string
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export default function DmConversationPage() {
   const router = useRouter()
   const params = useParams<{ userId: string }>()
-  const partnerId = params?.userId
+  const rawPartnerId = params?.userId
+  const partnerId = rawPartnerId && UUID_RE.test(rawPartnerId) ? rawPartnerId : null
   const { showToast } = useToast()
 
   const [loading, setLoading] = useState(true)

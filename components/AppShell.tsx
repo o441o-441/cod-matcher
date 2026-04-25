@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import TopBar from './TopBar'
 import Footer from './Footer'
 import FriendsDrawer from './FriendsDrawer'
+import WinStreakHost from './WinStreakCelebration'
 
 const HIDE_SHELL_ROUTES = ['/login', '/auth/callback', '/onboarding']
 
@@ -50,6 +51,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <Footer />
       {friendsOpen && <FriendsDrawer onClose={() => setFriendsOpen(false)} />}
+      <WinStreakHost />
     </div>
   )
 }

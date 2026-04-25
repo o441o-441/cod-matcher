@@ -129,7 +129,7 @@ type MatchMessageRow = {
 };
 
 const PHASE_POOLS: Record<"hp" | "snd" | "ovl", string[]> = {
-  hp: ["酒", "コロッサス", "デン", "クリフタウン", "スカー", "グリッドロック"],
+  hp: ["酒", "コロッサス", "デン", "スカー", "グリッドロック"],
   snd: ["プラザ", "デン", "グリッドロック", "レイド", "スカー", "フリンジ"],
   ovl: ["デン", "エクスポージャー", "スカー"],
 };
@@ -159,7 +159,7 @@ const MAP_META: Record<string, { id: string; en: string }> = {
   "酒": { id: "sake", en: "Sake" },
   "コロッサス": { id: "colossus", en: "Colossus" },
   "デン": { id: "den", en: "Den" },
-  "クリフタウン": { id: "clifftown", en: "Clifftown" },
+
   "スカー": { id: "scar", en: "Scar" },
   "グリッドロック": { id: "gridlock", en: "Gridlock" },
   "プラザ": { id: "plaza", en: "Plaza" },

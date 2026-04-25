@@ -5,6 +5,13 @@ SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 begin
+  -- Authorization: only admins may call this function
+  IF NOT EXISTS (
+    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = true
+  ) THEN
+    RAISE EXCEPTION 'unauthorized: admin access required';
+  END IF;
+
   -- Reset logic:
   --   base = initial_rating (chosen during onboarding: 1400/1500/1600)
   --   if peak_rating >= 1600 → reset to 1600

@@ -75,7 +75,7 @@ export default function RulesPage() {
                 <li>酒</li>
                 <li>コロッサス</li>
                 <li>デン</li>
-                <li>クリフタウン</li>
+
                 <li>スカー</li>
                 <li>グリッドロック</li>
               </ul>

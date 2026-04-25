@@ -52,7 +52,7 @@ export default function EditBlogPostPage() {
 
       const { data, error } = await supabase
         .from('posts')
-        .select('id, slug, title, body, excerpt, tags, status, controller_name, rating')
+        .select('id, slug, title, body, excerpt, tags, status, controller_name, rating, author_user_id')
         .eq('slug', originalSlug)
         .maybeSingle<{
           id: string
@@ -64,11 +64,19 @@ export default function EditBlogPostPage() {
           status: 'draft' | 'published'
           controller_name: string | null
           rating: number | null
+          author_user_id: string
         }>()
 
       if (error) console.error('post fetch error:', error)
 
       if (!data) {
+        setNotFound(true)
+        setLoading(false)
+        return
+      }
+
+      // Ownership check: only the author can edit
+      if (data.author_user_id !== session.user.id) {
         setNotFound(true)
         setLoading(false)
         return
@@ -169,6 +177,7 @@ export default function EditBlogPostPage() {
       .from('posts')
       .update(patch)
       .eq('id', postId)
+      .eq('author_user_id', authUserId!)
       .select('slug')
       .single<{ slug: string }>()
     setSubmitting(false)

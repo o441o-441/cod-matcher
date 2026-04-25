@@ -1,4 +1,5 @@
 import './globals.css'
+import './winstreak.css'
 import { ToastProvider } from '@/components/ToastProvider'
 import CookieConsent from '@/components/CookieConsent'
 import GlobalNotificationListener from '@/components/GlobalNotificationListener'
