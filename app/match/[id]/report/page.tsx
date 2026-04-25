@@ -23,6 +23,7 @@ function useSoundOnChange<T>(value: T, soundFn: () => void) {
 import { Tutorial } from "@/components/Tutorial";
 import { LoadingSkeleton } from "@/components/UIState";
 import RatingDelta from "@/components/RatingDelta";
+import { triggerWinStreak } from "@/components/WinStreakCelebration";
 
 const REPORT_TUTORIAL = [
   { title: "試合結果報告", body: "試合が終わったら、勝者チームのボタンを押して結果を報告します。" },
@@ -446,6 +447,34 @@ export default function ReportPage() {
       }
     })();
   }, [match?.status, match?.approval_status, myUserId, myMember]);
+
+  // Fire win streak celebration when match completes with a win
+  const winStreakFiredRef = useRef(false);
+  useEffect(() => {
+    if (winStreakFiredRef.current) return;
+    if (match?.status !== "completed" || match.approval_status === "voided") return;
+    if (!myUserId || !myMatchTeamId) return;
+    // Only fire for winners
+    if (match.winner_match_team_id !== myMatchTeamId) return;
+
+    winStreakFiredRef.current = true;
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("win_streak")
+          .eq("id", myUserId)
+          .maybeSingle<{ win_streak: number }>();
+
+        const streak = data?.win_streak ?? 0;
+        if (streak >= 3) {
+          triggerWinStreak(streak);
+        }
+      } catch (e) {
+        console.error("win streak fetch error:", e);
+      }
+    })();
+  }, [match?.status, match?.approval_status, match?.winner_match_team_id, myUserId, myMatchTeamId]);
 
   const handleGameChange = <K extends keyof ReportFormGame>(
     index: number,
