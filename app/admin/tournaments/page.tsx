@@ -81,6 +81,9 @@ export default function AdminTournamentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  /** datetime-local の値にJSTオフセットを付加してtimestamptz用に変換 */
+  const toJSTTimestamp = (v: string) => (v ? `${v}:00+09:00` : null)
+
   const handleCreate = async () => {
     if (!title.trim() || !body.trim()) {
       showToast('タイトルと本文を入力してください', 'error')
@@ -90,9 +93,9 @@ export default function AdminTournamentsPage() {
     const { error } = await supabase.from('tournaments').insert({
       title: title.trim(),
       body: body.trim(),
-      event_date: eventDate || null,
-      event_date_end: eventDateEnd || null,
-      entry_deadline: entryDeadline || null,
+      event_date: toJSTTimestamp(eventDate),
+      event_date_end: toJSTTimestamp(eventDateEnd),
+      entry_deadline: toJSTTimestamp(entryDeadline),
       is_active: true,
       author_user_id: authUserId,
     })
@@ -148,9 +151,9 @@ export default function AdminTournamentsPage() {
       .update({
         title: editTitle.trim(),
         body: editBody.trim(),
-        event_date: editEventDate || null,
-        event_date_end: editEventDateEnd || null,
-        entry_deadline: editEntryDeadline || null,
+        event_date: toJSTTimestamp(editEventDate),
+        event_date_end: toJSTTimestamp(editEventDateEnd),
+        entry_deadline: toJSTTimestamp(editEntryDeadline),
         updated_at: new Date().toISOString(),
       })
       .eq('id', editingId)
