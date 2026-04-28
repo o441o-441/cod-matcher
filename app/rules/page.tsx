@@ -91,7 +91,6 @@ export default function RulesPage() {
             <li>設定後に再度確認しようとすると設定がリセットされることがあるので注意。</li>
             <li>試合後に設定がリセットされることがあるので注意。</li>
             <li>チームシャッフルバグは修正済み。</li>
-            <li>サーチ&amp;デストロイは CDL モードが使えないため、通常モードをカスタムして使用。</li>
           </ul>
         </div>
       </div>
@@ -109,57 +108,10 @@ export default function RulesPage() {
       <div className="section">
         <p className="sec-title">サーチ&amp;デストロイ設定</p>
         <div className="card-strong">
-          <div className="card" style={{ borderColor: 'rgba(255,77,109,0.3)' }}>
-            <p className="danger">
-              <strong>注意:</strong> CDL サーチ&amp;デストロイはデス後のカメラがバグっており、敵位置やボム設置が見えてしまうため使用しない。
-            </p>
-          </div>
-
-          <div className="card mt-s">
-            <h3>通常サーチ&amp;デストロイ（カスタム）</h3>
-            <p>通常の「サーチアンドデストロイ」を選択 → ルール設定で以下を変更</p>
-
-            <div className="grid grid-2">
-              <div>
-                <strong>ゲーム</strong>
-                <ul>
-                  <li>ラウンド制限時間: <span className="mono">1分30秒</span></li>
-                  <li>マッチ開始時間: <span className="mono">30秒</span></li>
-                  <li>入力切替許可: オフ</li>
-                  <li>コールアウトピンを許可: オフ</li>
-                </ul>
-              </div>
-              <div>
-                <strong>アドバンス</strong>
-                <ul>
-                  <li>解除時間: <span className="mono">7.5秒</span></li>
-                  <li>サイレント設置: オン</li>
-                </ul>
-              </div>
-              <div>
-                <strong>プレイヤー</strong>
-                <ul>
-                  <li>武器固定: オフ</li>
-                </ul>
-              </div>
-              <div>
-                <strong>チーム</strong>
-                <ul>
-                  <li>キルカメラ: オフ</li>
-                  <li>コンパス上の敵: オフ</li>
-                  <li>味方への誤射: オン</li>
-                </ul>
-              </div>
-              <div>
-                <strong>ゲームプレイ</strong>
-                <ul>
-                  <li>装備リミット: オフ</li>
-                  <li>バトルチャッター: オフ</li>
-                  <li>自動ドア: オフ</li>
-                  <li>マップのギミック: オフ</li>
-                </ul>
-              </div>
-            </div>
+          <div className="card">
+            <h3>CDL サーチ&amp;デストロイ</h3>
+            <p>「CDL サーチアンドデストロイ」を選択。<strong>ルール設定の変更はありません。</strong></p>
+            <p className="muted">※デス後のカメラバグは修正済みです。</p>
           </div>
         </div>
       </div>
@@ -168,7 +120,13 @@ export default function RulesPage() {
         <p className="sec-title">オーバーロード設定</p>
         <div className="card-strong">
           <div className="card">
-            <p>「CDL オーバーロード」を選択。<strong>ルール設定の変更はありません。</strong></p>
+            <p>「CDL オーバーロード」を選択し、下記<strong>ルール設定を変更してください。</strong></p>
+            <div className="mt-s">
+              <strong>アドバンス</strong>
+              <ul>
+                <li>所持で時間を一時停止: オフ</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
@@ -185,7 +143,8 @@ export default function RulesPage() {
 
             <div className="card">
               <h3>SMG</h3>
-              <p className="mono">DRAVEC 45</p>
+              <p className="mono">DRAVEC 45 / MPC-25</p>
+              <p className="muted">マズルは KuHN ポートコンプ以外使用不可 / バレルは 13.1&quot;レイザーバックバレル以外使用不可 / フローガードフォアグリップ使用不可 / 強装弾使用不可</p>
             </div>
 
             <div className="card">
