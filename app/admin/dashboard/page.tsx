@@ -298,6 +298,7 @@ export default function AdminDashboardPage() {
         </div>
         <div className="row">
           <button onClick={() => router.push('/admin/reports')}>通報管理</button>
+          <button onClick={() => router.push('/admin/security')}>セキュリティ</button>
           <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
         </div>
       </div>

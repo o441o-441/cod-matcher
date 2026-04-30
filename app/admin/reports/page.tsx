@@ -62,7 +62,29 @@ export default function AdminReportsPage() {
       showToast(error.message || '通報一覧の取得に失敗しました', 'error')
       return
     }
-    setReports((data ?? []) as AdminReportRow[])
+
+    const rows = (data ?? []) as AdminReportRow[]
+
+    // 通報者・対象者の表示名を取得
+    const userIds = [...new Set([
+      ...rows.map(r => r.reporter_user_id),
+      ...rows.map(r => r.reported_user_id),
+    ])]
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, display_name')
+        .in('id', userIds)
+      const nameMap = new Map(
+        (profiles ?? []).map((p: { id: string; display_name: string | null }) => [p.id, p.display_name])
+      )
+      for (const r of rows) {
+        r.reporter_display_name = nameMap.get(r.reporter_user_id) ?? null
+        r.reported_display_name = nameMap.get(r.reported_user_id) ?? null
+      }
+    }
+
+    setReports(rows)
   }
 
   useEffect(() => {

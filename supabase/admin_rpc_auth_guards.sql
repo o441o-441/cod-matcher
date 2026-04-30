@@ -111,7 +111,7 @@ begin
 
   RETURN QUERY
     SELECT * FROM public.reports
-    WHERE status = p_status
+    WHERE (p_status IS NULL OR status = p_status)
     ORDER BY created_at DESC
     LIMIT p_limit OFFSET p_offset;
 end;
