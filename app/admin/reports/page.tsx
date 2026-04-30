@@ -222,6 +222,7 @@ export default function AdminReportsPage() {
         <div className="row">
           <button onClick={() => router.push('/admin/bans')}>BANリスト</button>
           <button onClick={() => router.push('/admin/suspensions')}>一時停止リスト</button>
+          <button onClick={() => router.push('/admin/security')}>セキュリティ</button>
           <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
         </div>
       </div>

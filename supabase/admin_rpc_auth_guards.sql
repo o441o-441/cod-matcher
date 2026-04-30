@@ -71,22 +71,26 @@ $$;
 -- rpc_admin_lift_suspension
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.rpc_admin_lift_suspension(
-  p_suspension_id uuid
+  p_user_id uuid
 )
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
-begin
+BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = true
   ) THEN
     RAISE EXCEPTION 'unauthorized: admin access required';
   END IF;
 
-  DELETE FROM public.suspensions WHERE id = p_suspension_id;
-end;
+  DELETE FROM public.suspensions WHERE user_id = p_user_id;
+
+  UPDATE public.profiles
+  SET suspended_until = NULL
+  WHERE id = p_user_id;
+END;
 $$;
 
 -- ============================================================
