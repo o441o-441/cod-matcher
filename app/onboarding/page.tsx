@@ -59,6 +59,18 @@ export default function OnboardingPage() {
     const initialRating = Number(skillLevel)
     const user = session.user
 
+    // Activision ID 重複チェック（BAN 済ユーザーと照合）
+    if (activisionId.trim()) {
+      const { data: reuseCheck } = await supabase.rpc('rpc_check_activision_reuse', {
+        p_activision_id: activisionId.trim(),
+      })
+      if (reuseCheck?.blocked) {
+        alert(reuseCheck.reason || 'このActivision IDは使用できません')
+        setLoading(false)
+        return
+      }
+    }
+
     const { error } = await supabase
       .from('users')
       .update({

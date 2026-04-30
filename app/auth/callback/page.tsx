@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { runSecurityChecks } from '@/lib/security-check'
 
 function CallbackContent() {
   const router = useRouter()
@@ -38,6 +39,9 @@ function CallbackContent() {
         setErrorMessage(error.message || 'ログイン処理に失敗しました')
         return
       }
+
+      // サブアカウント検知（失敗してもログインは通す）
+      try { await runSecurityChecks() } catch { /* noop */ }
 
       router.replace('/menu')
     }

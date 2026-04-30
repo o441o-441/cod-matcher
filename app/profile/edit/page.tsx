@@ -94,6 +94,18 @@ export default function ProfileEditPage() {
 
     setSaving(true)
 
+    // Activision ID 重複チェック（BAN 済ユーザーと照合）
+    if (trimmedActivisionId) {
+      const { data: reuseCheck } = await supabase.rpc('rpc_check_activision_reuse', {
+        p_activision_id: trimmedActivisionId,
+      })
+      if (reuseCheck?.blocked) {
+        showToast(reuseCheck.reason || 'このActivision IDは使用できません', 'error')
+        setSaving(false)
+        return
+      }
+    }
+
     const { error } = await supabase
       .from('users')
       .update({

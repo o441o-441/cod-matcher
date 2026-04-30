@@ -77,6 +77,7 @@ export default function AdminDashboardPage() {
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([])
   const [disputedCount, setDisputedCount] = useState(0)
   const [voidedCount, setVoidedCount] = useState(0)
+  const [securityFlagCount, setSecurityFlagCount] = useState(0)
   const [clickStats, setClickStats] = useState<ClickStat[]>([])
   const [totalClicksThisMonth, setTotalClicksThisMonth] = useState(0)
   const [pageViewStats, setPageViewStats] = useState<PageViewStat[]>([])
@@ -115,7 +116,7 @@ export default function AdminDashboardPage() {
         { count: tu }, { count: tm }, { count: tmm },
         { count: tp }, { count: tpm }, { count: tcm }, { count: tlm },
         { count: bc }, { count: sc }, { count: mc }, { count: ac },
-        { count: dc }, { count: vc },
+        { count: dc }, { count: vc }, { count: sfc },
       ] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         supabase.from('matches').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
@@ -130,6 +131,7 @@ export default function AdminDashboardPage() {
         supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('is_approved', true),
         supabase.from('matches').select('id', { count: 'exact', head: true }).eq('disputed', true),
         supabase.from('matches').select('id', { count: 'exact', head: true }).eq('approval_status', 'voided'),
+        supabase.from('security_flags').select('id', { count: 'exact', head: true }).eq('resolved', false),
       ])
 
       setTotalUsers(tu ?? 0)
@@ -145,6 +147,7 @@ export default function AdminDashboardPage() {
       setApprovedCount(ac ?? 0)
       setDisputedCount(dc ?? 0)
       setVoidedCount(vc ?? 0)
+      setSecurityFlagCount(sfc ?? 0)
 
       // Active users this month
       const { data: activeData } = await supabase.from('rating_history').select('user_id').gte('created_at', monthStart)
@@ -406,6 +409,16 @@ export default function AdminDashboardPage() {
           <div className="card" style={{ textAlign: 'center' }}>
             <p className="muted">承認ユーザー</p>
             <h3>{approvedCount}</h3>
+          </div>
+          <div
+            className="card"
+            style={{ textAlign: 'center', cursor: 'pointer' }}
+            onClick={() => router.push('/admin/security')}
+          >
+            <p className="muted">セキュリティフラグ</p>
+            <h3 style={securityFlagCount > 0 ? { color: 'var(--danger)' } : undefined}>
+              {securityFlagCount}
+            </h3>
           </div>
         </div>
       </div>
