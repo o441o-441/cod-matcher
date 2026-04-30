@@ -137,6 +137,10 @@ export default function EditBlogPostPage() {
 
   const handleSubmit = async () => {
     if (!postId) return
+    if (authUserId) {
+      const { data: banCheck } = await supabase.from('profiles').select('is_banned').eq('id', authUserId).maybeSingle()
+      if (banCheck?.is_banned) { showToast('BANされているため編集できません', 'error'); return }
+    }
     if (!title.trim()) {
       showToast('タイトルを入力してください', 'error')
       return

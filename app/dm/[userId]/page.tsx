@@ -107,6 +107,8 @@ export default function DmConversationPage() {
 
   const handleSend = async () => {
     if (!myUserId || !partnerId) return
+    const { data: banCheck } = await supabase.from('profiles').select('is_banned').eq('id', myUserId).maybeSingle()
+    if (banCheck?.is_banned) { showToast('BANされているためメッセージを送信できません', 'error'); return }
     const trimmed = input.trim()
     if (!trimmed) {
       showToast('メッセージを入力してください', 'error')

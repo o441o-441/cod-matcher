@@ -167,6 +167,8 @@ export default function BlogPostPage() {
       router.push('/login')
       return
     }
+    const { data: banCheck } = await supabase.from('profiles').select('is_banned').eq('id', currentUserProfileId).maybeSingle()
+    if (banCheck?.is_banned) { showToast('BANされているためコメントできません', 'error'); return }
     const trimmed = commentBody.trim()
     if (!trimmed) {
       showToast('コメントを入力してください', 'error')

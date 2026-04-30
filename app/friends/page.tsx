@@ -93,6 +93,11 @@ export default function FriendsPage() {
       showToast('表示名を入力してください', 'error')
       return
     }
+    const { data: { session: s } } = await supabase.auth.getSession()
+    if (s?.user) {
+      const { data: banCheck } = await supabase.from('profiles').select('is_banned').eq('id', s.user.id).maybeSingle()
+      if (banCheck?.is_banned) { showToast('BANされているためフレンド申請できません', 'error'); return }
+    }
 
     setSending(true)
     const { error } = await supabase.rpc('rpc_send_friend_request', {

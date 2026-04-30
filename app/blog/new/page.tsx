@@ -110,6 +110,8 @@ export default function NewBlogPostPage() {
 
   const handleSubmit = async () => {
     if (!profileId) return
+    const { data: banCheck } = await supabase.from('profiles').select('is_banned').eq('id', profileId).maybeSingle()
+    if (banCheck?.is_banned) { showToast('BANされているため投稿できません', 'error'); return }
     if (!title.trim()) {
       showToast('タイトルを入力してください', 'error')
       return

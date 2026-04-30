@@ -78,6 +78,11 @@ function ReportNewContent() {
   }, [reportedId])
 
   const handleSubmit = async () => {
+    const { data: { session: s } } = await supabase.auth.getSession()
+    if (s?.user) {
+      const { data: banCheck } = await supabase.from('profiles').select('is_banned').eq('id', s.user.id).maybeSingle()
+      if (banCheck?.is_banned) { showToast('BANされているため通報できません', 'error'); return }
+    }
     if (!category) {
       showToast('違反種別を選択してください', 'error')
       return
