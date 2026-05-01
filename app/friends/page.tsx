@@ -39,6 +39,13 @@ export default function FriendsPage() {
   const [searchName, setSearchName] = useState('')
   const [sending, setSending] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [showGuide, setShowGuide] = useState(false)
+
+  useEffect(() => {
+    if (!localStorage.getItem('friends_guide_dismissed')) {
+      setShowGuide(true)
+    }
+  }, [])
 
   const fetchAll = async () => {
     const [friendsRes, incomingRes, sentRes] = await Promise.all([
@@ -185,6 +192,34 @@ export default function FriendsPage() {
       <p className="eyebrow">FRIENDS</p>
       <h1 className="display"><em>フレンド</em></h1>
       <p className="muted">フレンドの追加・管理ができます</p>
+
+      {showGuide && (
+        <div className="section card-strong" style={{ borderLeft: '3px solid var(--accent-cyan)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <p style={{ fontWeight: 700, marginTop: 0 }}>フレンドの追加方法</p>
+              <ol style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8 }}>
+                <li>下の「フレンド申請を送る」欄に、追加したい相手の<strong>表示名</strong>を正確に入力</li>
+                <li>「申請を送る」ボタンを押す</li>
+                <li>相手が「受信した申請」から承認すると、フレンド一覧に追加されます</li>
+              </ol>
+              <p className="muted" style={{ fontSize: 13 }}>
+                表示名はマイページやプロフィール画面で確認できます。大文字・小文字も一致させてください。
+              </p>
+            </div>
+            <button
+              className="btn-ghost btn-sm"
+              style={{ flexShrink: 0, marginLeft: 12 }}
+              onClick={() => {
+                localStorage.setItem('friends_guide_dismissed', '1')
+                setShowGuide(false)
+              }}
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="section">
         <p className="sec-title">フレンド申請を送る</p>
