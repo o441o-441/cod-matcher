@@ -714,7 +714,7 @@ export default function MatchConfirmPage() {
                     })}
                   </div>
                   <p className="dim" style={{ fontSize: 11, marginTop: 8 }}>
-                    トロフィー: {trophyList.length}/2 ・ SR: {srUser ? "1/1" : "なし"}
+                    トロフィー: {trophyList.length}/2 ・ SR: {srUser && srUser !== 'none' ? "1/1" : "なし"}
                   </p>
                 </div>
               );

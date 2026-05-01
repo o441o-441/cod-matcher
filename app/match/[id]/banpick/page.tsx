@@ -383,10 +383,8 @@ export default function BanpickPage() {
 
   const allTrophyDone = alphaTrophyDone && bravoTrophyDone;
 
-  const [alphaSrSkipped, setAlphaSrSkipped] = useState(false);
-  const [bravoSrSkipped, setBravoSrSkipped] = useState(false);
-  const alphaSrDone = !!alphaTeam?.sr_user || alphaSrSkipped;
-  const bravoSrDone = !!bravoTeam?.sr_user || bravoSrSkipped;
+  const alphaSrDone = !!alphaTeam?.sr_user;
+  const bravoSrDone = !!bravoTeam?.sr_user;
   const allSrDone = alphaSrDone && bravoSrDone;
 
   const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
@@ -702,9 +700,21 @@ export default function BanpickPage() {
     }
   };
 
-  const handleSkipSr = (side: "alpha" | "bravo") => {
-    if (side === "alpha") setAlphaSrSkipped(true);
-    else setBravoSrSkipped(true);
+  const handleSkipSr = async (side: "alpha" | "bravo") => {
+    if (!matchId) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc("rpc_skip_sr_user", {
+        p_match_id: matchId,
+        p_side: side,
+      });
+      if (error) throw error;
+      await loadAll({ silent: true });
+    } catch (e) {
+      setErrorText(e instanceof Error ? e.message : "SRスキップに失敗しました。");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleSelectHost = async () => {
@@ -1263,8 +1273,8 @@ export default function BanpickPage() {
                   const teamMembers = groupedMembers[side];
                   const srUser = team?.sr_user ?? null;
                   const isMyTeam = !!myMatchTeamId && team?.id === myMatchTeamId;
-                  const srSkipped = side === "alpha" ? alphaSrSkipped : bravoSrSkipped;
-                  const srDone = !!srUser || srSkipped;
+                  const srSkipped = srUser === 'none';
+                  const srDone = !!srUser;
 
                   return (
                     <div key={side} style={{ marginBottom: 12 }}>
