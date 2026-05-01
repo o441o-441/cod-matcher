@@ -24,7 +24,29 @@ export default function QueueStatusBar() {
     }
     if (!uid) { setWaiting(false); return }
 
-    // パーティメンバーシップからパーティIDを取得
+    // 1. アクティブマッチがあるか（match_team_membersから直接検索）
+    const { data: activeMatchData } = await supabase
+      .from('match_team_members')
+      .select('match_teams!inner(match_id, matches!inner(id, status))')
+      .eq('user_id', uid)
+
+    type ActiveRow = { match_teams: { match_id: string; matches: { id: string; status: string }[] }[] }
+    const activeRows = (activeMatchData ?? []) as unknown as ActiveRow[]
+    for (const row of activeRows) {
+      const teams = Array.isArray(row.match_teams) ? row.match_teams : [row.match_teams]
+      for (const team of teams) {
+        const matches = Array.isArray(team.matches) ? team.matches : [team.matches]
+        const bm = matches.find((m: { status: string }) => m?.status === 'banpick')
+        if (bm) {
+          setWaiting(false)
+          waitStartRef.current = null
+          setMatchFoundId(bm.id)
+          return
+        }
+      }
+    }
+
+    // 2. waitingキューがあるか（パーティ経由）
     const { data: pm } = await supabase
       .from('party_members')
       .select('party_id')
@@ -33,7 +55,6 @@ export default function QueueStatusBar() {
     const partyIds = [...new Set((pm ?? []).map((r: { party_id: string }) => r.party_id))]
     if (partyIds.length === 0) { setWaiting(false); return }
 
-    // waitingエントリがあるか
     const { data: waitingEntries } = await supabase
       .from('queue_entries')
       .select('id,created_at')
@@ -47,27 +68,6 @@ export default function QueueStatusBar() {
         waitStartRef.current = new Date(waitingEntries[0].created_at).getTime()
       }
       return
-    }
-
-    // matchedエントリがあるか → アクティブマッチを探す
-    const { data: matchedEntries } = await supabase
-      .from('queue_entries')
-      .select('id')
-      .in('party_id', partyIds)
-      .eq('status', 'matched')
-
-    if (matchedEntries && matchedEntries.length > 0) {
-      const matchedIds = matchedEntries.map((e: { id: string }) => e.id)
-      const { data: activeMatch } = await supabase.rpc('rpc_get_active_match_for_queue_entries', {
-        p_queue_entry_ids: matchedIds,
-      })
-      const rows = (activeMatch ?? []) as Array<{ match_id: string; match_status: string }>
-      if (rows.length > 0 && rows[0].match_status === 'banpick') {
-        setWaiting(false)
-        waitStartRef.current = null
-        setMatchFoundId(rows[0].match_id)
-        return
-      }
     }
 
     setWaiting(false)
