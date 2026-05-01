@@ -82,6 +82,8 @@ export const CONTROLLER_GROUPS: ControllerGroup[] = [
     manufacturer: 'GameSir',
     options: [
       'GameSir G7',
+      'GameSir G7 Pro',
+      'GameSir G7 Pro 8K',
       'GameSir G7 SE',
       'GameSir G7 HE',
       'GameSir T4 Kaleid',
