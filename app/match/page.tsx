@@ -286,19 +286,19 @@ export default function MatchPage() {
         return;
       }
 
-      // Phase 1: profile + party membership + pending invites + friends + team (parallel)
+      // Phase 1: profile + party membership (always), invites + friends + team (initial only)
       const [profileRes, partyMemberRes, pendingInvitesRes, friendsRes, membershipRes] = await Promise.all([
         supabase.from("profiles").select("id,display_name,current_rating,is_banned,is_onboarded").eq("id", uid).maybeSingle<ProfileRow>(),
         supabase.from("party_members").select("id,party_id,user_id").eq("user_id", uid).returns<PartyMemberRow[]>(),
-        supabase.rpc("rpc_list_my_pending_party_invites"),
-        supabase.rpc("rpc_list_my_friends"),
-        supabase.from("team_members").select("team_id").eq("user_id", uid).maybeSingle<{ team_id: string }>(),
+        opts?.silent ? Promise.resolve({ data: null, error: null }) : supabase.rpc("rpc_list_my_pending_party_invites"),
+        opts?.silent ? Promise.resolve({ data: null, error: null }) : supabase.rpc("rpc_list_my_friends"),
+        opts?.silent ? Promise.resolve({ data: null, error: null }) : supabase.from("team_members").select("team_id").eq("user_id", uid).maybeSingle<{ team_id: string }>(),
       ]);
 
       if (profileRes.error) throw profileRes.error;
 
       let resolvedProfile = profileRes.data ?? null;
-      if (!resolvedProfile || !resolvedProfile.is_onboarded) {
+      if (!opts?.silent && (!resolvedProfile || !resolvedProfile.is_onboarded)) {
         const { data: legacyUser } = await supabase
           .from("users")
           .select("display_name,is_profile_complete")
@@ -333,8 +333,8 @@ export default function MatchPage() {
         setFriends((friendsRes.data as { friend_user_id: string; friend_display_name: string | null }[] | null) ?? []);
       }
 
-      // Set team info from parallel result
-      if (membershipRes.data?.team_id) {
+      // Set team info from parallel result (skip on silent reload)
+      if (!opts?.silent && membershipRes.data?.team_id) {
         const [teamRes, memberRowsRes] = await Promise.all([
           supabase.from("teams").select("id, name").eq("id", membershipRes.data.team_id).maybeSingle<{ id: string; name: string }>(),
           supabase.from("team_members").select("user_id, profiles!inner(id, display_name)").eq("team_id", membershipRes.data.team_id),
@@ -357,7 +357,7 @@ export default function MatchPage() {
         } else {
           setMyTeam(null);
         }
-      } else {
+      } else if (!opts?.silent) {
         setMyTeam(null);
       }
 
@@ -408,24 +408,13 @@ export default function MatchPage() {
         setMyMatchedEntryIds(matchedIds);
 
         if (matchedIds.length > 0) {
-          const { data: mtmData, error: mtmError } = await supabase
-            .from("match_team_members")
-            .select("source_queue_entry_id,match_team_id")
-            .in("source_queue_entry_id", matchedIds);
-          if (mtmError) throw mtmError;
-
-          const matchTeamIds = [...new Set(((mtmData ?? []) as Array<{ match_team_id: string | null }>).map((x) => x.match_team_id).filter((id): id is string => Boolean(id)))];
-
-          if (matchTeamIds.length > 0) {
-            const { data: matchTeamsData, error: matchTeamsError } = await supabase.from("match_teams").select("id,match_id").in("id", matchTeamIds);
-            if (matchTeamsError) throw matchTeamsError;
-            const matchIds = [...new Set(((matchTeamsData ?? []) as Array<{ match_id: string | null }>).map((x) => x.match_id).filter((id): id is string => Boolean(id)))];
-
-            if (matchIds.length > 0) {
-              const { data: matchesData, error: matchesError } = await supabase.from("matches").select("id,status,matched_at").in("id", matchIds).in("status", ["banpick", "ready", "in_progress", "report_pending"]).order("matched_at", { ascending: false }).limit(1).returns<MatchRow[]>();
-              if (matchesError) throw matchesError;
-              setMyActiveMatch((matchesData ?? [])[0] ?? null);
-            } else { setMyActiveMatch(null); }
+          const { data: activeMatchData, error: activeMatchError } = await supabase.rpc("rpc_get_active_match_for_queue_entries", {
+            p_queue_entry_ids: matchedIds,
+          });
+          if (activeMatchError) throw activeMatchError;
+          const rows = (activeMatchData ?? []) as Array<{ match_id: string; match_status: string; matched_at: string }>;
+          if (rows.length > 0) {
+            setMyActiveMatch({ id: rows[0].match_id, status: rows[0].match_status, matched_at: rows[0].matched_at });
           } else { setMyActiveMatch(null); }
         } else { setMyActiveMatch(null); }
       } else {
