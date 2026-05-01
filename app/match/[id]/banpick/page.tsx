@@ -509,6 +509,12 @@ export default function BanpickPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
 
+  // Fallback polling for state sync
+  useEffect(() => {
+    const interval = setInterval(() => void loadAll({ silent: true }), 10000);
+    return () => clearInterval(interval);
+  }, [loadAll]);
+
   // Auto-select host when banpick completes
   const autoHostTriggeredRef = useRef(false);
   useEffect(() => {
