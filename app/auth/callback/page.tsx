@@ -40,8 +40,8 @@ function CallbackContent() {
         return
       }
 
-      // サブアカウント検知（失敗してもログインは通す）
-      try { await runSecurityChecks() } catch { /* noop */ }
+      // サブアカウント検知（バックグラウンドで実行、ログインをブロックしない）
+      runSecurityChecks().catch(() => { /* noop */ })
 
       router.replace('/menu')
     }
