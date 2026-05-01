@@ -383,8 +383,8 @@ export default function BanpickPage() {
 
   const allTrophyDone = alphaTrophyDone && bravoTrophyDone;
 
-  const alphaSrDone = !!alphaTeam?.sr_user;
-  const bravoSrDone = !!bravoTeam?.sr_user;
+  const alphaSrDone = true;
+  const bravoSrDone = true;
   const allSrDone = alphaSrDone && bravoSrDone;
 
   const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
@@ -508,12 +508,6 @@ export default function BanpickPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
-
-  // Fallback polling for state sync
-  useEffect(() => {
-    const interval = setInterval(() => void loadAll({ silent: true }), 10000);
-    return () => clearInterval(interval);
-  }, [loadAll]);
 
   // Auto-select host when banpick completes
   const autoHostTriggeredRef = useRef(false);
@@ -1318,18 +1312,8 @@ export default function BanpickPage() {
                           })}
                         </div>
                       )}
-                      {isMyTeam && !srDone && (
-                        <button
-                          type="button"
-                          onClick={() => handleSkipSr(side)}
-                          className="btn-ghost btn-sm"
-                          style={{ marginTop: 6, fontSize: 11 }}
-                        >
-                          SRを使わない（スキップ）
-                        </button>
-                      )}
                       <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
-                        {srUser ? "選択済み: 1 / 1" : srSkipped ? "スキップ" : "選択済み: 0 / 1"}
+                        {srUser && srUser !== 'none' ? "選択済み: 1 / 1" : "選択済み: 0 / 1"}
                       </div>
                     </div>
                   );
