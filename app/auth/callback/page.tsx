@@ -57,6 +57,7 @@ function CallbackContent() {
   }, [])
 
   if (errorMessage) {
+    const isTimeout = errorMessage.includes('timed out') || errorMessage.includes('timeout') || errorMessage.includes('deadline')
     return (
       <main>
         <div className="eyebrow">AUTH</div>
@@ -64,12 +65,25 @@ function CallbackContent() {
           <em>ログインに失敗しました</em>
         </h1>
         <div className="section card-strong">
-          <p className="danger">{errorMessage}</p>
-          <div className="section">
-            <button onClick={() => router.replace('/login')}>
-              ログイン画面へ戻る
-            </button>
-          </div>
+          {isTimeout ? (
+            <>
+              <p className="danger">サーバーが混み合っています。しばらく待ってから再度お試しください。</p>
+              <div className="section row">
+                <button className="btn-primary" onClick={() => router.replace('/login')}>
+                  再度ログインする
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="danger">{errorMessage}</p>
+              <div className="section row">
+                <button className="btn-primary" onClick={() => router.replace('/login')}>
+                  再度ログインする
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </main>
     )
