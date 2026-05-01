@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { runSecurityChecks } from '@/lib/security-check'
+import { setCache } from '@/lib/cache'
 
 function CallbackContent() {
   const router = useRouter()
@@ -46,8 +47,30 @@ function CallbackContent() {
         return
       }
 
-      // サブアカウント検知（バックグラウンドで実行、ログインをブロックしない）
-      runSecurityChecks().catch(() => { /* noop */ })
+      // セッション確立後、メニューデータをプリフェッチ + セキュリティチェックを並行実行
+      const { data: { session: newSession } } = await supabase.auth.getSession()
+      if (newSession?.user) {
+        const uid = newSession.user.id
+        // プリフェッチ（結果をキャッシュに保存、遷移をブロックしない）
+        Promise.all([
+          supabase.from('profiles').select('is_admin, current_rating, peak_rating, wins, losses').eq('id', uid).maybeSingle(),
+          supabase.from('team_members').select('team_id').eq('user_id', uid).maybeSingle(),
+        ]).then(([profileRes, memberRes]) => {
+          const p = profileRes.data as { is_admin: boolean | null; current_rating: number | null; peak_rating: number | null; wins: number | null; losses: number | null } | null
+          if (p) {
+            setCache('menu_data', {
+              hasTeam: !!(memberRes.data as { team_id: string | null } | null)?.team_id,
+              isAdmin: !!p.is_admin,
+              rating: p.current_rating,
+              peakRating: p.peak_rating,
+              wins: p.wins,
+              losses: p.losses,
+            })
+          }
+        }).catch(() => { /* noop */ })
+
+        runSecurityChecks().catch(() => { /* noop */ })
+      }
 
       router.replace('/menu')
     }

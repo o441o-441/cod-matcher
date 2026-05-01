@@ -79,12 +79,15 @@ export default function MenuPage() {
         return
       }
 
-      let { data: userRow } = await supabase
-        .from('users')
-        .select('is_profile_complete')
-        .eq('auth_user_id', session.user.id)
-        .maybeSingle<{ is_profile_complete: boolean | null }>()
+      // 全クエリを並列実行
+      const [userRes, memberRes, profileRes, notifRes] = await Promise.all([
+        supabase.from('users').select('is_profile_complete').eq('auth_user_id', session.user.id).maybeSingle<{ is_profile_complete: boolean | null }>(),
+        supabase.from('team_members').select('team_id').eq('user_id', session.user.id).maybeSingle<{ team_id: string | null }>(),
+        supabase.from('profiles').select('is_admin, current_rating, peak_rating, wins, losses').eq('id', session.user.id).maybeSingle<{ is_admin: boolean | null; current_rating: number | null; peak_rating: number | null; wins: number | null; losses: number | null }>(),
+        supabase.from('notifications').select('id, type, body, link, created_at').eq('user_id', session.user.id).eq('is_read', false).order('created_at', { ascending: false }).limit(10),
+      ])
 
+      let userRow = userRes.data
       if (!userRow) {
         const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>
         const identities = (session.user.identities ?? []) as Array<{
@@ -92,60 +95,22 @@ export default function MenuPage() {
           identity_data?: Record<string, unknown>
         }>
         const discordIdentity = identities.find((i) => i?.provider === 'discord')
-        const identityData = (discordIdentity?.identity_data ?? {}) as Record<
-          string,
-          unknown
-        >
-        const pick = (o: Record<string, unknown>, k: string) => {
-          const v = o[k]
-          return typeof v === 'string' ? v : null
-        }
-        const discordUserId =
-          pick(identityData, 'provider_id') ||
-          pick(identityData, 'user_id') ||
-          pick(meta, 'provider_id') ||
-          pick(meta, 'sub') ||
-          null
-        const discordName =
-          pick(meta, 'full_name') ||
-          pick(meta, 'name') ||
-          pick(identityData, 'full_name') ||
-          pick(identityData, 'name') ||
-          pick(identityData, 'global_name') ||
-          pick(identityData, 'preferred_username') ||
-          null
+        const identityData = (discordIdentity?.identity_data ?? {}) as Record<string, unknown>
+        const pick = (o: Record<string, unknown>, k: string) => { const v = o[k]; return typeof v === 'string' ? v : null }
+        const discordUserId = pick(identityData, 'provider_id') || pick(identityData, 'user_id') || pick(meta, 'provider_id') || pick(meta, 'sub') || null
+        const discordName = pick(meta, 'full_name') || pick(meta, 'name') || pick(identityData, 'full_name') || pick(identityData, 'name') || pick(identityData, 'global_name') || pick(identityData, 'preferred_username') || null
 
         const { data: inserted, error: insertErr } = await supabase
           .from('users')
-          .insert({
-            auth_user_id: session.user.id,
-            display_name: null,
-            activision_id: null,
-            is_profile_complete: false,
-            discord_name: discordName,
-            discord_user_id: discordUserId,
-          })
+          .insert({ auth_user_id: session.user.id, display_name: null, activision_id: null, is_profile_complete: false, discord_name: discordName, discord_user_id: discordUserId })
           .select('is_profile_complete')
           .single<{ is_profile_complete: boolean | null }>()
 
-        if (insertErr) {
-          console.error('users insert error:', insertErr)
-          router.push('/onboarding')
-          return
-        }
+        if (insertErr) { console.error('users insert error:', insertErr); router.push('/onboarding'); return }
         userRow = inserted
       }
 
-      if (!userRow?.is_profile_complete) {
-        router.push('/onboarding')
-        return
-      }
-
-      const [memberRes, profileRes, notifRes] = await Promise.all([
-        supabase.from('team_members').select('team_id').eq('user_id', session.user.id).maybeSingle<{ team_id: string | null }>(),
-        supabase.from('profiles').select('is_admin, current_rating, peak_rating, wins, losses').eq('id', session.user.id).maybeSingle<{ is_admin: boolean | null; current_rating: number | null; peak_rating: number | null; wins: number | null; losses: number | null }>(),
-        supabase.from('notifications').select('id, type, body, link, created_at').eq('user_id', session.user.id).eq('is_read', false).order('created_at', { ascending: false }).limit(10),
-      ])
+      if (!userRow?.is_profile_complete) { router.push('/onboarding'); return }
 
       setHasTeam(!!memberRes.data?.team_id)
 
