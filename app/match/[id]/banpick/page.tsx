@@ -383,8 +383,8 @@ export default function BanpickPage() {
 
   const allTrophyDone = alphaTrophyDone && bravoTrophyDone;
 
-  const alphaSrDone = true;
-  const bravoSrDone = true;
+  const alphaSrDone = !!alphaTeam?.sr_user;
+  const bravoSrDone = !!bravoTeam?.sr_user;
   const allSrDone = alphaSrDone && bravoSrDone;
 
   const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
@@ -530,18 +530,20 @@ export default function BanpickPage() {
     })();
   }, [isBanpickCompleted, match?.host_user_id, myUserId, alphaTeam?.captain_user_id, myMatchTeamId, matchId, loadAll]);
 
-  // Show trophy popup when banpick completes
+  // Show trophy popup after SR selection is done
   const trophyPopupShownRef = useRef(false);
   useEffect(() => {
     if (!isBanpickCompleted) return;
+    if (!allSrDone) return;
     if (allTrophyDone) return;
     if (trophyPopupShownRef.current) return;
     trophyPopupShownRef.current = true;
     setShowTrophyPopup(true);
-  }, [isBanpickCompleted, allTrophyDone]);
+  }, [isBanpickCompleted, allSrDone, allTrophyDone]);
 
-  // Auto-navigate to confirm page when all trophies and SR are set
   const allSelectionDone = allTrophyDone && allSrDone;
+
+  // Auto-navigate to confirm page when SR + trophy both done
   const autoNavTriggeredRef = useRef(false);
   useEffect(() => {
     if (!isBanpickCompleted) return;
@@ -1219,106 +1221,125 @@ export default function BanpickPage() {
               <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
                 各チームからトロフィー・SR使用者を選択してください。3分以内に選択しないと強制敗北になります。
               </p>
+              {/* SR選択（先に完了させる） */}
+              <div className="sec-title" style={{ margin: "0 0 8px" }}>STEP 1: SR選択（S&amp;D）</div>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+                S&amp;Dで SR（VS RECON）を使う人を各チーム1人選択してください。使わない場合は「SRなし」を選択してください。
+              </p>
               {(["alpha", "bravo"] as const).map((side) => {
                 const team = side === "alpha" ? alphaTeam : bravoTeam;
                 const teamMembers = groupedMembers[side];
-                const trophyList: string[] = Array.isArray(team?.trophy_users) ? team.trophy_users : [];
+                const srUser = team?.sr_user ?? null;
                 const isMyTeam = !!myMatchTeamId && team?.id === myMatchTeamId;
+                const srDone = !!srUser;
 
                 return (
                   <div key={side} style={{ marginBottom: 12 }}>
                     <div className={`side-chip ${side}`} style={{ marginBottom: 8 }}>{side.toUpperCase()}</div>
                     <div className="stack-sm">
                       {teamMembers.map((m) => {
-                        const isTrophy = trophyList.includes(m.user_id);
+                        const isSr = srUser === m.user_id;
                         return (
                           <div key={m.id} className="card" style={{ padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                             <span style={{ fontSize: 13 }}>
                               {m.profiles?.display_name ?? m.user_id}
-                              {isTrophy && (
-                                <span style={{ marginLeft: 8, color: "var(--cyan)", fontSize: 11 }}>
-                                  [トロフィー]
+                              {isSr && (
+                                <span style={{ marginLeft: 8, color: "var(--violet)", fontSize: 11 }}>
+                                  [SR]
                                 </span>
                               )}
                             </span>
                             {isMyTeam && (
                               <button
                                 type="button"
-                                onClick={() => handleToggleTrophy(m.user_id)}
+                                onClick={() => handleToggleSr(m.user_id)}
                                 disabled={busy}
-                                className={isTrophy ? "btn-danger btn-sm" : "btn-sm"}
+                                className={isSr ? "btn-danger btn-sm" : "btn-sm"}
                                 style={{ padding: "4px 10px", fontSize: 11 }}
                               >
-                                {isTrophy ? "解除" : "選択"}
+                                {isSr ? "解除" : "選択"}
                               </button>
                             )}
                           </div>
                         );
                       })}
                     </div>
+                    {isMyTeam && !srDone && (
+                      <button
+                        type="button"
+                        onClick={() => handleSkipSr(side)}
+                        disabled={busy}
+                        className="btn-ghost btn-sm"
+                        style={{ marginTop: 6, fontSize: 11 }}
+                      >
+                        SRなし
+                      </button>
+                    )}
                     <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
-                      選択済み: {trophyList.length} / 2
+                      {srUser === 'none' ? "SRなし" : srUser ? "選択済み" : "未選択"}
                     </div>
                   </div>
                 );
               })}
 
-              <div style={{ marginTop: 20 }}>
-                <div className="sec-title" style={{ margin: "0 0 8px" }}>SR選択（S&amp;D・任意）</div>
-                <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-                  S&amp;Dで SR（VS RECON）を使う人を各チーム1人まで選択できます。使わない場合はスキップしてください。
-                </p>
-                {(["alpha", "bravo"] as const).map((side) => {
-                  const team = side === "alpha" ? alphaTeam : bravoTeam;
-                  const teamMembers = groupedMembers[side];
-                  const srUser = team?.sr_user ?? null;
-                  const isMyTeam = !!myMatchTeamId && team?.id === myMatchTeamId;
-                  const srSkipped = srUser === 'none';
-                  const srDone = !!srUser;
+              {/* トロフィー選択（SR完了後に表示） */}
+              {allSrDone && (
+                <div style={{ marginTop: 20 }}>
+                  <div className="sec-title" style={{ margin: "0 0 8px" }}>STEP 2: トロフィー選択</div>
+                  <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+                    各チームからトロフィー使用者を選択してください。
+                  </p>
+                  {(["alpha", "bravo"] as const).map((side) => {
+                    const team = side === "alpha" ? alphaTeam : bravoTeam;
+                    const teamMembers = groupedMembers[side];
+                    const trophyList: string[] = Array.isArray(team?.trophy_users) ? team.trophy_users : [];
+                    const isMyTeam = !!myMatchTeamId && team?.id === myMatchTeamId;
 
-                  return (
-                    <div key={side} style={{ marginBottom: 12 }}>
-                      <div className={`side-chip ${side}`} style={{ marginBottom: 8 }}>{side.toUpperCase()}</div>
-                      {srDone && !srUser && (
-                        <p className="dim" style={{ fontSize: 12 }}>SRなし（スキップ済み）</p>
-                      )}
-                      {!srSkipped && (
+                    return (
+                      <div key={side} style={{ marginBottom: 12 }}>
+                        <div className={`side-chip ${side}`} style={{ marginBottom: 8 }}>{side.toUpperCase()}</div>
                         <div className="stack-sm">
                           {teamMembers.map((m) => {
-                            const isSr = srUser === m.user_id;
+                            const isTrophy = trophyList.includes(m.user_id);
                             return (
                               <div key={m.id} className="card" style={{ padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                 <span style={{ fontSize: 13 }}>
                                   {m.profiles?.display_name ?? m.user_id}
-                                  {isSr && (
-                                    <span style={{ marginLeft: 8, color: "var(--violet)", fontSize: 11 }}>
-                                      [SR]
+                                  {isTrophy && (
+                                    <span style={{ marginLeft: 8, color: "var(--cyan)", fontSize: 11 }}>
+                                      [トロフィー]
                                     </span>
                                   )}
                                 </span>
                                 {isMyTeam && (
                                   <button
                                     type="button"
-                                    onClick={() => handleToggleSr(m.user_id)}
+                                    onClick={() => handleToggleTrophy(m.user_id)}
                                     disabled={busy}
-                                    className={isSr ? "btn-danger btn-sm" : "btn-sm"}
+                                    className={isTrophy ? "btn-danger btn-sm" : "btn-sm"}
                                     style={{ padding: "4px 10px", fontSize: 11 }}
                                   >
-                                    {isSr ? "解除" : "選択"}
+                                    {isTrophy ? "解除" : "選択"}
                                   </button>
                                 )}
                               </div>
                             );
                           })}
                         </div>
-                      )}
-                      <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
-                        {srUser && srUser !== 'none' ? "選択済み: 1 / 1" : "選択済み: 0 / 1"}
+                        <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
+                          選択済み: {trophyList.length} / 2
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
+              {!allSrDone && (
+                <div style={{ marginTop: 20, opacity: 0.5 }}>
+                  <div className="sec-title" style={{ margin: 0 }}>STEP 2: トロフィー選択</div>
+                  <p className="muted" style={{ fontSize: 12 }}>SR選択を完了してください</p>
+                </div>
+              )}
             </div>
           )}
         </div>
