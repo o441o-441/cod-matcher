@@ -43,6 +43,7 @@ type MatchRow = {
   host_user_id: string | null;
   host_match_team_id: string | null;
   host_selected_at: string | null;
+  sr_completed_at: string | null;
   lobby_code: string | null;
   lobby_code_set_by_user_id: string | null;
   lobby_code_set_at: string | null;
@@ -408,7 +409,7 @@ export default function BanpickPage() {
         await Promise.all([
           supabase
             .from("matches")
-            .select("id,status,host_user_id,host_match_team_id,host_selected_at,lobby_code,lobby_code_set_by_user_id,lobby_code_set_at,winner_match_team_id,loser_match_team_id")
+            .select("id,status,host_user_id,host_match_team_id,host_selected_at,sr_completed_at,lobby_code,lobby_code_set_by_user_id,lobby_code_set_at,winner_match_team_id,loser_match_team_id")
             .eq("id", matchId)
             .maybeSingle<MatchRow>(),
           supabase
@@ -553,29 +554,51 @@ export default function BanpickPage() {
     router.push(`/match/${matchId}/confirm`);
   }, [isBanpickCompleted, allSelectionDone, matchId, router]);
 
-  // Trophy selection timer (3 min from host selection)
-  const [trophyRemainingSec, setTrophyRemainingSec] = useState<number | null>(null);
+  // SR selection timer (3 min from host selection)
+  const [srRemainingSec, setSrRemainingSec] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!isBanpickCompleted || !match?.host_selected_at || allSelectionDone) {
-      setTrophyRemainingSec(null);
+    if (!isBanpickCompleted || !match?.host_selected_at || allSrDone) {
+      setSrRemainingSec(null);
       return;
     }
     const deadline = new Date(match.host_selected_at).getTime() + 3 * 60 * 1000;
     const tick = () => {
-      const now = Date.now();
-      const remaining = Math.max(0, Math.ceil((deadline - now) / 1000));
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setSrRemainingSec(remaining);
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [isBanpickCompleted, match?.host_selected_at, allSrDone]);
+
+  // Trophy selection timer (3 min from sr_completed_at)
+  const [trophyRemainingSec, setTrophyRemainingSec] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isBanpickCompleted || !allSrDone || allTrophyDone) {
+      setTrophyRemainingSec(null);
+      return;
+    }
+    const srCompletedAt = match?.sr_completed_at
+      ? new Date(match.sr_completed_at).getTime()
+      : Date.now();
+    const deadline = srCompletedAt + 3 * 60 * 1000;
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
       setTrophyRemainingSec(remaining);
     };
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [isBanpickCompleted, match?.host_selected_at, allSelectionDone]);
+  }, [isBanpickCompleted, allSrDone, allTrophyDone, match?.sr_completed_at]);
 
-  // Trophy timeout enforcement - any player can trigger, RPC is idempotent
+  // SR/Trophy timeout enforcement - any player can trigger, RPC is idempotent
   const trophyTimeoutTriggeredRef = useRef(false);
   useEffect(() => {
-    if (trophyRemainingSec !== 0) return;
+    const srTimedOut = srRemainingSec === 0 && !allSrDone;
+    const trophyTimedOut = trophyRemainingSec === 0 && allSrDone && !allTrophyDone;
+    if (!srTimedOut && !trophyTimedOut) return;
     if (allSelectionDone) return;
     if (trophyTimeoutTriggeredRef.current) return;
     if (!myUserId) return;
@@ -1222,7 +1245,14 @@ export default function BanpickPage() {
                 各チームからトロフィー・SR使用者を選択してください。3分以内に選択しないと強制敗北になります。
               </p>
               {/* SR選択（先に完了させる） */}
-              <div className="sec-title" style={{ margin: "0 0 8px" }}>STEP 1: SR選択（S&amp;D）</div>
+              <div className="rowx" style={{ marginBottom: 8 }}>
+                <div className="sec-title" style={{ margin: 0 }}>STEP 1: SR選択（S&amp;D）</div>
+                {srRemainingSec !== null && (
+                  <span className={`badge ${srRemainingSec <= 30 ? "danger" : "amber"}`}>
+                    残り {Math.floor(srRemainingSec / 60)}:{String(srRemainingSec % 60).padStart(2, "0")}
+                  </span>
+                )}
+              </div>
               <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
                 S&amp;Dで SR（VS RECON）を使う人を各チーム1人選択してください。使わない場合は「SRなし」を選択してください。
               </p>
@@ -1285,7 +1315,14 @@ export default function BanpickPage() {
               {/* トロフィー選択（SR完了後に表示） */}
               {allSrDone && (
                 <div style={{ marginTop: 20 }}>
-                  <div className="sec-title" style={{ margin: "0 0 8px" }}>STEP 2: トロフィー選択</div>
+                  <div className="rowx" style={{ marginBottom: 8 }}>
+                    <div className="sec-title" style={{ margin: 0 }}>STEP 2: トロフィー選択</div>
+                    {trophyRemainingSec !== null && (
+                      <span className={`badge ${trophyRemainingSec <= 30 ? "danger" : "amber"}`}>
+                        残り {Math.floor(trophyRemainingSec / 60)}:{String(trophyRemainingSec % 60).padStart(2, "0")}
+                      </span>
+                    )}
+                  </div>
                   <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
                     各チームからトロフィー使用者を選択してください。
                   </p>
