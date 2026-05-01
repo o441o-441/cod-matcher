@@ -41,6 +41,7 @@ type MatchTeamMemberRow = {
   is_party_leader: boolean;
   joined_as_party_size: number | null;
   rating_before: number;
+  ready_at: string | null;
   profiles?: { id: string; display_name: string } | null;
 };
 
@@ -99,6 +100,8 @@ const MESSAGE_JA: Record<string, string> = {
   "auto-confirmed as dispute (2nd reject)": "却下が連続したため申請通りの結果で自動確定しました。異議がある場合は相手を通報してください。",
   "report auto-approved after timeout": "承認期限を超過したため自動承認されました。レートが更新されました。",
   "match created": "マッチが成立しました。バンピックを開始してください。",
+  "ready timeout: both teams had unready players, match voided": "準備完了タイムアウト: 両チームに未準備のプレイヤーがいたため無効試合になりました。",
+  "ready timeout: team forfeited for unready players": "準備完了タイムアウト: 未準備のプレイヤーがいたチームの強制敗北となりました。",
   "all players on report page, deadline shortened to 5 min": "全員が結果報告画面を開きました。承認期限が5分に短縮されました。",
   "match voided after 2 rejections": "却下が連続したため無効試合になりました。レート変動はありません。",
 };
@@ -181,7 +184,7 @@ export default function MatchConfirmPage() {
             .returns<MatchTeamRow[]>(),
           supabase
             .from("match_team_members")
-            .select("id,match_team_id,user_id,is_party_leader,joined_as_party_size,rating_before,profiles!match_team_members_user_id_fkey(id,display_name)")
+            .select("id,match_team_id,user_id,is_party_leader,joined_as_party_size,rating_before,ready_at,profiles!match_team_members_user_id_fkey(id,display_name)")
             .in("match_team_id", teamIds.length > 0 ? teamIds : ["00000000-0000-0000-0000-000000000000"])
             .returns<MatchTeamMemberRow[]>(),
           supabase
@@ -283,6 +286,12 @@ export default function MatchConfirmPage() {
   }, [match?.lobby_code]);
 
   const [lobbyCodeInput, setLobbyCodeInput] = useState("");
+  const [showReadyPopup, setShowReadyPopup] = useState(false);
+  const readyPopupShownRef = useRef(false);
+  const [readyCountdown, setReadyCountdown] = useState<number | null>(null);
+  const [readyDeadline, setReadyDeadline] = useState<string | null>(null);
+  const [forfeited, setForfeited] = useState(false);
+  const [forfeitNotReadyUserIds, setForfeitNotReadyUserIds] = useState<string[]>([]);
 
   const handleSendLobbyCode = async () => {
     if (!matchId) return;
@@ -301,6 +310,69 @@ export default function MatchConfirmPage() {
       setBusy(false);
     }
   };
+
+  const myMember = useMemo(() => members.find((m) => m.user_id === myUserId) ?? null, [members, myUserId]);
+  const amReady = !!myMember?.ready_at;
+
+  const handleMarkReady = async () => {
+    if (!matchId) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc("rpc_mark_player_ready", { p_match_id: matchId });
+      if (error) throw error;
+      await loadAll({ silent: true });
+    } catch (e) {
+      setErrorText(e instanceof Error ? e.message : "準備完了に失敗しました。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Show ready popup on first load
+  useEffect(() => {
+    if (!match || !myUserId || readyPopupShownRef.current) return;
+    if (match.status === 'completed') return;
+    if (amReady) return;
+    readyPopupShownRef.current = true;
+    setShowReadyPopup(true);
+  }, [match, myUserId, amReady]);
+
+  // Ready timeout check & countdown
+  useEffect(() => {
+    if (!matchId || !match || match.status === 'completed') return;
+    const check = async () => {
+      const { data } = await supabase.rpc("rpc_check_ready_timeout", { p_match_id: matchId });
+      if (!data) return;
+      const result = data as { status: string; deadline?: string; loser_team_id?: string; alpha_not_ready?: number; bravo_not_ready?: number };
+      if (result.status === 'waiting' && result.deadline) {
+        setReadyDeadline(result.deadline);
+        const remaining = Math.max(0, Math.floor((new Date(result.deadline).getTime() - Date.now()) / 1000));
+        setReadyCountdown(remaining);
+      } else if (result.status === 'all_ready') {
+        setReadyCountdown(null);
+      } else if (result.status === 'forfeited' || result.status === 'voided') {
+        setForfeited(true);
+        const notReadyIds = members.filter((m) => !m.ready_at).map((m) => m.user_id);
+        setForfeitNotReadyUserIds(notReadyIds);
+        await loadAll({ silent: true });
+      }
+    };
+    void check();
+    const timer = setInterval(() => void check(), 5000);
+    return () => clearInterval(timer);
+  }, [matchId, match?.status, members, loadAll, match]);
+
+  // Countdown ticker
+  useEffect(() => {
+    if (readyDeadline == null) return;
+    const tick = () => {
+      const remaining = Math.max(0, Math.floor((new Date(readyDeadline).getTime() - Date.now()) / 1000));
+      setReadyCountdown(remaining);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [readyDeadline]);
 
   const phaseStates = useMemo(() => {
     return {
@@ -425,6 +497,35 @@ export default function MatchConfirmPage() {
         </div>
       )}
 
+      {/* Ready popup modal */}
+      {showReadyPopup && (
+        <div className="modal-root" onClick={() => setShowReadyPopup(false)}>
+          <div className="modal-scrim" />
+          <div className="modal-card" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-body" style={{ textAlign: "center", padding: "32px 24px" }}>
+              <h2 style={{ marginTop: 0, color: "var(--danger)" }}>5分以内に準備完了ボタンを押してください</h2>
+              <p style={{ lineHeight: 1.8 }}>
+                制限時間内に準備完了ボタンを押さなかった場合、<strong>強制敗北</strong>となります。
+              </p>
+            </div>
+            <div className="modal-foot" style={{ justifyContent: "center" }}>
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  setShowReadyPopup(false);
+                  void handleMarkReady();
+                }}
+              >
+                準備完了
+              </button>
+              <button className="btn-ghost" onClick={() => setShowReadyPopup(false)}>
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <div className="eyebrow">MATCH CONFIRM</div>
@@ -435,6 +536,79 @@ export default function MatchConfirmPage() {
           メンバーが揃い次第、以下の内容でプライベートマッチを開始してください。
         </p>
       </div>
+
+      {/* Ready status */}
+      {match?.status !== 'completed' && (
+        <div className="section card-strong" style={{ borderLeft: amReady ? '3px solid var(--success)' : '3px solid var(--danger)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              {amReady ? (
+                <p style={{ margin: 0, fontWeight: 700, color: 'var(--success)' }}>準備完了済み</p>
+              ) : (
+                <>
+                  <p style={{ margin: 0, fontWeight: 700, color: 'var(--danger)' }}>
+                    準備完了を押してください
+                    {readyCountdown != null && readyCountdown > 0 && (
+                      <span className="mono" style={{ marginLeft: 12, fontSize: 20 }}>
+                        残り {Math.floor(readyCountdown / 60)}:{String(readyCountdown % 60).padStart(2, '0')}
+                      </span>
+                    )}
+                  </p>
+                  <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>押さないと強制敗北になります</p>
+                </>
+              )}
+            </div>
+            {!amReady && (
+              <button className="btn-primary" onClick={handleMarkReady} disabled={busy} style={{ flexShrink: 0 }}>
+                準備完了
+              </button>
+            )}
+          </div>
+          {/* Ready status per member */}
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+            {members.map((m) => (
+              <span
+                key={m.id}
+                className="badge"
+                style={{
+                  fontSize: 11,
+                  background: m.ready_at ? 'var(--success)' : 'rgba(255,77,109,0.2)',
+                  color: m.ready_at ? '#fff' : 'var(--danger)',
+                }}
+              >
+                {m.profiles?.display_name ?? m.user_id.slice(0, 6)}
+                {m.ready_at ? ' OK' : ' 未準備'}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Forfeit: report button */}
+      {forfeited && forfeitNotReadyUserIds.length > 0 && (
+        <div className="section card-strong" style={{ borderLeft: '3px solid var(--danger)' }}>
+          <p style={{ fontWeight: 700, color: 'var(--danger)', marginTop: 0 }}>
+            準備完了タイムアウトにより強制敗北が発生しました
+          </p>
+          <p className="muted" style={{ fontSize: 13 }}>準備完了しなかったプレイヤーを通報できます。</p>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+            {forfeitNotReadyUserIds.filter((uid) => uid !== myUserId).map((uid) => {
+              const m = members.find((x) => x.user_id === uid);
+              const name = m?.profiles?.display_name ?? uid.slice(0, 8);
+              return (
+                <button
+                  key={uid}
+                  className="btn-ghost btn-sm"
+                  style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                  onClick={() => router.push(`/reports/new?reported=${uid}`)}
+                >
+                  {name} を通報
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Action buttons */}
       <div className="section row">

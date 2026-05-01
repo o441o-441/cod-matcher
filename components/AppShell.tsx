@@ -6,6 +6,7 @@ import TopBar from './TopBar'
 import Footer from './Footer'
 import FriendsDrawer from './FriendsDrawer'
 import WinStreakHost from './WinStreakCelebration'
+import QueueStatusBar from './QueueStatusBar'
 
 const HIDE_SHELL_ROUTES = ['/login', '/auth/callback', '/onboarding']
 
@@ -52,6 +53,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <Footer />
       {friendsOpen && <FriendsDrawer onClose={() => setFriendsOpen(false)} />}
       <WinStreakHost />
+      <QueueStatusBar />
     </div>
   )
 }

@@ -794,7 +794,14 @@ export default function MatchPage() {
         p_queue_entry_id: myWaitingEntry?.id ?? null,
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message?.includes('already matched')) {
+          setInfoText("マッチが成立しました。キャンセルできません。");
+          await loadMyState();
+          return;
+        }
+        throw error;
+      }
 
       setInfoText("待機解除済み マッチング待機を終了しました。");
       await loadMyState();
