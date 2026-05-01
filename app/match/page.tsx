@@ -298,7 +298,7 @@ export default function MatchPage() {
       if (profileRes.error) throw profileRes.error;
 
       let resolvedProfile = profileRes.data ?? null;
-      if (!opts?.silent && (!resolvedProfile || !resolvedProfile.is_onboarded)) {
+      if (!resolvedProfile || !resolvedProfile.is_onboarded) {
         const { data: legacyUser } = await supabase
           .from("users")
           .select("display_name,is_profile_complete")

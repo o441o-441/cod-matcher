@@ -71,23 +71,6 @@ export default function OnboardingPage() {
       }
     }
 
-    const { error } = await supabase
-      .from('users')
-      .update({
-        display_name: displayName,
-        activision_id: activisionId,
-        controller: controller || null,
-        platform: platform || null,
-        is_profile_complete: true,
-      })
-      .eq('auth_user_id', user.id)
-
-    if (error) {
-      alert('保存失敗: ' + error.message)
-      setLoading(false)
-      return
-    }
-
     // 既存の peak_rating を取得して保持する
     const { data: existingProfile } = await supabase
       .from('profiles')
@@ -98,7 +81,7 @@ export default function OnboardingPage() {
     const existingPeak = (existingProfile?.peak_rating as number | null) ?? 0
     const newPeakRating = Math.max(initialRating, existingPeak)
 
-    // /match 系（パーティーモデル）が参照する profiles テーブルにも反映する
+    // profiles を先に保存（is_onboarded を確実にセット）
     const { error: profileError } = await supabase
       .from('profiles')
       .upsert(
@@ -115,6 +98,24 @@ export default function OnboardingPage() {
 
     if (profileError) {
       alert('プロフィール同期に失敗: ' + profileError.message)
+      setLoading(false)
+      return
+    }
+
+    // profiles 成功後に users を更新
+    const { error } = await supabase
+      .from('users')
+      .update({
+        display_name: displayName,
+        activision_id: activisionId,
+        controller: controller || null,
+        platform: platform || null,
+        is_profile_complete: true,
+      })
+      .eq('auth_user_id', user.id)
+
+    if (error) {
+      alert('保存失敗: ' + error.message)
       setLoading(false)
       return
     }
