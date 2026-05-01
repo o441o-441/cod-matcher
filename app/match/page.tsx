@@ -495,23 +495,30 @@ export default function MatchPage() {
   useEffect(() => {
     if (!myUserId) return;
 
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedLoad = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => void loadMyState({ silent: true }), 500);
+    };
+
     const channel = supabase
       .channel(`match-page-auto-${myUserId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "parties" }, () => void loadMyState({ silent: true }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "party_members" }, () => void loadMyState({ silent: true }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "party_invites" }, () => void loadMyState({ silent: true }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "queue_entries" }, () => void loadMyState({ silent: true }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "match_team_members" }, () => void loadMyState({ silent: true }))
-      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => void loadMyState({ silent: true }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "parties" }, debouncedLoad)
+      .on("postgres_changes", { event: "*", schema: "public", table: "party_members" }, debouncedLoad)
+      .on("postgres_changes", { event: "*", schema: "public", table: "party_invites" }, debouncedLoad)
+      .on("postgres_changes", { event: "*", schema: "public", table: "queue_entries" }, debouncedLoad)
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_team_members" }, debouncedLoad)
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, debouncedLoad)
       .subscribe();
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       void supabase.removeChannel(channel);
     };
   }, [myUserId, loadMyState, supabase]);
 
   useEffect(() => {
-    const interval = setInterval(() => void loadMyState({ silent: true }), 5000);
+    const interval = setInterval(() => void loadMyState({ silent: true }), 15000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -574,7 +581,7 @@ export default function MatchPage() {
 
     const timer = window.setInterval(() => {
       void attemptAutoMatch();
-    }, 3000);
+    }, 5000);
 
     return () => window.clearInterval(timer);
   }, [isWaiting, isPartyLeader, myActiveMatch, attemptAutoMatch]);

@@ -414,7 +414,7 @@ export default function ReportPage() {
       void supabase.rpc("rpc_mark_report_visited", { p_match_id: matchId }).then(({ data }) => {
         if (data) setVisitInfo(data as { all_visited: boolean; total: number; visited: number });
       });
-    }, 5000);
+    }, 10000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);

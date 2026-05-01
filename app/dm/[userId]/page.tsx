@@ -42,6 +42,7 @@ export default function DmConversationPage() {
       .select('id, sender_user_id, receiver_user_id, body, is_read, created_at')
       .or(`and(sender_user_id.eq.${uid},receiver_user_id.eq.${pid}),and(sender_user_id.eq.${pid},receiver_user_id.eq.${uid})`)
       .order('created_at', { ascending: true })
+      .limit(100)
 
     setMessages((data ?? []) as MessageRow[])
 
@@ -96,7 +97,7 @@ export default function DmConversationPage() {
       )
       .subscribe()
 
-    const interval = setInterval(() => void loadMessages(myUserId, partnerId), 5000)
+    const interval = setInterval(() => void loadMessages(myUserId, partnerId), 10000)
 
     return () => {
       void supabase.removeChannel(channel)

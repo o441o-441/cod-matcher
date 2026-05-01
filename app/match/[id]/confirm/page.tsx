@@ -240,7 +240,7 @@ export default function MatchConfirmPage() {
   }, [matchId, loadAll]);
 
   useEffect(() => {
-    const interval = setInterval(() => void loadAll({ silent: true }), 5000);
+    const interval = setInterval(() => void loadAll({ silent: true }), 10000);
     return () => clearInterval(interval);
   }, [loadAll]);
 
