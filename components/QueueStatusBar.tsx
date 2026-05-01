@@ -24,23 +24,36 @@ export default function QueueStatusBar() {
     }
     if (!uid) { setWaiting(false); return }
 
-    // 1. アクティブマッチがあるか（match_team_membersから直接検索）
-    const { data: activeMatchData } = await supabase
+    // 1. 自分が参加中のmatch_team_idを取得
+    const { data: myMtm } = await supabase
       .from('match_team_members')
-      .select('match_teams!inner(match_id, matches!inner(id, status))')
+      .select('match_team_id')
       .eq('user_id', uid)
 
-    type ActiveRow = { match_teams: { match_id: string; matches: { id: string; status: string }[] }[] }
-    const activeRows = (activeMatchData ?? []) as unknown as ActiveRow[]
-    for (const row of activeRows) {
-      const teams = Array.isArray(row.match_teams) ? row.match_teams : [row.match_teams]
-      for (const team of teams) {
-        const matches = Array.isArray(team.matches) ? team.matches : [team.matches]
-        const bm = matches.find((m: { status: string }) => m?.status === 'banpick')
-        if (bm) {
+    const mtIds = (myMtm ?? []).map((r: { match_team_id: string }) => r.match_team_id)
+
+    if (mtIds.length > 0) {
+      // match_teamsからmatch_idを取得
+      const { data: myTeams } = await supabase
+        .from('match_teams')
+        .select('match_id')
+        .in('id', mtIds)
+
+      const matchIds = [...new Set((myTeams ?? []).map((r: { match_id: string }) => r.match_id))]
+
+      if (matchIds.length > 0) {
+        // banpick状態のマッチがあるか
+        const { data: activeMatches } = await supabase
+          .from('matches')
+          .select('id, status')
+          .in('id', matchIds)
+          .eq('status', 'banpick')
+          .limit(1)
+
+        if (activeMatches && activeMatches.length > 0) {
           setWaiting(false)
           waitStartRef.current = null
-          setMatchFoundId(bm.id)
+          setMatchFoundId((activeMatches[0] as { id: string }).id)
           return
         }
       }
@@ -84,7 +97,7 @@ export default function QueueStatusBar() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => void checkQueue())
       .subscribe()
 
-    const fallback = setInterval(() => void checkQueue(), 30000)
+    const fallback = setInterval(() => void checkQueue(), 10000)
     return () => {
       clearInterval(fallback)
       void supabase.removeChannel(channel)
