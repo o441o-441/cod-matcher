@@ -215,6 +215,7 @@ export default function MatchPage() {
   const [myActiveMatch, setMyActiveMatch] = useState<MatchRow | null>(null);
 
   const [waitingSeconds, setWaitingSeconds] = useState(0);
+  const [queueWaitingCount, setQueueWaitingCount] = useState<number | null>(null);
 
   usePageView('/match');
 
@@ -402,6 +403,18 @@ export default function MatchPage() {
 
         if (waitingRes.error) throw waitingRes.error;
         setMyWaitingEntry(waitingRes.data ?? null);
+
+        // 待機中のプレイヤー数を取得
+        if (waitingRes.data) {
+          const { count } = await supabase
+            .from("queue_entries")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "waiting")
+            .eq("queue_type", waitingRes.data.queue_type);
+          setQueueWaitingCount(count ?? 0);
+        } else {
+          setQueueWaitingCount(null);
+        }
 
         if (matchedRes.error) throw matchedRes.error;
         const matchedIds = (matchedRes.data ?? []).map((x) => x.id);
@@ -1220,7 +1233,7 @@ export default function MatchPage() {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-                  <QueueRadar size={160} />
+                  <QueueRadar size={160} waitingCount={queueWaitingCount ?? undefined} />
                   <div style={{ flex: 1 }}>
                     {/* Large searching text */}
                     <div className="flicker" style={{

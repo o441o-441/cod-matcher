@@ -1,6 +1,6 @@
 'use client'
 
-export default function QueueRadar({ size = 220 }: { size?: number }) {
+export default function QueueRadar({ size = 220, waitingCount }: { size?: number; waitingCount?: number }) {
   return (
     <div style={{ width: size, height: size, position: 'relative' }}>
       {/* Rings */}
@@ -43,17 +43,40 @@ export default function QueueRadar({ size = 220 }: { size?: number }) {
         }}
       />
 
-      {/* Center dot */}
+      {/* Center: waiting count or dot */}
       <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-        <div
-          style={{
-            width: 16,
-            height: 16,
-            borderRadius: '50%',
-            background: 'var(--cyan)',
-            boxShadow: '0 0 20px var(--cyan)',
-          }}
-        />
+        {waitingCount != null ? (
+          <div style={{ textAlign: 'center' }}>
+            <div style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: size * 0.18,
+              fontWeight: 800,
+              color: 'var(--cyan)',
+              lineHeight: 1,
+              textShadow: '0 0 20px var(--cyan)',
+            }}>
+              {waitingCount}
+            </div>
+            <div style={{
+              fontSize: size * 0.065,
+              color: 'var(--text-muted)',
+              fontWeight: 600,
+              marginTop: 2,
+            }}>
+              人が検索中
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{
+              width: 16,
+              height: 16,
+              borderRadius: '50%',
+              background: 'var(--cyan)',
+              boxShadow: '0 0 20px var(--cyan)',
+            }}
+          />
+        )}
       </div>
 
       {/* Blips */}

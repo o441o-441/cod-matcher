@@ -36,6 +36,12 @@ function CallbackContent() {
       const { error } = await supabase.auth.exchangeCodeForSession(code)
       if (error) {
         console.error('exchangeCodeForSession error:', error)
+        // code再利用（リロード等）の場合、既にセッションがあればそのまま遷移
+        const { data: { session: existing } } = await supabase.auth.getSession()
+        if (existing?.user) {
+          router.replace('/menu')
+          return
+        }
         setErrorMessage(error.message || 'ログイン処理に失敗しました')
         return
       }
