@@ -394,8 +394,9 @@ export default function BanpickPage() {
 
   const allTrophyDone = alphaTrophyDone && bravoTrophyDone;
 
-  const alphaSrDone = !!alphaTeam?.sr_user;
-  const bravoSrDone = !!bravoTeam?.sr_user;
+  // 自動ランダム割り当てのため常にtrue
+  const alphaSrDone = true;
+  const bravoSrDone = true;
   const allSrDone = alphaSrDone && bravoSrDone;
 
   const loadAll = useCallback(async (opts?: { silent?: boolean }) => {

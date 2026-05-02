@@ -32,6 +32,7 @@ type MatchTeamRow = {
   is_full_party: boolean;
   trophy_users: string[];
   sr_user: string | null;
+  smoke_user: string | null;
 };
 
 type MatchTeamMemberRow = {
@@ -179,7 +180,7 @@ export default function MatchConfirmPage() {
             .maybeSingle<MatchRow>(),
           supabase
             .from("match_teams")
-            .select("id,match_id,side,display_name,captain_user_id,party_composition,base_avg_rating,synergy_bonus,effective_avg_rating,is_full_party,trophy_users,sr_user")
+            .select("id,match_id,side,display_name,captain_user_id,party_composition,base_avg_rating,synergy_bonus,effective_avg_rating,is_full_party,trophy_users,sr_user,smoke_user")
             .eq("match_id", matchId)
             .returns<MatchTeamRow[]>(),
           supabase
@@ -508,7 +509,7 @@ export default function MatchConfirmPage() {
 
       {/* Ready popup modal */}
       {showReadyPopup && (
-        <div className="modal-root" onClick={() => setShowReadyPopup(false)}>
+        <div className="modal-root" onClick={() => setShowReadyPopup(false)} style={{ alignItems: 'flex-start', paddingTop: '15vh' }}>
           <div className="modal-scrim" />
           <div className="modal-card" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-body" style={{ textAlign: "center", padding: "32px 24px" }}>
@@ -688,14 +689,15 @@ export default function MatchConfirmPage() {
             </div>
           </div>
 
-          {/* Trophy & SR Users */}
+          {/* Trophy & SR & Smoke Users */}
           <div className="card-strong">
-            <h2 style={{ marginTop: 0 }}>トロフィー・SR使用者</h2>
+            <h2 style={{ marginTop: 0 }}>ロール割り当て（自動選出）</h2>
             {(["alpha", "bravo"] as const).map((side) => {
               const team = side === "alpha" ? alphaTeam : bravoTeam;
               const teamMembers = groupedMembers[side];
               const trophyList: string[] = Array.isArray(team?.trophy_users) ? team.trophy_users : [];
               const srUser = team?.sr_user ?? null;
+              const smokeUser = team?.smoke_user ?? null;
               return (
                 <div key={side} className="card" style={{ marginTop: 12 }}>
                   <div className="row" style={{ marginBottom: 8 }}>
@@ -705,6 +707,7 @@ export default function MatchConfirmPage() {
                     {teamMembers.map((m) => {
                       const isTrophy = trophyList.includes(m.user_id);
                       const isSr = srUser === m.user_id;
+                      const isSmoke = smokeUser === m.user_id;
                       return (
                         <div key={m.id} className="row" style={{ justifyContent: "space-between", padding: "6px 10px", borderRadius: "var(--r-sm)", background: "rgba(255,255,255,0.03)" }}>
                           <span style={{ fontSize: 14 }}>
@@ -714,8 +717,11 @@ export default function MatchConfirmPage() {
                             {isTrophy && (
                               <span className="badge" style={{ fontSize: 9 }}>トロフィー</span>
                             )}
-                            {isSr && (
+                            {isSr && srUser !== 'none' && (
                               <span className="badge" style={{ fontSize: 9, background: "var(--violet, #8b5cf6)" }}>SR</span>
+                            )}
+                            {isSmoke && (
+                              <span className="badge" style={{ fontSize: 9, background: "var(--amber, #f59e0b)" }}>スモーク</span>
                             )}
                           </span>
                         </div>
@@ -723,7 +729,9 @@ export default function MatchConfirmPage() {
                     })}
                   </div>
                   <p className="dim" style={{ fontSize: 11, marginTop: 8 }}>
-                    トロフィー: {trophyList.length}/2 ・ SR: {srUser && srUser !== 'none' ? "1/1" : "なし"}
+                    トロフィー: {trophyList.length}/2
+                    {srUser && srUser !== 'none' ? " ・ SR: あり" : ""}
+                    {smokeUser ? " ・ スモーク: あり" : ""}
                   </p>
                 </div>
               );
