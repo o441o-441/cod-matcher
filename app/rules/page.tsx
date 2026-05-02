@@ -120,13 +120,7 @@ export default function RulesPage() {
         <p className="sec-title">オーバーロード設定</p>
         <div className="card-strong">
           <div className="card">
-            <p>「CDL オーバーロード」を選択し、下記<strong>ルール設定を変更してください。</strong></p>
-            <div className="mt-s">
-              <strong>アドバンス</strong>
-              <ul>
-                <li>所持で時間を一時停止: オフ</li>
-              </ul>
-            </div>
+            <p>「CDL オーバーロード」を選択してください。<strong>ルール設定の変更は不要です。</strong></p>
           </div>
         </div>
       </div>
