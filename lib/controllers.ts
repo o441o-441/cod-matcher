@@ -209,6 +209,10 @@ export const CONTROLLER_GROUPS: ControllerGroup[] = [
     options: ['Nintendo Switch Pro Controller'],
   },
   {
+    manufacturer: 'MOJHON',
+    options: ['MOJHON Rainbow3'],
+  },
+  {
     manufacturer: 'マウス',
     options: ['マウス＆キーボード'],
   },

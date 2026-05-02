@@ -183,9 +183,7 @@ export default function ReportPage() {
   useSoundOnChange(messages.length, playChatReceive);
 
   const [games, setGames] = useState<ReportFormGame[]>([
-    { game_number: 1, mode: "hp", map_name: "", winner_match_team_id: "", was_played: true },
-    { game_number: 2, mode: "snd", map_name: "", winner_match_team_id: "", was_played: true },
-    { game_number: 3, mode: "control", map_name: "", winner_match_team_id: "", was_played: true },
+    { game_number: 1, mode: "", map_name: "", winner_match_team_id: "", was_played: true },
   ]);
 
   const [reportRemainingSec, setReportRemainingSec] = useState<number | null>(null);

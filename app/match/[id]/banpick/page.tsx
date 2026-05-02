@@ -300,13 +300,23 @@ export default function BanpickPage() {
   const isBanpickCompleted = session?.status === "completed" || match?.status === "ready" || match?.status === "report_pending" || match?.status === "completed";
   const isHost = !!match?.host_user_id && match.host_user_id === myUserId;
 
+  const selectedMode = useMemo(() => {
+    const maps = session?.selected_maps;
+    if (!maps || typeof maps !== "object" || Array.isArray(maps)) return null;
+    return (maps as Record<string, unknown>).selected_mode as string | null ?? null;
+  }, [session?.selected_maps]);
+
   const phaseStates = useMemo(() => {
+    const mode = selectedMode;
+    if (mode) {
+      return { [mode]: parsePhaseState(session?.selected_maps ?? null, mode as "hp" | "snd" | "ovl") };
+    }
     return {
       hp: parsePhaseState(session?.selected_maps ?? null, "hp"),
       snd: parsePhaseState(session?.selected_maps ?? null, "snd"),
       ovl: parsePhaseState(session?.selected_maps ?? null, "ovl"),
     };
-  }, [session?.selected_maps]);
+  }, [session?.selected_maps, selectedMode]);
 
   const teamAssignment = useMemo(
     () => parseTeamAssignment(session?.selected_maps ?? null),
@@ -824,10 +834,12 @@ export default function BanpickPage() {
   };
 
   /* ---- helpers for phase bar ---- */
-  const phaseKeys = ["hp", "snd", "ovl"] as const;
+  const phaseKeys: ("hp" | "snd" | "ovl")[] = selectedMode
+    ? [selectedMode as "hp" | "snd" | "ovl"]
+    : ["hp", "snd", "ovl"];
   const currentPhaseIndex = session
     ? session.phase === "completed"
-      ? 3
+      ? phaseKeys.length
       : phaseKeys.indexOf(session.phase as "hp" | "snd" | "ovl")
     : -1;
 
@@ -843,7 +855,7 @@ export default function BanpickPage() {
     const st = phaseStatus(pk);
     if (st === "done") {
       const ps = phaseStates[pk];
-      return `${ps.map ?? "-"} / ${ps.side ?? "-"}`;
+      return `${ps?.map ?? "-"} / ${ps?.side ?? "-"}`;
     }
     if (st === "active") {
       const turnInPhase = session ? session.turn_number : 0;
@@ -855,7 +867,7 @@ export default function BanpickPage() {
   /* ---- turn card helpers ---- */
   const currentPhase: "hp" | "snd" | "ovl" | null =
     session && session.phase !== "completed" ? (session.phase as "hp" | "snd" | "ovl") : null;
-  const currentState = currentPhase ? phaseStates[currentPhase] : null;
+  const currentState = currentPhase ? (phaseStates[currentPhase] ?? null) : null;
   const currentPool = currentPhase ? PHASE_POOLS[currentPhase] : [];
   const allowInteraction =
     !!currentPhase &&
@@ -876,16 +888,17 @@ export default function BanpickPage() {
   /* ---- side selection helpers ---- */
   function getSideForPhase(pk: "hp" | "snd" | "ovl") {
     const ps = phaseStates[pk];
-    if (!ps.side) return null;
-    const pickerIsTeamA = pk === "snd" || pk === "ovl";
+    if (!ps?.side) return null;
+    // サイド選択者はBANしなかった方のチーム（= pick_mapした方の相手）
     const teamAIsAlpha = teamAssignment.teamA === alphaTeam?.id;
-    const pickerIsAlpha = pickerIsTeamA ? teamAIsAlpha : !teamAIsAlpha;
+    // BO1: team_aがサイド選択
+    const pickerIsAlpha = teamAIsAlpha;
     const alphaSide = pickerIsAlpha ? ps.side : (ps.side === "JSOC" ? "ギルド" : "JSOC");
     return alphaSide;
   }
 
   /* ---- completion count for progress ---- */
-  const completedPhases = phaseKeys.filter((pk) => phaseStatus(pk) === "done").length;
+  const completedPhases = phaseKeys.filter((pk: "hp" | "snd" | "ovl") => phaseStatus(pk) === "done").length;
 
   if (!matchId) {
     return (
@@ -1161,6 +1174,7 @@ export default function BanpickPage() {
             <div className="grid-3">
               {phaseKeys.map((pk) => {
                 const ps = phaseStates[pk];
+                if (!ps) return null;
                 const meta = ps.map ? MAP_META[ps.map] : null;
                 const sideLabel = getSideForPhase(pk);
                 return (

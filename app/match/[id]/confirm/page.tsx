@@ -374,13 +374,22 @@ export default function MatchConfirmPage() {
     return () => clearInterval(id);
   }, [readyDeadline]);
 
-  const phaseStates = useMemo(() => {
-    return {
-      hp: parsePhaseState(session?.selected_maps ?? null, "hp"),
-      snd: parsePhaseState(session?.selected_maps ?? null, "snd"),
-      ovl: parsePhaseState(session?.selected_maps ?? null, "ovl"),
-    };
+  const selectedMode = useMemo(() => {
+    const maps = session?.selected_maps;
+    if (!maps || typeof maps !== "object" || Array.isArray(maps)) return null;
+    return (maps as Record<string, unknown>).selected_mode as string | null ?? null;
   }, [session?.selected_maps]);
+
+  const activePhaseKeys: string[] = selectedMode ? [selectedMode] : ["hp", "snd", "ovl"];
+
+  const phaseStates = useMemo(() => {
+    const result: Record<string, PhaseState> = {};
+    for (const k of activePhaseKeys) {
+      result[k] = parsePhaseState(session?.selected_maps ?? null, k as "hp" | "snd" | "ovl");
+    }
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.selected_maps, selectedMode]);
 
   const teamAssignment = useMemo(
     () => parseTeamAssignment(session?.selected_maps ?? null),
@@ -664,7 +673,7 @@ export default function MatchConfirmPage() {
               <div className="stat-label" style={{ marginBottom: 8 }}>ロビーコード送信</div>
               <input
                 value={lobbyCodeInput}
-                onChange={(e) => setLobbyCodeInput(e.target.value)}
+                onChange={(e) => setLobbyCodeInput(e.target.value.replace(/[^\x20-\x7E]/g, ''))}
                 placeholder={isHost ? "例: ABCDE" : "ホストのみ送信可能"}
                 disabled={busy || !isHost}
               />
@@ -725,14 +734,14 @@ export default function MatchConfirmPage() {
           <div className="card-strong">
             <h2 style={{ marginTop: 0 }}>バンピック結果</h2>
             <div className="stack" style={{ marginTop: 12 }}>
-              {(["hp", "snd", "ovl"] as const).map((phaseKey) => {
+              {activePhaseKeys.map((phaseKey) => {
                 const state = phaseStates[phaseKey];
+                if (!state) return null;
+                const phaseLabel = phaseKey === "hp" ? "HARDPOINT" : phaseKey === "snd" ? "SEARCH & DESTROY" : phaseKey === "ovl" ? "OVERLOAD" : phaseKey.toUpperCase();
                 return (
                   <div key={phaseKey} className="card">
                     <div className="stat-label" style={{ marginBottom: 6 }}>
-                      {phaseKey === "hp" && "HARDPOINT"}
-                      {phaseKey === "snd" && "SEARCH & DESTROY"}
-                      {phaseKey === "ovl" && "OVERLOAD"}
+                      {phaseLabel}
                     </div>
                     <div className="row" style={{ gap: 16 }}>
                       <div>
@@ -740,9 +749,8 @@ export default function MatchConfirmPage() {
                         <span className="success" style={{ fontWeight: 600 }}>{state.map ?? "-"}</span>
                       </div>
                       {state.side ? (() => {
-                        const pickerIsTeamA = phaseKey === "snd" || phaseKey === "ovl";
                         const teamAIsAlpha = teamAssignment.teamA === alphaTeam?.id;
-                        const pickerIsAlpha = pickerIsTeamA ? teamAIsAlpha : !teamAIsAlpha;
+                        const pickerIsAlpha = teamAIsAlpha;
                         const alphaSide = pickerIsAlpha ? state.side : (state.side === "JSOC" ? "ギルド" : "JSOC");
                         const bravoSide = alphaSide === "JSOC" ? "ギルド" : "JSOC";
                         return (
