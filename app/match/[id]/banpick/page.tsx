@@ -26,13 +26,13 @@ import TimerRing from "@/components/TimerRing";
 import MapThumb from "@/components/MapThumb";
 
 const BANPICK_TUTORIAL = [
-  { title: "バンピックとは", body: "試合で使うマップとサイドを交互に選ぶフェーズです。3つのモード（HP / SND / OVL）それぞれでBAN → PICK → サイド選択を行います。" },
-  { title: "BAN", body: "マップを1つ選んで除外します。BANされたマップには取り消し線が付き、PICKできなくなります。" },
+  { title: "バンピックとは", body: "HP / SND / OVL の中からランダムで1つモードが選ばれ、そのモードでBAN → PICK → サイド選択を行います（BO1）。" },
+  { title: "BAN", body: "マップを1つ選んで除外します。BANされたマップには取り消し線が付き、PICKできなくなります。各チーム1回ずつBANします。" },
   { title: "PICK", body: "残りのマップから試合で使うマップを選びます。選ばれたマップはハイライト表示されます。" },
   { title: "サイド選択", body: "マップが決まったら、JSOC / ギルド のどちらのサイドでプレイするか選びます。" },
   { title: "制限時間", body: "各ステップには5分の制限時間があります。時間切れの場合、操作すべきだった側の敗北になります。" },
-  { title: "ホスト決定", body: "バンピック完了後、自動でパーティリーダーの中からランダムにホストが決定されます。何らかの理由でホストを持てない場合は、チャット欄で他のプレイヤーと相談してホストを決めてください。" },
-  { title: "トロフィー選択", body: "ホストが決定したら3分以内にトロフィー使用者を選択してください。制限時間に達した場合、選択していない方の敗北となります。どちらも選択していない場合は無効試合となり、レートが-10されます。" },
+  { title: "ホスト決定", body: "バンピック完了後、自動でパーティリーダーの中からランダムにホストが決定されます。" },
+  { title: "ロール自動割り当て", body: "トロフィー使用者（各チーム2人）はランダムで自動選出されます。S&Dの場合はSR・スモーク使用者（各チーム1人）も自動選出されます。" },
 ];
 
 type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
@@ -917,7 +917,7 @@ export default function BanpickPage() {
 
   return (
     <main>
-      {/* ---- TROPHY POPUP ---- */}
+      {/* ---- ROLE ASSIGNMENT POPUP ---- */}
       {showTrophyPopup && (
         <div className="modal-root" onClick={() => setShowTrophyPopup(false)}>
           <div className="modal-scrim" />
@@ -927,18 +927,11 @@ export default function BanpickPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "1.25rem", margin: "0 0 12px" }}>
-              トロフィー・SR使用者の選択をしてください。
+              ロールが自動割り当てされました
             </h3>
             <p className="muted" style={{ marginBottom: 24 }}>
-              ※トロフィー: 各チーム2人まで / SR: 各チーム1人まで（任意）
+              トロフィー・SR・スモーク使用者がランダムで選出されました。試合条件確認画面に移動します。
             </p>
-            {trophyRemainingSec !== null && !allSelectionDone && (
-              <div style={{ marginBottom: 16 }}>
-                <span className="badge amber">
-                  残り {Math.floor(trophyRemainingSec / 60)}:{String(trophyRemainingSec % 60).padStart(2, "0")}
-                </span>
-              </div>
-            )}
             <button
               type="button"
               className="btn-primary"
@@ -1245,155 +1238,7 @@ export default function BanpickPage() {
             </div>
           )}
 
-          {/* ---- Trophy & SR selection (inline, only when banpick complete and not all done) ---- */}
-          {isBanpickCompleted && !allSelectionDone && (
-            <div className="card-strong">
-              <div className="rowx" style={{ marginBottom: 14 }}>
-                <div className="sec-title" style={{ margin: 0 }}>トロフィー選択</div>
-                {trophyRemainingSec !== null && (
-                  <span className={`badge ${trophyRemainingSec <= 30 ? "danger" : "amber"}`}>
-                    残り {Math.floor(trophyRemainingSec / 60)}:{String(trophyRemainingSec % 60).padStart(2, "0")}
-                  </span>
-                )}
-              </div>
-              <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-                各チームからトロフィー・SR使用者を選択してください。3分以内に選択しないと強制敗北になります。
-              </p>
-              {/* SR選択（先に完了させる） */}
-              <div className="rowx" style={{ marginBottom: 8 }}>
-                <div className="sec-title" style={{ margin: 0 }}>STEP 1: SR選択（S&amp;D）</div>
-                {srRemainingSec !== null && (
-                  <span className={`badge ${srRemainingSec <= 30 ? "danger" : "amber"}`}>
-                    残り {Math.floor(srRemainingSec / 60)}:{String(srRemainingSec % 60).padStart(2, "0")}
-                  </span>
-                )}
-              </div>
-              <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-                S&amp;Dで SR（VS RECON）を使う人を各チーム1人選択してください。使わない場合は「SRなし」を選択してください。
-              </p>
-              {(["alpha", "bravo"] as const).map((side) => {
-                const team = side === "alpha" ? alphaTeam : bravoTeam;
-                const teamMembers = groupedMembers[side];
-                const srUser = team?.sr_user ?? null;
-                const isMyTeam = !!myMatchTeamId && team?.id === myMatchTeamId;
-                const srDone = !!srUser;
-
-                return (
-                  <div key={side} style={{ marginBottom: 12 }}>
-                    <div className={`side-chip ${side}`} style={{ marginBottom: 8 }}>{side.toUpperCase()}</div>
-                    <div className="stack-sm">
-                      {teamMembers.map((m) => {
-                        const isSr = srUser === m.user_id;
-                        return (
-                          <div key={m.id} className="card" style={{ padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <span style={{ fontSize: 13 }}>
-                              {m.profiles?.display_name ?? m.user_id}
-                              {isSr && (
-                                <span style={{ marginLeft: 8, color: "var(--violet)", fontSize: 11 }}>
-                                  [SR]
-                                </span>
-                              )}
-                            </span>
-                            {isMyTeam && (
-                              <button
-                                type="button"
-                                onClick={() => handleToggleSr(m.user_id)}
-                                disabled={busy}
-                                className={isSr ? "btn-danger btn-sm" : "btn-sm"}
-                                style={{ padding: "4px 10px", fontSize: 11 }}
-                              >
-                                {isSr ? "解除" : "選択"}
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {isMyTeam && !srDone && (
-                      <button
-                        type="button"
-                        onClick={() => handleSkipSr(side)}
-                        disabled={busy}
-                        className="btn-ghost btn-sm"
-                        style={{ marginTop: 6, fontSize: 11 }}
-                      >
-                        SRなし
-                      </button>
-                    )}
-                    <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
-                      {srUser === 'none' ? "SRなし" : srUser ? "選択済み" : "未選択"}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* トロフィー選択（SR完了後に表示） */}
-              {allSrDone && (
-                <div style={{ marginTop: 20 }}>
-                  <div className="rowx" style={{ marginBottom: 8 }}>
-                    <div className="sec-title" style={{ margin: 0 }}>STEP 2: トロフィー選択</div>
-                    {trophyRemainingSec !== null && (
-                      <span className={`badge ${trophyRemainingSec <= 30 ? "danger" : "amber"}`}>
-                        残り {Math.floor(trophyRemainingSec / 60)}:{String(trophyRemainingSec % 60).padStart(2, "0")}
-                      </span>
-                    )}
-                  </div>
-                  <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-                    各チームからトロフィー使用者を選択してください。
-                  </p>
-                  {(["alpha", "bravo"] as const).map((side) => {
-                    const team = side === "alpha" ? alphaTeam : bravoTeam;
-                    const teamMembers = groupedMembers[side];
-                    const trophyList: string[] = Array.isArray(team?.trophy_users) ? team.trophy_users : [];
-                    const isMyTeam = !!myMatchTeamId && team?.id === myMatchTeamId;
-
-                    return (
-                      <div key={side} style={{ marginBottom: 12 }}>
-                        <div className={`side-chip ${side}`} style={{ marginBottom: 8 }}>{side.toUpperCase()}</div>
-                        <div className="stack-sm">
-                          {teamMembers.map((m) => {
-                            const isTrophy = trophyList.includes(m.user_id);
-                            return (
-                              <div key={m.id} className="card" style={{ padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                <span style={{ fontSize: 13 }}>
-                                  {m.profiles?.display_name ?? m.user_id}
-                                  {isTrophy && (
-                                    <span style={{ marginLeft: 8, color: "var(--cyan)", fontSize: 11 }}>
-                                      [トロフィー]
-                                    </span>
-                                  )}
-                                </span>
-                                {isMyTeam && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleTrophy(m.user_id)}
-                                    disabled={busy}
-                                    className={isTrophy ? "btn-danger btn-sm" : "btn-sm"}
-                                    style={{ padding: "4px 10px", fontSize: 11 }}
-                                  >
-                                    {isTrophy ? "解除" : "選択"}
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
-                          選択済み: {trophyList.length} / 2
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {!allSrDone && (
-                <div style={{ marginTop: 20, opacity: 0.5 }}>
-                  <div className="sec-title" style={{ margin: 0 }}>STEP 2: トロフィー選択</div>
-                  <p className="muted" style={{ fontSize: 12 }}>SR選択を完了してください</p>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Trophy/SR/Smoke are auto-assigned on banpick completion */}
         </div>
 
         {/* ---- RIGHT COLUMN ---- */}
