@@ -1136,7 +1136,7 @@ export default function BanpickPage() {
                             color: isAlphaSide ? "var(--cyan)" : "var(--magenta)",
                             lineHeight: 1.1,
                           }}>
-                            {isAlphaSide ? "ALPHA" : "BRAVO"}
+                            {isAlphaSide ? "チーム1" : "チーム2"}
                           </div>
                           <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>{s}</div>
                         </button>
