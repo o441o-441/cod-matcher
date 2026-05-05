@@ -17,6 +17,28 @@ export default function QueueStatusBar() {
   const redirectedRef = useRef<string | null>(null)
   const cachedUidRef = useRef<string | null>(null)
 
+  // マッチ画面から離脱した瞬間にキャンセル
+  const prevPathnameRef = useRef(pathname)
+  useEffect(() => {
+    const prev = prevPathnameRef.current
+    prevPathnameRef.current = pathname
+    // /match から他のページに遷移した場合
+    if (prev === '/match' && pathname !== '/match') {
+      const uid = cachedUidRef.current
+      if (!uid) return
+      void (async () => {
+        const { data: pm } = await supabase.from('party_members').select('party_id').eq('user_id', uid)
+        const pids = (pm ?? []).map((r: { party_id: string }) => r.party_id)
+        if (pids.length === 0) return
+        const { data: qe } = await supabase.from('queue_entries').select('id').in('party_id', pids).eq('status', 'waiting').limit(1).maybeSingle()
+        if (qe?.id) {
+          await supabase.rpc('rpc_cancel_queue', { p_queue_entry_id: qe.id })
+          setWaiting(false)
+        }
+      })()
+    }
+  }, [pathname])
+
   const checkQueue = useCallback(async () => {
     let uid = cachedUidRef.current
     if (!uid) {
