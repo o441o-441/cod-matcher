@@ -615,7 +615,23 @@ export default function MatchPage() {
     }
   }, [myActiveMatch?.id]);
 
-  // ハートビートはloadMyState内で送信（15秒ポーリング + Realtimeトリガー時）
+  // ページ離脱時に検索を自動キャンセル（他のページに遷移した場合）
+  const isWaitingRef = useRef(false);
+  const waitingEntryIdForCleanupRef = useRef<string | null>(null);
+  useEffect(() => {
+    isWaitingRef.current = isWaiting;
+    waitingEntryIdForCleanupRef.current = myWaitingEntry?.id ?? null;
+  }, [isWaiting, myWaitingEntry?.id]);
+
+  useEffect(() => {
+    return () => {
+      // アンマウント時（ページ遷移時）にwaitingならキャンセル
+      if (isWaitingRef.current && waitingEntryIdForCleanupRef.current) {
+        void supabase.rpc("rpc_cancel_queue", { p_queue_entry_id: waitingEntryIdForCleanupRef.current });
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // beforeunload: ブラウザを閉じる時にキャンセル試行
   useEffect(() => {
