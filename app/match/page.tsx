@@ -404,6 +404,11 @@ export default function MatchPage() {
         if (waitingRes.error) throw waitingRes.error;
         setMyWaitingEntry(waitingRes.data ?? null);
 
+        // ハートビート送信（waitingエントリがあれば）
+        if (waitingRes.data?.id) {
+          void supabase.rpc("rpc_queue_heartbeat", { p_queue_entry_id: waitingRes.data.id });
+        }
+
         // 待機中のプレイヤー数を取得
         if (waitingRes.data) {
           const { count } = await supabase
@@ -594,24 +599,7 @@ export default function MatchPage() {
     }
   }, [myActiveMatch?.id]);
 
-  // Heartbeat: 10秒ごとにlast_heartbeatを更新
-  const waitingEntryIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    waitingEntryIdRef.current = myWaitingEntry?.id ?? null;
-  }, [myWaitingEntry?.id]);
-
-  useEffect(() => {
-    if (!isWaiting) return;
-    const heartbeat = () => {
-      const entryId = waitingEntryIdRef.current;
-      if (entryId) {
-        void supabase.rpc("rpc_queue_heartbeat", { p_queue_entry_id: entryId });
-      }
-    };
-    heartbeat();
-    const id = setInterval(heartbeat, 10000);
-    return () => clearInterval(id);
-  }, [isWaiting, supabase]);
+  // ハートビートはloadMyState内で送信（15秒ポーリング + Realtimeトリガー時）
 
   // beforeunload: ブラウザを閉じる時にキャンセル試行
   useEffect(() => {
