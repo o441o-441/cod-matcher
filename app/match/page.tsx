@@ -583,6 +583,10 @@ export default function MatchPage() {
 
     const timer = window.setInterval(() => {
       void attemptAutoMatch();
+      // ハートビートも同時に送信
+      if (myWaitingEntry?.id) {
+        void supabase.rpc("rpc_queue_heartbeat", { p_queue_entry_id: myWaitingEntry.id });
+      }
     }, 5000);
 
     return () => window.clearInterval(timer);
@@ -594,16 +598,16 @@ export default function MatchPage() {
     }
   }, [myActiveMatch?.id]);
 
-  // Heartbeat: 30秒ごとにlast_heartbeatを更新
+  // Heartbeat: 15秒ごとにlast_heartbeatを更新（リーダー以外のメンバー向け）
   useEffect(() => {
-    if (!isWaiting || !myWaitingEntry?.id) return;
+    if (!isWaiting || !myWaitingEntry?.id || isPartyLeader) return;
     const heartbeat = () => {
       void supabase.rpc("rpc_queue_heartbeat", { p_queue_entry_id: myWaitingEntry.id });
     };
     heartbeat();
-    const id = setInterval(heartbeat, 30000);
+    const id = setInterval(heartbeat, 15000);
     return () => clearInterval(id);
-  }, [isWaiting, myWaitingEntry?.id, supabase]);
+  }, [isWaiting, myWaitingEntry?.id, isPartyLeader, supabase]);
 
   // beforeunload: ブラウザを閉じる時にキャンセル試行
   useEffect(() => {
