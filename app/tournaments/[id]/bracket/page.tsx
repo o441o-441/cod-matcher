@@ -9,7 +9,7 @@ type MatchRow = {
   id: string; round: number; match_number: number
   entry_a_id: string | null; entry_b_id: string | null
   winner_entry_id: string | null; score_a: number; score_b: number
-  status: string
+  status: string; bracket_side: string
 }
 
 type EntryInfo = { id: string; name: string; seed: number | null }
@@ -24,17 +24,19 @@ export default function BracketPage() {
   const [entryMap, setEntryMap] = useState<Map<string, EntryInfo>>(new Map())
   const [tournamentTitle, setTournamentTitle] = useState('')
   const [maxRound, setMaxRound] = useState(0)
+  const [eliminationType, setEliminationType] = useState('single')
 
   useEffect(() => {
     if (!tournamentId) return
     const load = async () => {
       const [{ data: t }, { data: matchData }, { data: entries }] = await Promise.all([
-        supabase.from('tournaments').select('title, entry_mode').eq('id', tournamentId).maybeSingle(),
+        supabase.from('tournaments').select('title, entry_mode, elimination_type').eq('id', tournamentId).maybeSingle(),
         supabase.from('tournament_matches').select('*').eq('tournament_id', tournamentId).order('round').order('match_number'),
         supabase.from('tournament_entries').select('id, team_id, user_id, assigned_team_name, seed_number').eq('tournament_id', tournamentId),
       ])
 
-      setTournamentTitle((t as { title: string } | null)?.title ?? '')
+      setTournamentTitle((t as { title: string; elimination_type?: string } | null)?.title ?? '')
+      setEliminationType((t as { elimination_type?: string } | null)?.elimination_type ?? 'single')
       setMatches((matchData ?? []) as MatchRow[])
 
       // エントリー名解決
@@ -85,10 +87,19 @@ export default function BracketPage() {
         <button className="btn-ghost" onClick={() => router.push(`/tournaments/${tournamentId}`)}>← 大会詳細に戻る</button>
       </div>
 
+      {eliminationType === 'double' && (
+        <div className="section row" style={{ gap: 8 }}>
+          <span className="badge" style={{ fontSize: 10, background: 'var(--cyan-dim)', color: 'var(--cyan)' }}>DOUBLE ELIMINATION</span>
+          <span className="muted" style={{ fontSize: 12 }}>2敗で敗退・敗者復活あり</span>
+        </div>
+      )}
+
+      {/* Winners Bracket */}
+      {eliminationType === 'double' && <h2 style={{ marginTop: 20 }}>Winners Bracket</h2>}
       <div className="section" style={{ overflowX: 'auto' }}>
         <div style={{ display: 'flex', gap: 24, minWidth: maxRound * 280 }}>
           {Array.from({ length: maxRound }, (_, i) => i + 1).map(round => {
-            const roundMatches = matches.filter(m => m.round === round)
+            const roundMatches = matches.filter(m => m.round === round && m.bracket_side === 'winners')
             return (
               <div key={round} style={{ flex: 1, minWidth: 240 }}>
                 <div className="stat-label" style={{ marginBottom: 12, textAlign: 'center' }}>
@@ -131,6 +142,82 @@ export default function BracketPage() {
           })}
         </div>
       </div>
+
+      {/* Losers Bracket (ダブルエリミのみ) */}
+      {eliminationType === 'double' && (() => {
+        const losersMatches = matches.filter(m => m.bracket_side === 'losers')
+        const losersMaxRound = losersMatches.reduce((max, m) => Math.max(max, m.round), 0)
+        if (losersMatches.length === 0) return null
+        return (
+          <>
+            <h2 style={{ marginTop: 32 }}>Losers Bracket</h2>
+            <div className="section" style={{ overflowX: 'auto' }}>
+              <div style={{ display: 'flex', gap: 24, minWidth: losersMaxRound * 280 }}>
+                {Array.from({ length: losersMaxRound }, (_, i) => i + 1).map(round => {
+                  const roundMatches = losersMatches.filter(m => m.round === round)
+                  return (
+                    <div key={round} style={{ flex: 1, minWidth: 240 }}>
+                      <div className="stat-label" style={{ marginBottom: 12, textAlign: 'center' }}>L Round {round}</div>
+                      <div className="stack" style={{ gap: 8 }}>
+                        {roundMatches.map(m => {
+                          const a = m.entry_a_id ? entryMap.get(m.entry_a_id) : null
+                          const b = m.entry_b_id ? entryMap.get(m.entry_b_id) : null
+                          return (
+                            <div key={m.id} className="card" style={{ padding: '8px 12px', borderLeft: '3px solid var(--magenta)' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--line)' }}>
+                                <span style={{ fontSize: 13, fontWeight: m.winner_entry_id === m.entry_a_id ? 700 : 400, color: m.winner_entry_id === m.entry_a_id ? 'var(--success)' : undefined }}>
+                                  {a ? a.name : 'TBD'}
+                                </span>
+                                <span className="mono" style={{ fontSize: 12 }}>{m.status === 'completed' ? m.score_a : '-'}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                                <span style={{ fontSize: 13, fontWeight: m.winner_entry_id === m.entry_b_id ? 700 : 400, color: m.winner_entry_id === m.entry_b_id ? 'var(--success)' : undefined }}>
+                                  {b ? b.name : 'TBD'}
+                                </span>
+                                <span className="mono" style={{ fontSize: 12 }}>{m.status === 'completed' ? m.score_b : '-'}</span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        )
+      })()}
+
+      {/* Grand Final (ダブルエリミのみ) */}
+      {eliminationType === 'double' && (() => {
+        const gf = matches.find(m => m.bracket_side === 'grand_final')
+        if (!gf) return null
+        const a = gf.entry_a_id ? entryMap.get(gf.entry_a_id) : null
+        const b = gf.entry_b_id ? entryMap.get(gf.entry_b_id) : null
+        return (
+          <>
+            <h2 style={{ marginTop: 32, color: 'var(--gold, #ffd700)' }}>Grand Final</h2>
+            <div className="section">
+              <div className="card-strong" style={{ maxWidth: 400, border: '2px solid var(--gold, #ffd700)', padding: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
+                  <span style={{ fontSize: 15, fontWeight: gf.winner_entry_id === gf.entry_a_id ? 700 : 400 }}>
+                    {a ? a.name : 'Winners側'} <span className="muted" style={{ fontSize: 11 }}>(W)</span>
+                  </span>
+                  <span className="mono">{gf.status === 'completed' ? gf.score_a : '-'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
+                  <span style={{ fontSize: 15, fontWeight: gf.winner_entry_id === gf.entry_b_id ? 700 : 400 }}>
+                    {b ? b.name : 'Losers側'} <span className="muted" style={{ fontSize: 11 }}>(L)</span>
+                  </span>
+                  <span className="mono">{gf.status === 'completed' ? gf.score_b : '-'}</span>
+                </div>
+                {gf.status === 'live' && <span className="badge" style={{ fontSize: 9, marginTop: 8, background: 'var(--gold, #ffd700)', color: '#000' }}>GRAND FINAL</span>}
+              </div>
+            </div>
+          </>
+        )
+      })()}
     </main>
   )
 }

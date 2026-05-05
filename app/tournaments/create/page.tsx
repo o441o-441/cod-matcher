@@ -13,6 +13,7 @@ export default function TournamentCreatePage() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [format, setFormat] = useState<'tournament' | 'league'>('tournament')
+  const [eliminationType, setEliminationType] = useState<'single' | 'double'>('single')
   const [entryMode, setEntryMode] = useState<'team' | 'solo'>('team')
   const [matchFormat, setMatchFormat] = useState('bo1')
   const [capacity, setCapacity] = useState(8)
@@ -35,6 +36,7 @@ export default function TournamentCreatePage() {
       title: title.trim(),
       description: description.trim() || null,
       format,
+      elimination_type: eliminationType,
       entry_mode: entryMode,
       match_format: matchFormat,
       status: 'recruit',
@@ -102,6 +104,31 @@ export default function TournamentCreatePage() {
               </button>
             </div>
           </div>
+
+          {/* エリミネーションタイプ（トーナメント形式のみ） */}
+          {format === 'tournament' && (
+            <div>
+              <div className="stat-label">エリミネーション方式</div>
+              <div className="grid grid-2" style={{ marginTop: 8 }}>
+                <button
+                  className="card"
+                  style={{ textAlign: 'center', padding: 16, border: eliminationType === 'single' ? '2px solid var(--cyan)' : undefined, cursor: 'pointer' }}
+                  onClick={() => setEliminationType('single')}
+                >
+                  <div style={{ fontWeight: 700 }}>SINGLE</div>
+                  <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>1敗で敗退</p>
+                </button>
+                <button
+                  className="card"
+                  style={{ textAlign: 'center', padding: 16, border: eliminationType === 'double' ? '2px solid var(--cyan)' : undefined, cursor: 'pointer' }}
+                  onClick={() => setEliminationType('double')}
+                >
+                  <div style={{ fontWeight: 700 }}>DOUBLE</div>
+                  <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>2敗で敗退（敗者復活あり）</p>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* エントリー方式 */}
           <div>
