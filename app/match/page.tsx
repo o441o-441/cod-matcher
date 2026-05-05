@@ -525,7 +525,23 @@ export default function MatchPage() {
   }, [myUserId, loadMyState, supabase]);
 
   useEffect(() => {
-    const interval = setInterval(() => void loadMyState({ silent: true }), 15000);
+    const interval = setInterval(() => {
+      void loadMyState({ silent: true });
+      // ハートビート: 自分のwaitingエントリがあれ���更新
+      const uid = cachedUidRef.current;
+      if (uid) {
+        void (async () => {
+          const { data: pm } = await supabase.from("party_members").select("party_id").eq("user_id", uid);
+          const pids = (pm ?? []).map((r: { party_id: string }) => r.party_id);
+          if (pids.length > 0) {
+            const { data: qe } = await supabase.from("queue_entries").select("id").in("party_id", pids).eq("status", "waiting").limit(1).maybeSingle();
+            if (qe?.id) {
+              await supabase.rpc("rpc_queue_heartbeat", { p_queue_entry_id: qe.id });
+            }
+          }
+        })();
+      }
+    }, 15000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
