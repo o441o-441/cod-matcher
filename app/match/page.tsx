@@ -1350,7 +1350,9 @@ export default function MatchPage() {
                     検索を中止する際は必ず「待機解除」ボタンを押してください。
                   </p>
                   <p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>
-                    ボタンを押さずにページを離れると、一定時間マッチングに支障が出る場合があります。
+                    ボタンを押さずにページを離れると、マッチングがキャンセルされない場合があります。
+                    <br />
+                    気づかずにマッチングして放置状態となった場合はBAN対象となります。
                   </p>
                 </div>
                 <div style={{ marginTop: 12 }}>
