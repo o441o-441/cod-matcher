@@ -285,14 +285,46 @@ export default function TournamentDetailPage() {
         </div>
       </div>
 
+      {/* 進行中リンク */}
+      {(tournament.status === 'live' || tournament.status === 'seeding') && (
+        <div className="section row" style={{ gap: 8 }}>
+          {tournament.format === 'tournament' && (
+            <button className="btn-primary" onClick={() => router.push(`/tournaments/${tournamentId}/bracket`)}>
+              ブラケットを見る
+            </button>
+          )}
+          {tournament.format === 'league' && (
+            <button className="btn-primary" onClick={() => router.push(`/tournaments/${tournamentId}/standings`)}>
+              星取表を見る
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 主催者アクション */}
       {isHost && (
         <div className="section card-strong">
           <h2 style={{ marginTop: 0 }}>主催者メニュー</h2>
-          <div className="row" style={{ gap: 8 }}>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
             {tournament.status === 'recruit' && (
-              <button className="btn-primary" onClick={() => showToast('シード機能は今後実装予定です', 'info')}>
-                エントリー締切 → シード開始
+              <button className="btn-primary" onClick={async () => {
+                setBusy(true)
+                const { data, error } = await supabase.rpc('rpc_tournament_execute_seeding', { p_tournament_id: tournamentId })
+                if (error) { showToast(error.message, 'error'); setBusy(false); return }
+                showToast('シードを実行しました', 'success')
+                // ブラケット or リーグ初期化
+                if (tournament.format === 'tournament') {
+                  const { error: e2 } = await supabase.rpc('rpc_tournament_generate_bracket', { p_tournament_id: tournamentId })
+                  if (e2) showToast(e2.message, 'error')
+                  else { showToast('ブラケットを生成しました', 'success'); router.push(`/tournaments/${tournamentId}/bracket`) }
+                } else {
+                  const { error: e2 } = await supabase.rpc('rpc_tournament_init_league', { p_tournament_id: tournamentId })
+                  if (e2) showToast(e2.message, 'error')
+                  else { showToast('リーグを開始しました', 'success'); router.push(`/tournaments/${tournamentId}/standings`) }
+                }
+                setBusy(false)
+              }} disabled={busy}>
+                {busy ? '処理中...' : 'エントリー締切 → 大会開始'}
               </button>
             )}
             <button className="btn-ghost" onClick={() => router.push('/tournaments')}>
