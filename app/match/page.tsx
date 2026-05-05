@@ -615,7 +615,7 @@ export default function MatchPage() {
     }
   }, [myActiveMatch?.id]);
 
-  // ページ離脱時に検索を自動キャンセル（他のページに遷移した場合）
+  // ページ離脱時に検索を自動キャンセル
   const isWaitingRef = useRef(false);
   const waitingEntryIdForCleanupRef = useRef<string | null>(null);
   useEffect(() => {
@@ -624,13 +624,18 @@ export default function MatchPage() {
   }, [isWaiting, myWaitingEntry?.id]);
 
   useEffect(() => {
-    return () => {
-      // アンマウント時（ページ遷移時）にwaitingならキャンセル
-      if (isWaitingRef.current && waitingEntryIdForCleanupRef.current) {
-        void supabase.rpc("rpc_cancel_queue", { p_queue_entry_id: waitingEntryIdForCleanupRef.current });
-      }
+    const cancelQueue = () => {
+      if (!isWaitingRef.current || !waitingEntryIdForCleanupRef.current) return;
+      const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/rpc_cancel_queue`;
+      const headers = { 'Content-Type': 'application/json', 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' };
+      const body = JSON.stringify({ p_queue_entry_id: waitingEntryIdForCleanupRef.current });
+      // sendBeaconはヘッダーを送れないのでfetch keepaliveを使用
+      void fetch(url, { method: 'POST', headers, body, keepalive: true });
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    // pagehide: ブラウザ閉じる + ページ遷移の両方で発火
+    window.addEventListener('pagehide', cancelQueue);
+    return () => window.removeEventListener('pagehide', cancelQueue);
   }, []);
 
   // beforeunload: ブラウザを閉じる時にキャンセル試行

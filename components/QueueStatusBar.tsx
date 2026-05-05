@@ -80,6 +80,12 @@ export default function QueueStatusBar() {
       .limit(1)
 
     if (waitingEntries && waitingEntries.length > 0) {
+      // マッチ画面以外にいる場合は自動キャンセル
+      if (pathname !== '/match') {
+        await supabase.rpc('rpc_cancel_queue', { p_queue_entry_id: waitingEntries[0].id })
+        setWaiting(false)
+        return
+      }
       setWaiting(true)
       if (!waitStartRef.current) {
         waitStartRef.current = new Date(waitingEntries[0].created_at).getTime()
