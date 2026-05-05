@@ -594,6 +594,30 @@ export default function MatchPage() {
     }
   }, [myActiveMatch?.id]);
 
+  // Heartbeat: 30秒ごとにlast_heartbeatを更新
+  useEffect(() => {
+    if (!isWaiting || !myWaitingEntry?.id) return;
+    const heartbeat = () => {
+      void supabase.rpc("rpc_queue_heartbeat", { p_queue_entry_id: myWaitingEntry.id });
+    };
+    heartbeat();
+    const id = setInterval(heartbeat, 30000);
+    return () => clearInterval(id);
+  }, [isWaiting, myWaitingEntry?.id, supabase]);
+
+  // beforeunload: ブラウザを閉じる時にキャンセル試行
+  useEffect(() => {
+    if (!isWaiting || !myWaitingEntry?.id) return;
+    const handleBeforeUnload = () => {
+      // sendBeaconでfire-and-forget
+      const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/rpc_cancel_queue`;
+      const body = JSON.stringify({ p_queue_entry_id: myWaitingEntry.id });
+      navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isWaiting, myWaitingEntry?.id]);
+
   const handleCreateParty = async () => {
     clearMessages();
     setBusy(true);
@@ -1287,8 +1311,16 @@ export default function MatchPage() {
                   </div>
                 </div>
 
-                {/* Cancel button */}
-                <div style={{ marginTop: 16 }}>
+                {/* Warning + Cancel button */}
+                <div className="card" style={{ marginTop: 16, borderColor: 'rgba(245, 158, 11, 0.4)', background: 'rgba(245, 158, 11, 0.05)', padding: '12px 16px' }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--amber, #f59e0b)' }}>
+                    検索を中止する際は必ず「待機解除」ボタンを押してください。
+                  </p>
+                  <p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>
+                    ボタンを押さずにページを離れると、一定時間マッチングに支障が出る場合があります。
+                  </p>
+                </div>
+                <div style={{ marginTop: 12 }}>
                   <button onClick={handleCancelQueue} disabled={busy} className="btn-danger">
                     待機解除
                   </button>
