@@ -26,7 +26,7 @@ import TimerRing from "@/components/TimerRing";
 import MapThumb from "@/components/MapThumb";
 
 const BANPICK_TUTORIAL = [
-  { title: "バンピックとは", body: "HP / SND / OVL の中からランダムで1つモードが選ばれ、そのモードでBAN → PICK → サイド選択を行います（BO1）。" },
+  { title: "バンピックとは", body: "HP / SND / OVL の中から重み付きランダムで1つモードが選ばれ、そのモードでBAN → PICK → サイド選択を行います（BO1）。選出確率: HP 約67% / SND 約22% / OVL 約11%" },
   { title: "BAN", body: "マップを1つ選んで除外します。BANされたマップには取り消し線が付き、PICKできなくなります。各チーム1回ずつBANします。" },
   { title: "PICK", body: "残りのマップから試合で使うマップを選びます。選ばれたマップはハイライト表示されます。" },
   { title: "サイド選択", body: "マップが決まったら、JSOC / ギルド のどちらのサイドでプレイするか選びます。" },
@@ -984,6 +984,11 @@ export default function BanpickPage() {
       {/* ---- PHASE BAR ---- */}
       {session && (
         <div className="card-strong" style={{ padding: "18px 20px", marginBottom: 20 }}>
+          {selectedMode && (
+            <p className="muted" style={{ fontSize: 11, marginBottom: 12 }}>
+              モード選出確率 — HP: 67% / SND: 22% / OVL: 11%
+            </p>
+          )}
           <div className="grid-3">
             {phaseKeys.map((pk) => {
               const st = phaseStatus(pk);
