@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { id: '/', label: 'HOME' },
   { id: '/menu', label: 'MENU' },
   { id: '/match', label: 'MATCH' },
+  { id: '/tournaments', label: 'TOURNAMENTS' },
   { id: '/ranking', label: 'RANKING' },
   { id: '/blog', label: 'REVIEWS' },
   { id: '/mypage', label: 'MY PAGE' },
