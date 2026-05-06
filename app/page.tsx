@@ -104,7 +104,7 @@ export default function HomePage() {
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 18 }}>
         {MODES.map((m) => (
           <button key={m.id} type="button" onClick={() => m.id === 'tournament' ? router.push(m.href) : goTo(m.href)} style={{
-            position: 'relative', padding: 20, borderRadius: 14, textAlign: 'left', cursor: 'pointer', minHeight: 240,
+            position: 'relative', padding: 20, borderRadius: 14, textAlign: 'left', cursor: 'pointer',
             border: `1px solid ${m.border}`, background: `linear-gradient(160deg, ${m.soft}, rgba(10,14,32,0.72) 60%, rgba(10,14,32,0.92))`,
             display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden',
             boxShadow: 'var(--shadow)', transition: 'transform 0.2s, box-shadow 0.2s',
@@ -132,10 +132,12 @@ export default function HomePage() {
               ))}
             </div>
 
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, marginTop: 4, borderTop: '1px solid var(--line)', fontFamily: 'var(--font-display)', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: m.color }}>
-              <span>{signedIn ? m.actionLoggedIn : m.action}</span>
-              <span style={{ fontSize: 14 }}>›</span>
-            </div>
+            {signedIn && (
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, marginTop: 4, borderTop: '1px solid var(--line)', fontFamily: 'var(--font-display)', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: m.color }}>
+                <span>{m.actionLoggedIn}</span>
+                <span style={{ fontSize: 14 }}>›</span>
+              </div>
+            )}
           </button>
         ))}
       </section>
