@@ -378,7 +378,7 @@ export default function ScrimQueuePage() {
 
           {/* Searching */}
           {isWaiting && (
-            <div className="card-strong">
+            <div className="card-strong anim-keep">
               <span className="badge magenta" style={{ marginBottom: 16 }}><span className="badge-dot" style={{ animation: 'pulse-glow 1.5s ease-in-out infinite' }} />SEARCHING</span>
               <div className="flicker" style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 800, background: 'linear-gradient(135deg, #fff, var(--magenta))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: 16 }}>
                 Scrim相手を探索中...

@@ -1288,7 +1288,7 @@ export default function MatchPage() {
               "幅広い相手を検索中です...",
             ];
             return (
-              <div className="card-strong">
+              <div className="card-strong anim-keep">
                 {/* SEARCHING badge with pulsing dot */}
                 <div style={{ marginBottom: 16 }}>
                   <span className="badge magenta">

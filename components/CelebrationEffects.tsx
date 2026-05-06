@@ -79,7 +79,7 @@ export function VictoryEffect({ onClose }: { onClose?: () => void }) {
   }, [onClose])
 
   return (
-    <div className="celeb-overlay" style={{ background: 'rgba(0,0,0,0.35)' }}>
+    <div className="celeb-overlay anim-keep" style={{ background: 'rgba(0,0,0,0.35)' }}>
       <div className="celeb-scan" />
       <div className="celeb-win-toast">
         <div className="celeb-victory-text">VICTORY</div>
@@ -108,7 +108,7 @@ export function ChampionEffect({
   }, [onClose])
 
   return (
-    <div className="celeb-overlay celeb-scrim">
+    <div className="celeb-overlay celeb-scrim anim-keep">
       <div className="celeb-spotlight" />
       <Confetti count={120} />
       <div className="celeb-stage">

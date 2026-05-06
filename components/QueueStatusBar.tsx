@@ -257,6 +257,7 @@ export default function QueueStatusBar() {
 
   return (
     <div
+      className="anim-keep"
       style={{
         position: 'fixed',
         bottom: 0,
