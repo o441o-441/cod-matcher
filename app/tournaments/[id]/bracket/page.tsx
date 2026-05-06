@@ -242,11 +242,20 @@ export default function BracketPage() {
           </div>
         </div>
 
-        {/* 結果報告ボタン */}
-        {canReport && !isReporting && (
+        {/* バンピック/結果報告ボタン */}
+        {m.status === 'pending' && m.entry_a_id && m.entry_b_id && (
           <button
             className="btn-primary btn-sm btn-block"
             style={{ marginTop: 10, fontSize: 12 }}
+            onClick={() => router.push(`/tournaments/${tournamentId}/match/${m.id}`)}
+          >
+            バンピック → 試合
+          </button>
+        )}
+        {canReport && !isReporting && (
+          <button
+            className="btn-ghost btn-sm btn-block"
+            style={{ marginTop: 6, fontSize: 12 }}
             onClick={() => { setReportMatchId(m.id); setReportWinner(null); setReportScoreA(0); setReportScoreB(0) }}
           >
             結果を報告

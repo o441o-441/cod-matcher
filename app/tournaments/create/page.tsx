@@ -16,6 +16,7 @@ export default function TournamentCreatePage() {
   const [eliminationType, setEliminationType] = useState<'single' | 'double'>('single')
   const [entryMode, setEntryMode] = useState<'team' | 'solo'>('team')
   const [matchFormat, setMatchFormat] = useState('bo1')
+  const [bo1Mode, setBo1Mode] = useState('random')
   const [capacity, setCapacity] = useState(8)
   const [rateCapOn, setRateCapOn] = useState(false)
   const [rateCap, setRateCap] = useState(2000)
@@ -39,6 +40,7 @@ export default function TournamentCreatePage() {
       elimination_type: eliminationType,
       entry_mode: entryMode,
       match_format: matchFormat,
+      bo1_mode: matchFormat === 'bo1' ? bo1Mode : 'random',
       status: 'recruit',
       capacity,
       rate_cap: rateCapOn ? rateCap : null,
@@ -172,6 +174,31 @@ export default function TournamentCreatePage() {
               </select>
             </div>
           </div>
+
+          {/* BO1モード選択 */}
+          {matchFormat === 'bo1' && (
+            <div>
+              <div className="stat-label">BO1 モード</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 8 }}>
+                {[
+                  { value: 'random', label: 'ランダム', desc: 'HP:67% SND:22% OVL:11%' },
+                  { value: 'hp', label: 'HARDPOINT', desc: '固定' },
+                  { value: 'snd', label: 'S&D', desc: '固定' },
+                  { value: 'ovl', label: 'OVERLOAD', desc: '固定' },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    className="card"
+                    style={{ textAlign: 'center', padding: 12, cursor: 'pointer', border: bo1Mode === opt.value ? '2px solid var(--cyan)' : undefined }}
+                    onClick={() => setBo1Mode(opt.value)}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{opt.label}</div>
+                    <div className="muted" style={{ fontSize: 10, marginTop: 2 }}>{opt.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 日程 */}
           <div className="grid grid-2">
