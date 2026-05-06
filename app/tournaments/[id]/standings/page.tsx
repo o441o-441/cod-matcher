@@ -232,6 +232,25 @@ export default function StandingsPage() {
                           結果を報告
                         </button>
                       )}
+                      {m.status === 'completed' && isHost && (
+                        <button
+                          type="button"
+                          className="btn-ghost btn-sm btn-block"
+                          style={{ marginTop: 6, fontSize: 11, color: 'var(--amber)' }}
+                          disabled={busy}
+                          onClick={async () => {
+                            if (!confirm('この試合の結果をリセットしますか？')) return
+                            setBusy(true)
+                            const { error: err } = await supabase.rpc('rpc_tournament_reset_match', { p_tournament_match_id: m.id })
+                            setBusy(false)
+                            if (err) { showToast(err.message, 'error'); return }
+                            showToast('結果をリセットしました', 'success')
+                            void loadData()
+                          }}
+                        >
+                          結果を修正（リセット）
+                        </button>
+                      )}
 
                       {/* Report form */}
                       {isReporting && (
