@@ -2,7 +2,7 @@
 
 export default function QueueRadar({ size = 220, waitingCount }: { size?: number; waitingCount?: number }) {
   return (
-    <div style={{ width: size, height: size, position: 'relative' }}>
+    <div className="anim-keep" style={{ width: size, height: size, position: 'relative' }}>
       {/* Rings */}
       <div
         style={{
