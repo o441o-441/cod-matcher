@@ -253,8 +253,25 @@ export default function TournamentDetailPage() {
 
           {myEntry && (
             <div className="card-strong" style={{ borderLeft: '3px solid var(--success)' }}>
-              <p style={{ fontWeight: 700, color: 'var(--success)', margin: 0 }}>エントリー済み</p>
-              {myEntry.weapon_class && <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>武器種: {myEntry.weapon_class.toUpperCase()}</p>}
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <div>
+                  <p style={{ fontWeight: 700, color: 'var(--success)', margin: 0 }}>エントリー済み</p>
+                  {myEntry.weapon_class && <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>武器種: {myEntry.weapon_class.toUpperCase()}</p>}
+                </div>
+                {tournament.status === 'recruit' && (
+                  <button className="btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--danger)' }} disabled={busy} onClick={async () => {
+                    if (!confirm('エントリーを取り消しますか？')) return
+                    setBusy(true)
+                    const { error } = await supabase.from('tournament_entries').delete().eq('id', myEntry.id)
+                    setBusy(false)
+                    if (error) { showToast(error.message, 'error'); return }
+                    showToast('エントリーを取り消しました', 'success')
+                    router.refresh()
+                  }}>
+                    取り消す
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
