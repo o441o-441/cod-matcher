@@ -285,8 +285,8 @@ export default function TournamentDetailPage() {
         </div>
       </div>
 
-      {/* 進行中リンク */}
-      {(tournament.status === 'live' || tournament.status === 'seeding') && (
+      {/* 進行中・完了リンク */}
+      {(tournament.status === 'live' || tournament.status === 'seeding' || tournament.status === 'completed') && (
         <div className="section row" style={{ gap: 8 }}>
           {tournament.format === 'tournament' && (
             <button className="btn-primary" onClick={() => router.push(`/tournaments/${tournamentId}/bracket`)}>
@@ -298,6 +298,9 @@ export default function TournamentDetailPage() {
               星取表を見る
             </button>
           )}
+          <button className="btn-ghost" onClick={() => router.push(`/tournaments/${tournamentId}/results`)}>
+            大会結果・戦績
+          </button>
         </div>
       )}
 
