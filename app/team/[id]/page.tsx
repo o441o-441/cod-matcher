@@ -32,17 +32,13 @@ type TeamMemberRow = {
 }
 
 type MatchRow = {
-  id: string
-  team1_id: string
-  team2_id: string
-  winner_team_id: string | null
-  loser_team_id: string | null
+  match_id: string
+  match_team_id: string
+  opponent_team_id: string | null
+  opponent_source_team_id: string | null
+  is_winner: boolean
   status: string
-  created_at: string
-  team1_rating_before: number | null
-  team2_rating_before: number | null
-  team1_rating_after: number | null
-  team2_rating_after: number | null
+  completed_at: string | null
 }
 
 type TeamNameMap = Record<string, string>
@@ -164,39 +160,44 @@ export default function TeamDetailPage() {
 
     setMembers(normalizedMembers)
 
-    const { data: matchData, error: matchError } = await supabase
-      .from('matches')
-      .select('*')
-      .or(`team1_id.eq.${teamId},team2_id.eq.${teamId}`)
+    // Get matches via match_teams
+    const { data: myMatchTeams } = await supabase
+      .from('match_teams')
+      .select('id, match_id, source_team_id, matches!inner(id, status, completed_at, winner_match_team_id)')
+      .eq('source_team_id', teamId)
       .order('created_at', { ascending: false })
       .limit(10)
 
-    if (matchError) {
-      console.error('matchError:', matchError)
-    }
+    const matchList: MatchRow[] = []
+    const opponentTeamIds = new Set<string>()
 
-    const matchList = (matchData || []) as MatchRow[]
+    for (const mt of (myMatchTeams ?? []) as unknown as { id: string; match_id: string; source_team_id: string; matches: { id: string; status: string; completed_at: string | null; winner_match_team_id: string | null } }[]) {
+      // Find opponent match_team
+      const { data: oppTeams } = await supabase
+        .from('match_teams')
+        .select('id, source_team_id')
+        .eq('match_id', mt.match_id)
+        .neq('id', mt.id)
+        .limit(1)
+      const opp = (oppTeams ?? [])[0] as { id: string; source_team_id: string | null } | undefined
+      if (opp?.source_team_id) opponentTeamIds.add(opp.source_team_id)
+      matchList.push({
+        match_id: mt.match_id,
+        match_team_id: mt.id,
+        opponent_team_id: opp?.id ?? null,
+        opponent_source_team_id: opp?.source_team_id ?? null,
+        is_winner: mt.matches.winner_match_team_id === mt.id,
+        status: mt.matches.status,
+        completed_at: mt.matches.completed_at,
+      })
+    }
     setMatches(matchList)
 
-    const uniqueTeamIds = Array.from(
-      new Set(matchList.flatMap((match) => [match.team1_id, match.team2_id]))
-    )
-
-    if (uniqueTeamIds.length > 0) {
-      const { data: teamsData, error: teamsError } = await supabase
-        .from('teams')
-        .select('id, name')
-        .in('id', uniqueTeamIds)
-
-      if (teamsError) {
-        console.error('teamsError:', teamsError)
-      } else {
-        const map: TeamNameMap = {}
-        for (const item of teamsData || []) {
-          map[item.id] = item.name
-        }
-        setTeamNames(map)
-      }
+    if (opponentTeamIds.size > 0) {
+      const { data: teamsData } = await supabase.from('teams').select('id, name').in('id', [...opponentTeamIds])
+      const map: TeamNameMap = {}
+      for (const item of (teamsData ?? []) as { id: string; name: string }[]) map[item.id] = item.name
+      setTeamNames(map)
     }
 
     setLoading(false)
@@ -423,34 +424,19 @@ export default function TeamDetailPage() {
     router.push('/menu')
   }
 
-  const getOpponentId = (match: MatchRow) => {
-    return match.team1_id === teamId ? match.team2_id : match.team1_id
+  const getOpponentName = (match: MatchRow) => {
+    if (!match.opponent_source_team_id) return '不明'
+    return teamNames[match.opponent_source_team_id] ?? '不明'
   }
 
   const getResultText = (match: MatchRow) => {
     if (match.status !== 'completed') return '未完了'
-    if (match.winner_team_id === teamId) return '勝ち'
-    if (match.loser_team_id === teamId) return '負け'
-    return '不明'
+    return match.is_winner ? '勝ち' : '負け'
   }
 
   const getResultClass = (match: MatchRow) => {
     if (match.status !== 'completed') return 'muted'
-    if (match.winner_team_id === teamId) return 'success'
-    if (match.loser_team_id === teamId) return 'danger'
-    return 'muted'
-  }
-
-  const getMyRatingBefore = (match: MatchRow) => {
-    return match.team1_id === teamId
-      ? match.team1_rating_before
-      : match.team2_rating_before
-  }
-
-  const getMyRatingAfter = (match: MatchRow) => {
-    return match.team1_id === teamId
-      ? match.team1_rating_after
-      : match.team2_rating_after
+    return match.is_winner ? 'success' : 'danger'
   }
 
   if (loading) {
@@ -660,21 +646,16 @@ export default function TeamDetailPage() {
             ) : (
               <div className="stack">
                 {matches.map((match) => {
-                  const opponentId = getOpponentId(match)
-                  const opponentName = teamNames[opponentId] || '不明'
+                  const opponentName = getOpponentName(match)
                   const resultText = getResultText(match)
                   const resultClass = getResultClass(match)
-                  const myBefore = getMyRatingBefore(match)
-                  const myAfter = getMyRatingAfter(match)
-                  const ratingDiff =
-                    myBefore != null && myAfter != null ? myAfter - myBefore : null
 
                   return (
                     <div
-                      key={match.id}
+                      key={match.match_id}
                       className="card glow-hover"
                       style={{ cursor: 'pointer' }}
-                      onClick={() => router.push(`/match/${match.id}`)}
+                      onClick={() => router.push(`/match/${match.match_id}`)}
                     >
                       <div className="rowx">
                         <div>
@@ -684,26 +665,11 @@ export default function TeamDetailPage() {
                             {resultText}
                           </span>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div className="stat">
-                            <span className="stat-label">RATING</span>
-                            <span className="stat-val" style={{ fontSize: 18 }}>
-                              {myAfter ?? '-'}
-                              {ratingDiff !== null && (
-                                <span style={{
-                                  fontSize: 13,
-                                  marginLeft: 6,
-                                  color: ratingDiff >= 0 ? 'var(--success)' : 'var(--danger)',
-                                }}>
-                                  {ratingDiff >= 0 ? '+' : ''}{ratingDiff}
-                                </span>
-                              )}
-                            </span>
+                        {match.completed_at && (
+                          <div className="muted" style={{ fontSize: 12 }}>
+                            {new Date(match.completed_at).toLocaleString('ja-JP')}
                           </div>
-                          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                            {new Date(match.created_at).toLocaleString()}
-                          </div>
-                        </div>
+                        )}
                       </div>
                     </div>
                   )
