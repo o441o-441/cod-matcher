@@ -283,11 +283,11 @@ export default function BracketPage() {
             <div className="grid grid-2" style={{ gap: 8, marginBottom: 8 }}>
               <div>
                 <label style={{ fontSize: 11 }}>{teamMap.get(m.entry_a_id!)?.teamName ?? 'A'} のスコア</label>
-                <input type="number" value={reportScoreA} onChange={e => setReportScoreA(Number(e.target.value))} min={0} />
+                <input type="number" value={reportScoreA || ''} onChange={e => setReportScoreA(e.target.value === '' ? 0 : Number(e.target.value))} onFocus={e => e.target.select()} min={0} inputMode="numeric" />
               </div>
               <div>
                 <label style={{ fontSize: 11 }}>{teamMap.get(m.entry_b_id!)?.teamName ?? 'B'} のスコア</label>
-                <input type="number" value={reportScoreB} onChange={e => setReportScoreB(Number(e.target.value))} min={0} />
+                <input type="number" value={reportScoreB || ''} onChange={e => setReportScoreB(e.target.value === '' ? 0 : Number(e.target.value))} onFocus={e => e.target.select()} min={0} inputMode="numeric" />
               </div>
             </div>
             <div className="row" style={{ gap: 8 }}>
