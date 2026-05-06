@@ -339,25 +339,29 @@ export default function TournamentDetailPage() {
               大会を削除
             </button>
           </div>
-          <ConfirmDialog
-            open={deleteConfirm}
-            title="大会を削除"
-            message={`「${tournament.title}」を削除します。エントリー・試合データもすべて削除されます。この操作は元に戻せません。`}
-            confirmText="削除する"
-            cancelText="キャンセル"
-            danger
-            loading={busy}
-            onCancel={() => setDeleteConfirm(false)}
-            onConfirm={async () => {
-              setBusy(true)
-              const { error } = await supabase.rpc('rpc_tournament_delete', { p_tournament_id: tournamentId })
-              setBusy(false)
-              if (error) { showToast(error.message, 'error'); setDeleteConfirm(false); return }
-              showToast('大会を削除しました', 'success')
-              router.push('/tournaments')
-            }}
-          />
         </div>
+      )}
+
+      {/* 削除確認ダイアログ — card-strongの外に配置 */}
+      {isHost && (
+        <ConfirmDialog
+          open={deleteConfirm}
+          title="大会を削除"
+          message={`「${tournament.title}」を削除します。エントリー・試合データもすべて削除されます。この操作は元に戻せません。`}
+          confirmText="削除する"
+          cancelText="キャンセル"
+          danger
+          loading={busy}
+          onCancel={() => setDeleteConfirm(false)}
+          onConfirm={async () => {
+            setBusy(true)
+            const { error } = await supabase.rpc('rpc_tournament_delete', { p_tournament_id: tournamentId })
+            setBusy(false)
+            if (error) { showToast(error.message, 'error'); setDeleteConfirm(false); return }
+            showToast('大会を削除しました', 'success')
+            router.push('/tournaments')
+          }}
+        />
       )}
     </main>
   )
