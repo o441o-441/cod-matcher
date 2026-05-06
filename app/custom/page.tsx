@@ -153,6 +153,11 @@ export default function CustomPage() {
               onClick={() => setShowCreate(false)}>
               <div className="card-strong" style={{ maxWidth: 460, width: '100%', overflow: 'visible' }} onClick={e => e.stopPropagation()}>
                 <h2 style={{ marginTop: 0 }}>8s を開催する</h2>
+                <div className="card" style={{ padding: '10px 14px', marginBottom: 14, borderColor: 'rgba(88,101,242,0.4)', background: 'rgba(88,101,242,0.08)' }}>
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--text)' }}>
+                    <span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> の #8s-lobby チャンネルに @everyone 通知が自動送信されます
+                  </p>
+                </div>
                 <div style={{ marginBottom: 12 }}>
                   <label htmlFor="c-title" className="stat-label">ロビー名</label>
                   <input id="c-title" value={createTitle} onChange={e => setCreateTitle(e.target.value)} placeholder="例: YN's Lobby" style={{ marginTop: 6 }} />
