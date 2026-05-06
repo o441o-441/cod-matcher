@@ -35,6 +35,7 @@ export default function MenuPage() {
 
   const [loading, setLoading] = useState(!cached)
   const [hasTeam, setHasTeam] = useState(cached?.hasTeam ?? false)
+  const [teamId, setTeamId] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(cached?.isAdmin ?? false)
   const [rating, setRating] = useState<number | null>(cached?.rating ?? null)
   const [peakRating, setPeakRating] = useState<number | null>(cached?.peakRating ?? null)
@@ -113,6 +114,7 @@ export default function MenuPage() {
       if (!userRow?.is_profile_complete) { router.push('/onboarding'); return }
 
       setHasTeam(!!memberRes.data?.team_id)
+      setTeamId(memberRes.data?.team_id ?? null)
 
       const profileRow = profileRes.data
       setIsAdmin(!!profileRow?.is_admin)
@@ -329,8 +331,8 @@ export default function MenuPage() {
           <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>チームの作成・管理</div>
           <div className="stack" style={{ marginTop: 16 }}>
             {hasTeam ? (
-              <button className="btn-ghost btn-block" onClick={() => router.push('/team/edit')}>
-                チーム編集
+              <button className="btn-ghost btn-block" onClick={() => router.push(`/team/${teamId}`)}>
+                チーム情報
                 <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
             ) : (
