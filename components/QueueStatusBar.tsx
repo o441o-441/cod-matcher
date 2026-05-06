@@ -17,15 +17,16 @@ export default function QueueStatusBar() {
   const redirectedRef = useRef<string | null>(null)
   const cachedUidRef = useRef<string | null>(null)
 
-  // マッチ画面から離脱した瞬間にキャンセル
+  // キュー画面から離脱した瞬間にキャンセル
   const prevPathnameRef = useRef(pathname)
   useEffect(() => {
     const prev = prevPathnameRef.current
     prevPathnameRef.current = pathname
-    // /match or /custom/scrim から他のページに遷移した場合
-    const wasQueuePage = prev === '/match' || prev.startsWith('/custom/scrim')
-    const isQueuePage = pathname === '/match' || pathname.startsWith('/custom/scrim')
-    if (wasQueuePage && !isQueuePage) {
+    // /match から離脱、または /custom/scrim から離脱した場合それぞれキャンセル
+    const leftMatch = prev === '/match' && pathname !== '/match'
+    const leftScrim = prev.startsWith('/custom/scrim') && !pathname.startsWith('/custom/scrim')
+    if (!leftMatch && !leftScrim) return
+    {
       const uid = cachedUidRef.current
       if (!uid) return
       void (async () => {
