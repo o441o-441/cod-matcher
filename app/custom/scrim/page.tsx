@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import { LoadingSkeleton } from '@/components/UIState'
 
-type ProfileRow = { id: string; display_name: string; current_rating: number; peak_rating: number; is_banned: boolean }
+type ProfileRow = { id: string; display_name: string; current_rating: number; peak_rating: number; is_banned: boolean; is_admin: boolean }
 type PartyRow = { id: string; leader_user_id: string; party_type: string; status: string }
 type PartyMemberRow = { id: string; party_id: string; user_id: string; profiles?: { id: string; display_name: string; current_rating: number | null; peak_rating: number | null } | null }
 type QueueEntryRow = { id: string; party_id: string; status: string; avg_rating: number; created_at: string }
@@ -49,7 +49,7 @@ export default function ScrimQueuePage() {
       if (!uid) { setLoading(false); return }
 
       const [{ data: prof }, { data: pm }, { data: pendInv }, { data: fr }, { data: membership }] = await Promise.all([
-        supabase.from('profiles').select('id,display_name,current_rating,peak_rating,is_banned').eq('id', uid).maybeSingle(),
+        supabase.from('profiles').select('id,display_name,current_rating,peak_rating,is_banned,is_admin').eq('id', uid).maybeSingle(),
         supabase.from('party_members').select('party_id').eq('user_id', uid).maybeSingle(),
         opts?.silent ? Promise.resolve({ data: null }) : supabase.rpc('rpc_list_my_pending_party_invites'),
         opts?.silent ? Promise.resolve({ data: null }) : supabase.rpc('rpc_list_my_friends'),
@@ -57,7 +57,7 @@ export default function ScrimQueuePage() {
       ])
 
       setProfile(prof as ProfileRow | null)
-      if (prof && (prof as { is_admin?: boolean }).is_admin) setIsAdmin(true)
+      if ((prof as ProfileRow | null)?.is_admin) setIsAdmin(true)
       if (!opts?.silent) setPendingInvites((pendInv as PendingInviteRow[] | null) ?? [])
       if (!opts?.silent) setFriends((fr as { friend_user_id: string; friend_display_name: string | null }[] | null) ?? [])
 
