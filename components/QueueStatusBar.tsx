@@ -189,8 +189,9 @@ export default function QueueStatusBar() {
     router.push(targetPath)
   }, [activeMatch, pathname, router])
 
-  // マッチ画面自体にいる場合はバーを表示しない
+  // マッチ画面・scrimキュー画面にいる場合はバーを表示しない（各画面が独自UIを持つ）
   if (pathname === '/match') return null
+  if (pathname.startsWith('/custom/scrim')) return null
   // マッチ関連ページにいる場合もバーを表示しない
   if (pathname.startsWith('/match/') && activeMatch && pathname.includes(activeMatch.id)) return null
 
