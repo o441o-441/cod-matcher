@@ -10,13 +10,13 @@ type ProfileData = {
 }
 
 const NAV_LINKS = [
-  { id: '/', label: 'HOME' },
-  { id: '/menu', label: 'MENU' },
-  { id: '/match', label: 'MATCH' },
-  { id: '/tournaments', label: 'TOURNAMENTS' },
-  { id: '/ranking', label: 'RANKING' },
-  { id: '/blog', label: 'REVIEWS' },
-  { id: '/mypage', label: 'MY PAGE' },
+  { id: '/', label: 'HOME', auth: false },
+  { id: '/menu', label: 'MENU', auth: true },
+  { id: '/match', label: 'MATCH', auth: true },
+  { id: '/tournaments', label: 'TOURNAMENTS', auth: false },
+  { id: '/ranking', label: 'RANKING', auth: false },
+  { id: '/blog', label: 'REVIEWS', auth: false },
+  { id: '/mypage', label: 'MY PAGE', auth: true },
 ]
 
 export default function TopBar({
@@ -108,7 +108,7 @@ export default function TopBar({
 
         {/* Desktop nav — hidden on mobile via responsive.css */}
         <nav className="nav desktop-nav" aria-label="メインナビゲーション" style={{ flex: 1, justifyContent: 'center' }}>
-          {NAV_LINKS.map((l) => (
+          {NAV_LINKS.filter((l) => !l.auth || signedIn).map((l) => (
             <button
               key={l.id}
               type="button"
@@ -202,7 +202,7 @@ export default function TopBar({
         <>
           <div className="mobile-nav-scrim" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
           <nav id="mobile-nav" className="mobile-nav" aria-label="モバイルナビゲーション">
-            {NAV_LINKS.map((l) => (
+            {NAV_LINKS.filter((l) => !l.auth || signedIn).map((l) => (
               <button
                 key={l.id}
                 type="button"
