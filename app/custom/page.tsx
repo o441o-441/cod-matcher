@@ -121,6 +121,10 @@ export default function CustomPage() {
             </div>
           </div>
 
+          <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+            8sを開催すると <span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> の #8s-lobby に @everyone 通知が自動送信されます
+          </p>
+
           {lobbies.length === 0 ? (
             <div className="empty">現在開催中の8sロビーはありません</div>
           ) : (
