@@ -850,7 +850,7 @@ export default function ReportPage() {
                       setBusy(false);
                       if (error) { setErrorText(error.message); return; }
                       setInfoText("レポートを自動承認しました");
-                      void loadState();
+                      void loadAll();
                     }}>
                       [Admin] 自動承認
                     </button>
