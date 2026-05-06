@@ -25,6 +25,7 @@ export default function EightsLobbyPage() {
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [dragUser, setDragUser] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const isHost = myUserId === lobby?.host_user_id
   const isDrafting = lobby?.status === 'drafting'
@@ -34,7 +35,12 @@ export default function EightsLobbyPage() {
   const loadData = useCallback(async () => {
     if (!lobbyId) return
     const { data: { session } } = await supabase.auth.getSession()
-    setMyUserId(session?.user?.id ?? null)
+    const uid = session?.user?.id ?? null
+    setMyUserId(uid)
+    if (uid) {
+      const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', uid).maybeSingle()
+      setIsAdmin(!!(prof as { is_admin?: boolean } | null)?.is_admin)
+    }
 
     const [{ data: l }, { data: mData }] = await Promise.all([
       supabase.from('eights_lobbies').select('title, host_user_id, status, rate_cap').eq('id', lobbyId).maybeSingle(),
@@ -235,6 +241,17 @@ export default function EightsLobbyPage() {
             )}
           </div>
           {members.length < 8 && <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>8人揃うと振り分けボタンが有効になります</p>}
+          {isAdmin && members.length < 8 && (
+            <button className="btn-ghost btn-sm" style={{ marginTop: 8, fontSize: 11 }} disabled={busy} onClick={async () => {
+              setBusy(true)
+              const { error } = await supabase.rpc('rpc_eights_fill_test_members', { p_lobby_id: lobbyId })
+              setBusy(false)
+              if (error) showToast(error.message, 'error')
+              else void loadData()
+            }}>
+              [Admin] テスト用メンバーを追加
+            </button>
+          )}
         </div>
       )}
 
