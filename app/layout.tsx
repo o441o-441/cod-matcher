@@ -7,7 +7,34 @@ import GlobalNotificationListener from '@/components/GlobalNotificationListener'
 import AppShell from '@/components/AppShell'
 
 export const metadata: Metadata = {
-  title: 'ASCENT',
+  title: {
+    default: 'ASCENT — CoD 4v4 マッチメイキング & トーナメント',
+    template: '%s | ASCENT',
+  },
+  description:
+    'Call of Dutyの4v4対戦マッチメイキング、レート制ランキング、トーナメント運営をワンストップで。チーム結成からバンピック、大会開催まで。',
+  keywords: ['CoD', 'Call of Duty', 'マッチメイキング', 'トーナメント', '4v4', 'ランキング', 'eスポーツ'],
+  authors: [{ name: 'ASCENT' }],
+  creator: 'ASCENT',
+  metadataBase: new URL('https://and-and-and.com'),
+  openGraph: {
+    type: 'website',
+    locale: 'ja_JP',
+    siteName: 'ASCENT',
+    title: 'ASCENT — CoD 4v4 マッチメイキング & トーナメント',
+    description:
+      'Call of Dutyの4v4対戦マッチメイキング、レート制ランキング、トーナメント運営をワンストップで。',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ASCENT — CoD 4v4 マッチメイキング & トーナメント',
+    description:
+      'Call of Dutyの4v4対戦マッチメイキング、レート制ランキング、トーナメント運営をワンストップで。',
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 }
 
 export const viewport: Viewport = {
