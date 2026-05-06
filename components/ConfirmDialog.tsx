@@ -85,6 +85,9 @@ export default function ConfirmDialog({
         style={{
           width: '100%',
           maxWidth: '460px',
+          overflow: 'visible',
+          maxHeight: 'calc(100vh - 40px)',
+          overflowY: 'auto',
         }}
         onClick={(e) => e.stopPropagation()}
       >
