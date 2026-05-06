@@ -16,10 +16,9 @@ type AnnouncementRow = {
 type TournamentRow = {
   id: string
   title: string
-  body: string
-  event_date: string | null
-  event_date_end: string | null
+  description: string | null
   entry_deadline: string | null
+  event_start: string | null
   created_at: string
 }
 
@@ -61,8 +60,8 @@ export default function Home() {
   const fetchTournaments = async () => {
     const { data, error } = await supabase
       .from('tournaments')
-      .select('id, title, body, event_date, event_date_end, entry_deadline, created_at')
-      .eq('is_active', true)
+      .select('id, title, description, entry_deadline, event_start, created_at')
+      .in('status', ['recruit', 'live'])
       .order('entry_deadline', { ascending: true, nullsFirst: false })
       .limit(5)
     if (error) {
@@ -247,7 +246,7 @@ export default function Home() {
                 return (
                   <div key={t.id}>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>{t.title}</div>
-                    <p style={{ fontSize: 13, color: 'var(--text-soft)', marginTop: 8, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{t.body}</p>
+                    {t.description && <p style={{ fontSize: 13, color: 'var(--text-soft)', marginTop: 8, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{t.description}</p>}
                     <div className="grid-2 mt-s" style={{ gap: 10 }}>
                       {t.entry_deadline && (
                         <div className="card" style={{ padding: 12, borderColor: closed ? 'rgba(255, 77, 109, 0.3)' : 'rgba(0, 229, 255, 0.3)', background: closed ? 'rgba(255, 77, 109, 0.05)' : 'rgba(0, 229, 255, 0.05)' }}>
@@ -258,17 +257,12 @@ export default function Home() {
                           <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>{deadlineLabel}</div>
                         </div>
                       )}
-                      {t.event_date && (
+                      {t.event_start && (
                         <div className="card" style={{ padding: 12, borderColor: 'rgba(139, 92, 246, 0.3)', background: 'rgba(139, 92, 246, 0.05)' }}>
                           <div className="stat-label" style={{ color: 'var(--violet)' }}>開催日</div>
                           <div className="mono" style={{ fontSize: 14, fontWeight: 700, marginTop: 4 }}>
-                            {new Date(t.event_date).toLocaleString('ja-JP')}
+                            {new Date(t.event_start).toLocaleString('ja-JP')}
                           </div>
-                          {t.event_date_end && (
-                            <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
-                              〜 {new Date(t.event_date_end).toLocaleString('ja-JP')}
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
