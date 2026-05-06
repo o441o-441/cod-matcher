@@ -22,8 +22,10 @@ export default function QueueStatusBar() {
   useEffect(() => {
     const prev = prevPathnameRef.current
     prevPathnameRef.current = pathname
-    // /match から他のページに遷移した場合
-    if (prev === '/match' && pathname !== '/match') {
+    // /match or /custom/scrim から他のページに遷移した場合
+    const wasQueuePage = prev === '/match' || prev.startsWith('/custom/scrim')
+    const isQueuePage = pathname === '/match' || pathname.startsWith('/custom/scrim')
+    if (wasQueuePage && !isQueuePage) {
       const uid = cachedUidRef.current
       if (!uid) return
       void (async () => {
@@ -102,8 +104,8 @@ export default function QueueStatusBar() {
       .limit(1)
 
     if (waitingEntries && waitingEntries.length > 0) {
-      // マッチ画面以外にいる場合は自動キャンセル
-      if (pathname !== '/match') {
+      // マッチ画面・scrimキュー画面以外にいる場合は自動キャンセル
+      if (pathname !== '/match' && !pathname.startsWith('/custom/scrim')) {
         await supabase.rpc('rpc_cancel_queue', { p_queue_entry_id: waitingEntries[0].id })
         setWaiting(false)
         return
