@@ -14,7 +14,7 @@ type ScrimSession = {
 type PartyMember = { user_id: string; display_name: string; peak_rating: number }
 type ChatMsg = { id: string; sender_user_id: string | null; message_type: string; body: string; created_at: string; sender_name?: string }
 
-const HP_MAPS = ['Rewind', 'Skyline', 'Vault', 'Dealership', 'Hideout']
+const HP_MAPS = ['酒', 'コロッサス', 'デン', 'スカー', 'グリッドロック']
 const SCRIM_TIMEOUT_MS = 90 * 60 * 1000 // 1.5 hours
 
 export default function ScrimLobbyPage() {
@@ -208,19 +208,19 @@ export default function ScrimLobbyPage() {
 
           {/* HP Map Pool */}
           <div className="card">
-            <div className="stat-label" style={{ marginBottom: 10 }}>HARDPOINT マッププール</div>
-            <div className="row" style={{ gap: 10 }}>
+            <div className="stat-label" style={{ marginBottom: 10 }}>HARDPOINT マッププール（バンピックなし・全マップ実施）</div>
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
               {HP_MAPS.map(m => (
                 <div key={m} style={{
-                  flex: 1, padding: '16px 10px', textAlign: 'center', borderRadius: 'var(--r-md)',
-                  background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)',
+                  padding: '12px 16px', textAlign: 'center', borderRadius: 'var(--r-md)',
+                  background: 'rgba(0,229,255,0.06)', border: '1px solid rgba(0,229,255,0.25)',
                 }}>
                   <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13 }}>{m}</div>
-                  <div className="muted" style={{ fontSize: 10, marginTop: 2 }}>HARDPOINT</div>
+                  <div className="muted" style={{ fontSize: 10, marginTop: 2 }}>HP</div>
                 </div>
               ))}
             </div>
-            <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>ホストがマップを選択してください。バンピックは行いません。</p>
+            <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>全マップを順番に実施します。ホストがマップの順番を決めてください。</p>
           </div>
         </div>
 
@@ -266,9 +266,8 @@ export default function ScrimLobbyPage() {
           <div className="card-strong markdown-body" style={{ maxWidth: 600, width: '100%', maxHeight: '80vh', overflowY: 'auto', overflow: 'visible' }} onClick={e => e.stopPropagation()}>
             <h2 style={{ marginTop: 0 }}>Scrim ルール</h2>
             <ul>
-              <li>モード: Hardpoint のみ</li>
+              <li>モード: Hardpoint のみ（バンピックなし・全マップ実施）</li>
               <li>マッププール: {HP_MAPS.join(', ')}</li>
-              <li>バンピックなし（ホストがマップ選択）</li>
               <li>GA（紳士協定）準拠</li>
               <li>チート・コンバーター使用禁止</li>
               <li>暴言・煽り行為禁止</li>

@@ -79,7 +79,7 @@ export default function CustomPage() {
     router.push(`/custom/eights/${lobbyId}`)
   }
 
-  const HP_MAPS = ['Rewind', 'Skyline', 'Vault', 'Dealership', 'Hideout']
+  const HP_MAPS = ['酒', 'コロッサス', 'デン', 'スカー', 'グリッドロック']
 
   return (
     <main>
@@ -91,14 +91,23 @@ export default function CustomPage() {
         8人カスタム（8s）と、パーティ単位でレートを近い相手とぶつけるスクリム（scrim）。ランクには影響しません。
       </p>
 
-      {/* Tabs */}
-      <div className="row section" style={{ gap: 6 }}>
-        {(['8s', 'scrim', 'rules'] as const).map(t => (
-          <button key={t} type="button" className={tab === t ? 'btn-primary' : 'btn-ghost'}
-            onClick={() => setTab(t)} style={{ minWidth: 100 }}>
-            {t === '8s' ? '8s' : t === 'scrim' ? 'Scrim' : 'ルール'}
-          </button>
-        ))}
+      {/* Tabs — large cards */}
+      <div className="grid-3 section">
+        <button type="button" className="card" onClick={() => setTab('8s')}
+          style={{ textAlign: 'center', padding: 24, cursor: 'pointer', border: tab === '8s' ? '2px solid var(--cyan)' : undefined }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 900, letterSpacing: '-0.02em' }}>8s</div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>8人カスタム / 即席ロビー</p>
+        </button>
+        <button type="button" className="card" onClick={() => setTab('scrim')}
+          style={{ textAlign: 'center', padding: 24, cursor: 'pointer', border: tab === 'scrim' ? '2px solid var(--magenta)' : undefined }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 900, letterSpacing: '-0.02em' }}>SCRIM</div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>パーティ vs パーティ / 練習試合</p>
+        </button>
+        <button type="button" className="card" onClick={() => setTab('rules')}
+          style={{ textAlign: 'center', padding: 24, cursor: 'pointer', border: tab === 'rules' ? '2px solid var(--violet)' : undefined }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 900, letterSpacing: '-0.02em' }}>RULES</div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>8s と scrim のレギュレーション</p>
+        </button>
       </div>
 
       {/* 8s Tab */}
@@ -171,7 +180,7 @@ export default function CustomPage() {
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <div>
                 <p style={{ fontWeight: 700, margin: 0 }}>Scrim キュー</p>
-                <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>4人パーティを組んでからキューを開始してください</p>
+                <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>パーティを組むか、ソロで助っ人として参加できます</p>
               </div>
               <button className="btn-primary" onClick={() => router.push('/custom/scrim')}>
                 Scrim キューへ
@@ -180,12 +189,10 @@ export default function CustomPage() {
           </div>
           <div className="card" style={{ marginTop: 16, padding: '14px 18px' }}>
             <div className="stat-label" style={{ marginBottom: 8 }}>HARDPOINT マッププール</div>
-            <div className="row" style={{ gap: 10 }}>
-              {HP_MAPS.map(m => (
-                <div key={m} className="badge" style={{ fontSize: 11 }}>{m}</div>
-              ))}
+            <div className="row" style={{ gap: 6 }}>
+              {HP_MAPS.map(m => <span key={m} className="badge" style={{ fontSize: 11 }}>{m}</span>)}
             </div>
-            <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>scrimではバンピックは行わず、HPマッププールからホストがマップを選択します。</p>
+            <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>scrimではバンピックは行わず、HPの全マップを実施します。</p>
           </div>
         </div>
       )}
@@ -205,11 +212,10 @@ export default function CustomPage() {
             </ul>
             <h3>Scrim ルール</h3>
             <ul>
-              <li>パーティ単位（4人）でキュー</li>
+              <li>パーティ単位でキュー（ソロ参加も可能 — 助っ人として合流）</li>
               <li>マッチング: チームの最高個人レート平均が近い順</li>
-              <li>モード: Hardpoint のみ</li>
+              <li>モード: Hardpoint のみ（バンピックなし・全マップ実施）</li>
               <li>マッププール: {HP_MAPS.join(', ')}</li>
-              <li>バンピックなし（ホストがマップ選択）</li>
               <li>ホスト抽選あり</li>
               <li>1時間半経過で終了提案</li>
               <li>レート変動なし</li>
