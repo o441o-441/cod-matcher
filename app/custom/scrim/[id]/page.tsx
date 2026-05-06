@@ -34,6 +34,7 @@ export default function ScrimLobbyPage() {
   const [busy, setBusy] = useState(false)
   const [showRules, setShowRules] = useState(false)
   const [showTimeout, setShowTimeout] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   const loadData = useCallback(async () => {
@@ -41,6 +42,10 @@ export default function ScrimLobbyPage() {
     const { data: { session } } = await supabase.auth.getSession()
     const uid = session?.user?.id ?? null
     setMyUserId(uid)
+    if (uid) {
+      const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', uid).maybeSingle()
+      if ((prof as { is_admin?: boolean } | null)?.is_admin) setIsAdmin(true)
+    }
 
     const { data: s } = await supabase.from('scrim_sessions').select('*').eq('id', scrimId).maybeSingle()
     if (!s) { setLoading(false); return }
@@ -201,6 +206,17 @@ export default function ScrimLobbyPage() {
                 )}
                 {endRequested && scrim.end_requested_by === mySide && (
                   <span className="muted" style={{ fontSize: 12 }}>相手の承諾を待っています...</span>
+                )}
+                {isAdmin && (
+                  <button className="btn-danger btn-sm" style={{ fontSize: 11 }} disabled={busy} onClick={async () => {
+                    setBusy(true)
+                    const { error } = await supabase.rpc('rpc_scrim_force_end', { p_scrim_id: scrimId })
+                    setBusy(false)
+                    if (error) showToast(error.message, 'error')
+                    else { showToast('scrimを強制終了しました', 'success'); router.push('/custom') }
+                  }}>
+                    [Admin] 強制終了
+                  </button>
                 )}
               </div>
             </div>
