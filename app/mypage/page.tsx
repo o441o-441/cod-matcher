@@ -461,7 +461,7 @@ export default function MyPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut()
     showToast('ログアウトしました', 'info')
-    router.push('/login')
+    router.push('/')
   }
 
   const totalGames = (wins ?? 0) + (losses ?? 0)
