@@ -36,6 +36,7 @@ export default function ResultsPage() {
   const [winnerEntryId, setWinnerEntryId] = useState<string | null>(null)
   const [teams, setTeams] = useState<TeamInfo[]>([])
   const [matches, setMatches] = useState<MatchRow[]>([])
+  const [allEntryNameMap, setAllEntryNameMap] = useState<Map<string, string>>(new Map())
 
   useEffect(() => {
     if (!tournamentId) return
@@ -141,6 +142,14 @@ export default function ResultsPage() {
 
       uniqueTeams.forEach((t, i) => { t.placement = i + 1 })
       setTeams(uniqueTeams)
+
+      // 全エントリーID→チーム名のマップ
+      const nameMap = new Map<string, string>()
+      for (const [entryId, info] of teamInfoMap) {
+        nameMap.set(entryId, info.teamName)
+      }
+      setAllEntryNameMap(nameMap)
+
       setLoading(false)
     }
     void load()
@@ -263,12 +272,8 @@ export default function ResultsPage() {
         <p className="sec-title">全試合結果（{matches.length}試合）</p>
         <div className="stack">
           {matches.map(m => {
-            const teamA = m.entry_a_id ? teams.find(t => t.entryId === m.entry_a_id) ?? (function() { for (const [, v] of [...new Map()]) return v; return null })() : null
-            const teamB = m.entry_b_id ? teams.find(t => t.entryId === m.entry_b_id) : null
-
-            // teamMapからも検索
-            const nameA = teamA?.teamName ?? '不明'
-            const nameB = teamB?.teamName ?? '不明'
+            const nameA = m.entry_a_id ? allEntryNameMap.get(m.entry_a_id) ?? '不明' : 'TBD'
+            const nameB = m.entry_b_id ? allEntryNameMap.get(m.entry_b_id) ?? '不明' : 'TBD'
 
             return (
               <div key={m.id} className="card" style={{ padding: '10px 14px' }}>
