@@ -261,6 +261,17 @@ export default function StandingsPage() {
                         </div>
                       </div>
 
+                      {/* Banpick button */}
+                      {m.status === 'pending' && m.entry_a_id && m.entry_b_id && (
+                        <button
+                          type="button"
+                          className="btn-primary btn-sm btn-block"
+                          style={{ marginTop: 10, fontSize: 12 }}
+                          onClick={() => router.push(`/tournaments/${tournamentId}/match/${m.id}`)}
+                        >
+                          バンピック → 試合
+                        </button>
+                      )}
                       {/* Report button */}
                       {canReport && !isReporting && (
                         <button
