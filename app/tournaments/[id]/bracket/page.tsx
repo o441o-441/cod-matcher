@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import { LoadingSkeleton } from '@/components/UIState'
-import confetti from 'canvas-confetti'
+import { VictoryEffect, ChampionEffect } from '@/components/CelebrationEffects'
 
 type MatchRow = {
   id: string; round: number; match_number: number
@@ -41,6 +41,9 @@ export default function BracketPage() {
   const [reportWinner, setReportWinner] = useState<string | null>(null)
   const [reportScoreA, setReportScoreA] = useState(0)
   const [reportScoreB, setReportScoreB] = useState(0)
+  const [showVictory, setShowVictory] = useState(false)
+  const [showChampion, setShowChampion] = useState(false)
+  const [championInfo, setChampionInfo] = useState({ name: '', title: '' })
 
   const loadData = useCallback(async () => {
     if (!tournamentId) return
@@ -142,14 +145,16 @@ export default function BracketPage() {
     if (error) { showToast(error.message, 'error'); return }
     showToast('結果を報告しました', 'success')
 
-    // Victory confetti
-    const end = Date.now() + 1500
-    const frame = () => {
-      confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0, y: 0.6 }, colors: ['#00e5ff', '#8b5cf6', '#ff2bd6'] })
-      confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1, y: 0.6 }, colors: ['#00e5ff', '#8b5cf6', '#ff2bd6'] })
-      if (Date.now() < end) requestAnimationFrame(frame)
+    // Check if tournament just completed (champion effect)
+    const { data: tCheck } = await supabase.from('tournaments').select('status, title, winner_info').eq('id', tournamentId!).maybeSingle()
+    const tData = tCheck as { status: string; title: string; winner_info: { entry_id?: string } | null } | null
+    if (tData?.status === 'completed' && tData.winner_info?.entry_id) {
+      const winnerTeam = teamMap.get(tData.winner_info.entry_id)
+      setChampionInfo({ name: winnerTeam?.teamName ?? 'CHAMPION', title: tData.title })
+      setShowChampion(true)
+    } else {
+      setShowVictory(true)
     }
-    frame()
 
     setReportMatchId(null)
     setReportWinner(null)
@@ -400,6 +405,15 @@ export default function BracketPage() {
             <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>Losers側がGFに勝った場合、リセットマッチが行われます</p>
           )}
         </div>
+      )}
+
+      {showVictory && <VictoryEffect onClose={() => setShowVictory(false)} />}
+      {showChampion && (
+        <ChampionEffect
+          tournamentName={championInfo.title}
+          winnerName={championInfo.name}
+          onClose={() => setShowChampion(false)}
+        />
       )}
     </main>
   )

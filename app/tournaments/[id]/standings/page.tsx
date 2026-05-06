@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import { LoadingSkeleton } from '@/components/UIState'
-import confetti from 'canvas-confetti'
+import { VictoryEffect } from '@/components/CelebrationEffects'
 
 type StandingRow = {
   id: string; entry_id: string; wins: number; losses: number; draws: number; points: number
@@ -40,6 +40,7 @@ export default function StandingsPage() {
   const [reportScoreA, setReportScoreA] = useState(0)
   const [reportScoreB, setReportScoreB] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [showVictory, setShowVictory] = useState(false)
 
   const loadData = useCallback(async () => {
     if (!tournamentId) return
@@ -102,14 +103,7 @@ export default function StandingsPage() {
     setBusy(false)
     if (error) { showToast(error.message, 'error'); return }
     showToast('結果を報告しました', 'success')
-
-    const end = Date.now() + 1500
-    const frame = () => {
-      confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0, y: 0.6 }, colors: ['#00e5ff', '#8b5cf6', '#ff2bd6'] })
-      confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1, y: 0.6 }, colors: ['#00e5ff', '#8b5cf6', '#ff2bd6'] })
-      if (Date.now() < end) requestAnimationFrame(frame)
-    }
-    frame()
+    setShowVictory(true)
 
     setReportMatchId(null)
     setReportWinner(null)
@@ -286,6 +280,8 @@ export default function StandingsPage() {
         })}
         {matches.length === 0 && <p className="muted">対戦カードがまだ生成されていません</p>}
       </div>
+
+      {showVictory && <VictoryEffect onClose={() => setShowVictory(false)} />}
     </main>
   )
 }

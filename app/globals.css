@@ -1528,6 +1528,122 @@ a:focus-visible {
 }
 
 /* ===================================================================
+   Celebration effects — Victory & Champion
+   =================================================================== */
+.celeb-overlay {
+  position: fixed; inset: 0;
+  display: grid; place-items: center;
+  pointer-events: none;
+  z-index: 8000;
+  overflow: hidden;
+  animation: celeb-overlay-in 300ms ease;
+}
+.celeb-scrim {
+  background: radial-gradient(circle at center, rgba(0,0,0,0.4), rgba(0,0,0,0.85));
+}
+.celeb-scan {
+  position: absolute; left: 0; right: 0; height: 80px;
+  background: linear-gradient(180deg, transparent, rgba(0,229,255,0.4), transparent);
+  filter: blur(8px);
+  animation: celeb-scan-sweep 2.4s linear infinite;
+}
+@keyframes celeb-scan-sweep {
+  from { transform: translateY(-100vh); }
+  to   { transform: translateY(100vh); }
+}
+@keyframes celeb-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Victory toast */
+.celeb-win-toast {
+  position: absolute;
+  left: 50%; top: 30%;
+  transform: translate(-50%, -50%);
+  padding: 18px 28px;
+  border: 1px solid rgba(0,245,160,0.5);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(0,245,160,0.16), rgba(0,200,130,0.08));
+  box-shadow: 0 0 40px rgba(0,245,160,0.4);
+  text-align: center;
+  animation: celeb-pop 500ms cubic-bezier(.2,1.5,.4,1);
+}
+.celeb-victory-text {
+  font-family: var(--font-display); font-weight: 900;
+  font-size: 36px; letter-spacing: 0.04em;
+  background: linear-gradient(180deg, #fff, var(--success));
+  background-clip: text; -webkit-background-clip: text; color: transparent;
+}
+
+/* Champion stage */
+.celeb-stage {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  z-index: 2;
+}
+.celeb-eyebrow {
+  font-family: var(--font-display); font-size: 12px;
+  letter-spacing: 0.4em; color: var(--cyan); text-transform: uppercase;
+  text-shadow: 0 0 12px rgba(0,229,255,0.6);
+}
+.celeb-big {
+  font-family: var(--font-display); font-weight: 900;
+  font-size: clamp(40px, 11vw, 100px); line-height: 0.95;
+  letter-spacing: -0.04em;
+  text-align: center;
+  animation: celeb-pop 600ms cubic-bezier(.2,1.5,.4,1);
+}
+.celeb-gold {
+  background: linear-gradient(180deg, #fff 0%, #ffd166 40%, #e8a020 80%);
+  background-clip: text; -webkit-background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 32px rgba(255,209,102,0.8));
+}
+.celeb-sub {
+  font-family: var(--font-mono); color: var(--text); font-size: 13px;
+  letter-spacing: 0.18em; opacity: 0.9;
+}
+.celeb-ring {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 6px 18px; border-radius: var(--r-pill);
+  border: 1px solid rgba(255,209,102,0.5);
+  background: rgba(255,209,102,0.08);
+  color: #ffd166;
+  font-family: var(--font-display); font-size: 12px; font-weight: 700;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  box-shadow: 0 0 24px rgba(255,209,102,0.3);
+}
+@keyframes celeb-pop {
+  0%   { transform: scale(0.6) translateY(40px); opacity: 0; filter: blur(6px); }
+  60%  { transform: scale(1.08) translateY(0); opacity: 1; filter: blur(0); }
+  100% { transform: scale(1); }
+}
+
+/* Spotlight (conic gradient spin) */
+.celeb-spotlight {
+  position: absolute; inset: 0;
+  background:
+    conic-gradient(from 0deg,
+      rgba(255,209,102,0) 0deg, rgba(255,209,102,0.5) 30deg, rgba(255,209,102,0) 60deg,
+      rgba(0,229,255,0) 180deg, rgba(255,43,214,0.4) 210deg, rgba(255,43,214,0) 240deg,
+      rgba(255,209,102,0) 360deg);
+  animation: spin 6s linear infinite;
+  filter: blur(40px);
+  opacity: 0.5;
+}
+
+/* Confetti pieces */
+.confetti-piece {
+  position: absolute; top: -20px;
+  border-radius: 2px;
+  animation: confetti-fall linear forwards;
+}
+@keyframes confetti-fall {
+  0%   { transform: translateY(0) rotate(0); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0.4; }
+}
+
+/* ===================================================================
    Reduced motion — WCAG 2.3.3
    =================================================================== */
 @media (prefers-reduced-motion: reduce) {
