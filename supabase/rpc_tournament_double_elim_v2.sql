@@ -437,19 +437,8 @@ BEGIN
       status = 'completed', completed_at = now()
   WHERE id = p_tournament_match_id;
 
-  -- Compute bracket dimensions from W R1 count
-  SELECT count(*)::int INTO v_w_r1_count
-  FROM tournament_matches
-  WHERE tournament_id = v_match.tournament_id
-    AND bracket_side = 'winners' AND round = 1;
-  v_bracket_size := v_w_r1_count * 2;
-  v_winners_rounds := (log(2, v_bracket_size))::int;
-  v_losers_rounds := CASE
-    WHEN v_tournament.elimination_type = 'double' THEN (v_winners_rounds - 1) * 2
-    ELSE 0 END;
-
+  -- League: handle before bracket computation (no W R1 matches exist)
   IF v_tournament.format <> 'tournament' THEN
-    -- League: update standings
     IF v_tournament.format = 'league' THEN
       UPDATE league_standings
       SET wins = wins + 1, points = points + 3,
@@ -464,6 +453,17 @@ BEGIN
     END IF;
     RETURN json_build_object('ok', true, 'winner', p_winner_entry_id);
   END IF;
+
+  -- Compute bracket dimensions from W R1 count (tournament format only)
+  SELECT count(*)::int INTO v_w_r1_count
+  FROM tournament_matches
+  WHERE tournament_id = v_match.tournament_id
+    AND bracket_side = 'winners' AND round = 1;
+  v_bracket_size := v_w_r1_count * 2;
+  v_winners_rounds := (log(2, v_bracket_size))::int;
+  v_losers_rounds := CASE
+    WHEN v_tournament.elimination_type = 'double' THEN (v_winners_rounds - 1) * 2
+    ELSE 0 END;
 
   -- ══════════════════ WINNERS BRACKET ══════════════════
   IF v_match.bracket_side = 'winners' THEN
