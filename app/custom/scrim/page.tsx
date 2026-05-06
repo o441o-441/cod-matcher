@@ -133,15 +133,27 @@ export default function ScrimQueuePage() {
     return () => clearInterval(iv)
   }, [waitingEntry?.created_at])
 
-  // Heartbeat (15s interval)
+  // Heartbeat (15s interval) — same approach as /match page
   useEffect(() => {
-    if (!isWaiting || !waitingEntry?.id) return
-    const iv = setInterval(() => {
-      void supabase.rpc('rpc_queue_heartbeat', { p_queue_entry_id: waitingEntry.id })
+    const interval = setInterval(() => {
+      void loadState({ silent: true })
+      const uid = myUserId
+      if (uid) {
+        void (async () => {
+          const { data: pm } = await supabase.from('party_members').select('party_id').eq('user_id', uid)
+          const pids = (pm ?? []).map((r: { party_id: string }) => r.party_id)
+          if (pids.length > 0) {
+            const { data: qe } = await supabase.from('queue_entries').select('id').in('party_id', pids).eq('status', 'waiting').limit(1).maybeSingle()
+            if (qe?.id) {
+              await supabase.rpc('rpc_queue_heartbeat', { p_queue_entry_id: qe.id })
+            }
+          }
+        })()
+      }
     }, 15000)
-    void supabase.rpc('rpc_queue_heartbeat', { p_queue_entry_id: waitingEntry.id })
-    return () => clearInterval(iv)
-  }, [isWaiting, waitingEntry?.id])
+    return () => clearInterval(interval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myUserId])
 
   // Auto-match poll (5s interval, leader only)
   useEffect(() => {
