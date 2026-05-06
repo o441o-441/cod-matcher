@@ -7,9 +7,9 @@ import { useToast } from '@/components/ToastProvider'
 import { LoadingSkeleton } from '@/components/UIState'
 
 const PHASE_POOLS: Record<string, string[]> = {
-  hp: ['Rewind', 'Skyline', 'Vault', 'Protocol'],
-  snd: ['Rewind', 'Skyline', 'Vault', 'Protocol'],
-  ovl: ['Rewind', 'Skyline', 'Vault', 'Protocol'],
+  hp: ['酒', 'コロッサス', 'デン', 'スカー', 'グリッドロック'],
+  snd: ['プラザ', 'デン', 'グリッドロック', 'レイド', 'スカー', 'フリンジ'],
+  ovl: ['デン', 'エクスポージャー', 'スカー'],
 }
 
 const MODE_LABEL: Record<string, string> = { hp: 'HARDPOINT', snd: 'SEARCH & DESTROY', ovl: 'OVERLOAD' }
