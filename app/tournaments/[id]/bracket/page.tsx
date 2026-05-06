@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import { LoadingSkeleton } from '@/components/UIState'
+import confetti from 'canvas-confetti'
 
 type MatchRow = {
   id: string; round: number; match_number: number
@@ -140,6 +141,16 @@ export default function BracketPage() {
     setBusy(false)
     if (error) { showToast(error.message, 'error'); return }
     showToast('結果を報告しました', 'success')
+
+    // Victory confetti
+    const end = Date.now() + 1500
+    const frame = () => {
+      confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0, y: 0.6 }, colors: ['#00e5ff', '#8b5cf6', '#ff2bd6'] })
+      confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1, y: 0.6 }, colors: ['#00e5ff', '#8b5cf6', '#ff2bd6'] })
+      if (Date.now() < end) requestAnimationFrame(frame)
+    }
+    frame()
+
     setReportMatchId(null)
     setReportWinner(null)
     void loadData()
