@@ -261,6 +261,7 @@ export default function BanpickPage() {
   const [infoText, setInfoText] = useState<string | null>(null);
 
   const [myUserId, setMyUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [match, setMatch] = useState<MatchRow | null>(null);
   const [teams, setTeams] = useState<MatchTeamRow[]>([]);
@@ -408,7 +409,12 @@ export default function BanpickPage() {
 
     try {
       const { data: { session: authSession } } = await supabase.auth.getSession();
-      setMyUserId(authSession?.user?.id ?? null);
+      const authUid = authSession?.user?.id ?? null;
+      setMyUserId(authUid);
+      if (authUid) {
+        const { data: prof } = await supabase.from("profiles").select("is_admin").eq("id", authUid).maybeSingle();
+        if ((prof as { is_admin?: boolean } | null)?.is_admin) setIsAdmin(true);
+      }
 
       const { data: teamsForIds } = await supabase
         .from("match_teams")
@@ -966,6 +972,18 @@ export default function BanpickPage() {
             </button>
           )}
           <Tutorial pageKey="banpick" steps={BANPICK_TUTORIAL} />
+          {isAdmin && session?.status === "in_progress" && (
+            <button className="btn-ghost btn-sm" style={{ fontSize: 11 }} disabled={busy} onClick={async () => {
+              setBusy(true);
+              const { error } = await supabase.rpc("rpc_admin_skip_banpick", { p_match_id: matchId });
+              setBusy(false);
+              if (error) { setErrorText(error.message); return; }
+              setInfoText("バンピックをスキップしました");
+              router.push(`/match/${matchId}/confirm`);
+            }}>
+              [Admin] バンピックスキップ
+            </button>
+          )}
         </div>
       </div>
 
