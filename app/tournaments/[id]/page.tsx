@@ -13,6 +13,7 @@ type TournamentRow = {
   seeding_method: string; entry_deadline: string | null; event_start: string | null
   host_user_id: string; prize: string | null; rules: string | null
   winner_info: { name?: string } | null; created_at: string
+  block_count: number; group_phase_status: string | null
 }
 
 type EntryRow = {
@@ -300,6 +301,11 @@ export default function TournamentDetailPage() {
               星取表を見る
             </button>
           )}
+          {tournament.format === 'league' && tournament.block_count >= 2 && tournament.group_phase_status === 'playoff' && (
+            <button className="btn-primary" onClick={() => router.push(`/tournaments/${tournamentId}/bracket`)}>
+              決勝ブラケットを見る
+            </button>
+          )}
           <button className="btn-ghost" onClick={() => router.push(`/tournaments/${tournamentId}/results`)}>
             大会結果・戦績
           </button>
@@ -330,6 +336,18 @@ export default function TournamentDetailPage() {
                 setBusy(false)
               }} disabled={busy}>
                 {busy ? '処理中...' : 'エントリー締切 → 大会開始'}
+              </button>
+            )}
+            {tournament.format === 'league' && tournament.block_count >= 2 && tournament.group_phase_status === 'completed' && (
+              <button className="btn-primary" onClick={async () => {
+                setBusy(true)
+                const { error } = await supabase.rpc('rpc_tournament_start_playoff', { p_tournament_id: tournamentId })
+                setBusy(false)
+                if (error) { showToast(error.message, 'error'); return }
+                showToast('決勝トーナメントを開始しました', 'success')
+                router.push(`/tournaments/${tournamentId}/bracket`)
+              }} disabled={busy}>
+                {busy ? '処理中...' : '決勝トーナメント開始'}
               </button>
             )}
             <button className="btn-ghost" onClick={() => router.push('/tournaments')}>

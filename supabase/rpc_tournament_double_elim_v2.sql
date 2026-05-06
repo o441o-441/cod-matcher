@@ -437,20 +437,32 @@ BEGIN
       status = 'completed', completed_at = now()
   WHERE id = p_tournament_match_id;
 
-  -- League: handle before bracket computation (no W R1 matches exist)
-  IF v_tournament.format <> 'tournament' THEN
-    IF v_tournament.format = 'league' THEN
-      UPDATE league_standings
-      SET wins = wins + 1, points = points + 3,
-          rounds_won = rounds_won + p_score_a, rounds_lost = rounds_lost + p_score_b,
-          updated_at = now()
-      WHERE tournament_id = v_match.tournament_id AND entry_id = p_winner_entry_id;
-      UPDATE league_standings
-      SET losses = losses + 1,
-          rounds_won = rounds_won + p_score_b, rounds_lost = rounds_lost + p_score_a,
-          updated_at = now()
-      WHERE tournament_id = v_match.tournament_id AND entry_id = v_loser_entry_id;
+  -- League match: update standings + check group completion (bracket_side based, not format based)
+  IF v_match.bracket_side = 'league' THEN
+    UPDATE league_standings
+    SET wins = wins + 1, points = points + 3,
+        rounds_won = rounds_won + p_score_a, rounds_lost = rounds_lost + p_score_b,
+        updated_at = now()
+    WHERE tournament_id = v_match.tournament_id AND entry_id = p_winner_entry_id;
+    UPDATE league_standings
+    SET losses = losses + 1,
+        rounds_won = rounds_won + p_score_b, rounds_lost = rounds_lost + p_score_a,
+        updated_at = now()
+    WHERE tournament_id = v_match.tournament_id AND entry_id = v_loser_entry_id;
+
+    -- Auto-detect group phase completion for block league
+    IF v_tournament.block_count >= 2 THEN
+      IF NOT EXISTS (
+        SELECT 1 FROM tournament_matches
+        WHERE tournament_id = v_match.tournament_id
+          AND bracket_side = 'league' AND status = 'pending'
+      ) THEN
+        UPDATE tournaments
+        SET group_phase_status = 'completed', updated_at = now()
+        WHERE id = v_match.tournament_id AND group_phase_status = 'in_progress';
+      END IF;
     END IF;
+
     RETURN json_build_object('ok', true, 'winner', p_winner_entry_id);
   END IF;
 

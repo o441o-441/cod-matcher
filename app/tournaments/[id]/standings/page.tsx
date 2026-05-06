@@ -10,6 +10,7 @@ import { VictoryEffect } from '@/components/CelebrationEffects'
 type StandingRow = {
   id: string; entry_id: string; wins: number; losses: number; draws: number; points: number
   rounds_won: number; rounds_lost: number
+  assigned_group: string | null
   entry_name?: string
 }
 
@@ -17,7 +18,7 @@ type MatchRow = {
   id: string; round: number; match_number: number
   entry_a_id: string | null; entry_b_id: string | null
   winner_entry_id: string | null; score_a: number; score_b: number
-  status: string
+  status: string; assigned_group: string | null
 }
 
 export default function StandingsPage() {
@@ -41,6 +42,11 @@ export default function StandingsPage() {
   const [reportScoreB, setReportScoreB] = useState(0)
   const [busy, setBusy] = useState(false)
   const [showVictory, setShowVictory] = useState(false)
+  const [blockCount, setBlockCount] = useState(1)
+  const [groups, setGroups] = useState<string[]>([])
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
+  const [groupPhaseStatus, setGroupPhaseStatus] = useState<string | null>(null)
+  const [playoffAdvance, setPlayoffAdvance] = useState(2)
 
   const loadData = useCallback(async () => {
     if (!tournamentId) return
@@ -49,15 +55,22 @@ export default function StandingsPage() {
     setMyUserId(uid)
 
     const [{ data: t }, { data: standingsData }, { data: matchData }, { data: entries }] = await Promise.all([
-      supabase.from('tournaments').select('title, host_user_id').eq('id', tournamentId).maybeSingle(),
+      supabase.from('tournaments').select('title, host_user_id, block_count, group_phase_status, playoff_advance_count').eq('id', tournamentId).maybeSingle(),
       supabase.from('league_standings').select('*').eq('tournament_id', tournamentId).order('points', { ascending: false }),
       supabase.from('tournament_matches').select('*').eq('tournament_id', tournamentId).order('round').order('match_number'),
       supabase.from('tournament_entries').select('id, team_id, user_id, assigned_team_name').eq('tournament_id', tournamentId),
     ])
 
-    const tData = t as { title: string; host_user_id: string } | null
+    const tData = t as { title: string; host_user_id: string; block_count: number; group_phase_status: string | null; playoff_advance_count: number | null } | null
     setTournamentTitle(tData?.title ?? '')
     setIsHost(uid === tData?.host_user_id)
+    setBlockCount(tData?.block_count ?? 1)
+    setGroupPhaseStatus(tData?.group_phase_status ?? null)
+
+    // Compute groups from standings
+    const allGroups = [...new Set(((standingsData ?? []) as StandingRow[]).map(s => s.assigned_group).filter((g): g is string => g != null))].sort()
+    setGroups(allGroups)
+    if (tData?.playoff_advance_count) setPlayoffAdvance(tData.playoff_advance_count)
 
     const rows = (standingsData ?? []) as StandingRow[]
     const entryRows = (entries ?? []) as { id: string; team_id: string | null; user_id: string | null; assigned_team_name: string | null }[]
@@ -84,7 +97,7 @@ export default function StandingsPage() {
     }
 
     setStandings(rows)
-    setMatches((matchData ?? []) as MatchRow[])
+    setMatches(((matchData ?? []) as MatchRow[]).filter(m => m.assigned_group !== undefined))
     setEntryNameMap(nameMap)
     setLoading(false)
   }, [tournamentId])
@@ -119,9 +132,12 @@ export default function StandingsPage() {
     return undefined
   }
 
-  const maxRound = matches.reduce((max, m) => Math.max(max, m.round), 0)
-  const pendingCount = matches.filter(m => m.status === 'pending').length
-  const completedCount = matches.filter(m => m.status === 'completed').length
+  // Filter by selected group
+  const leagueMatches = matches.filter(m => !selectedGroup || m.assigned_group === selectedGroup)
+  const filteredStandings = standings.filter(s => !selectedGroup || s.assigned_group === selectedGroup)
+  const maxRound = leagueMatches.reduce((max, m) => Math.max(max, m.round), 0)
+  const pendingCount = leagueMatches.filter(m => m.status === 'pending').length
+  const completedCount = leagueMatches.filter(m => m.status === 'completed').length
 
   return (
     <main>
@@ -132,14 +148,35 @@ export default function StandingsPage() {
 
       <div className="section row" style={{ gap: 8 }}>
         <button className="btn-ghost" onClick={() => router.push(`/tournaments/${tournamentId}`)}>← 大会詳細に戻る</button>
+        {blockCount >= 2 && <span className="badge" style={{ fontSize: 10, background: 'var(--violet-soft)', color: 'var(--violet)' }}>ブロックリーグ</span>}
         <span className="badge" style={{ fontSize: 10 }}>
           {completedCount}/{completedCount + pendingCount} 試合完了
         </span>
       </div>
 
+      {/* グループタブ */}
+      {blockCount >= 2 && groups.length > 0 && (
+        <div className="section row" style={{ gap: 6 }}>
+          <button type="button" className={`btn-sm ${!selectedGroup ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setSelectedGroup(null)}>ALL</button>
+          {groups.map(g => (
+            <button key={g} type="button" className={`btn-sm ${selectedGroup === g ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setSelectedGroup(g)}>
+              GROUP {g}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* グループステージ完了バナー */}
+      {blockCount >= 2 && groupPhaseStatus === 'completed' && (
+        <div className="section card" style={{ padding: '14px 18px', borderLeft: '3px solid var(--gold, #ffd700)', background: 'rgba(255,209,102,0.04)' }}>
+          <p style={{ margin: 0, fontWeight: 700, color: 'var(--gold, #ffd700)' }}>グループステージ完了</p>
+          <p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>主催者が大会詳細ページから決勝トーナメントを開始できます</p>
+        </div>
+      )}
+
       {/* 順位表 */}
       <div className="section card-strong">
-        <h2 style={{ marginTop: 0 }}>順位表</h2>
+        <h2 style={{ marginTop: 0 }}>{selectedGroup ? `GROUP ${selectedGroup} 順位表` : '順位表'}</h2>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, minWidth: 480 }}>
             <thead>
@@ -153,8 +190,8 @@ export default function StandingsPage() {
               </tr>
             </thead>
             <tbody>
-              {standings.map((s, i) => (
-                <tr key={s.id} style={{ borderBottom: '1px solid var(--line)', background: i < 3 ? 'rgba(255,255,255,0.02)' : undefined }}>
+              {filteredStandings.map((s, i) => (
+                <tr key={s.id} style={{ borderBottom: '1px solid var(--line)', background: blockCount >= 2 && i < playoffAdvance ? 'rgba(0,229,255,0.04)' : i < 3 ? 'rgba(255,255,255,0.02)' : undefined }}>
                   <td style={{ padding: '10px 8px', fontWeight: 700, color: medalColor(i) }}>{i + 1}</td>
                   <td style={{ padding: '10px 8px', fontWeight: 600 }}>{s.entry_name ?? '不明'}</td>
                   <td style={{ padding: '10px 8px', textAlign: 'center', color: 'var(--success)' }}>{s.wins}</td>
@@ -168,14 +205,17 @@ export default function StandingsPage() {
             </tbody>
           </table>
         </div>
-        {standings.length === 0 && <p className="muted" style={{ padding: 20, textAlign: 'center' }}>まだデータがありません</p>}
+        {filteredStandings.length === 0 && <p className="muted" style={{ padding: 20, textAlign: 'center' }}>まだデータがありません</p>}
+        {blockCount >= 2 && filteredStandings.length > 0 && (
+          <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>上位{playoffAdvance}チーム（ハイライト）が決勝トーナメントに進出</p>
+        )}
       </div>
 
       {/* 対戦カード */}
       <div className="section">
         <h2>対戦カード</h2>
         {Array.from({ length: maxRound }, (_, i) => i + 1).map(round => {
-          const roundMs = matches.filter(m => m.round === round)
+          const roundMs = leagueMatches.filter(m => m.round === round)
           return (
             <div key={round} style={{ marginBottom: 20 }}>
               <div className="stat-label" style={{ marginBottom: 8 }}>ROUND {round}</div>
@@ -297,7 +337,7 @@ export default function StandingsPage() {
             </div>
           )
         })}
-        {matches.length === 0 && <p className="muted">対戦カードがまだ生成されていません</p>}
+        {leagueMatches.length === 0 && <p className="muted">対戦カードがまだ生成されていません</p>}
       </div>
 
       {showVictory && <VictoryEffect onClose={() => setShowVictory(false)} />}

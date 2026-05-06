@@ -52,15 +52,16 @@ export default function BracketPage() {
     setMyUserId(uid)
 
     const [{ data: t }, { data: matchData }, { data: entries }] = await Promise.all([
-      supabase.from('tournaments').select('title, entry_mode, elimination_type, host_user_id').eq('id', tournamentId).maybeSingle(),
+      supabase.from('tournaments').select('title, entry_mode, elimination_type, playoff_elimination_type, host_user_id, format, block_count').eq('id', tournamentId).maybeSingle(),
       supabase.from('tournament_matches').select('*').eq('tournament_id', tournamentId).order('round').order('match_number'),
       supabase.from('tournament_entries').select('id, team_id, user_id, assigned_team_name, assigned_team_index, seed_number, weapon_class, rating_at_entry').eq('tournament_id', tournamentId),
     ])
 
-    const tData = t as { title: string; entry_mode: string; elimination_type: string; host_user_id: string } | null
+    const tData = t as { title: string; entry_mode: string; elimination_type: string; playoff_elimination_type: string; host_user_id: string; format: string; block_count: number } | null
     setTournamentTitle(tData?.title ?? '')
     setEntryMode(tData?.entry_mode ?? 'team')
-    setEliminationType(tData?.elimination_type ?? 'single')
+    // For block league playoff, use playoff_elimination_type
+    setEliminationType(tData?.format === 'league' ? (tData?.playoff_elimination_type ?? 'single') : (tData?.elimination_type ?? 'single'))
     setIsHost(uid === tData?.host_user_id)
     setMatches((matchData ?? []) as MatchRow[])
 

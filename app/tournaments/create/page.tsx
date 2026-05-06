@@ -26,6 +26,10 @@ export default function TournamentCreatePage() {
   const [prize, setPrize] = useState('')
   const [rules, setRules] = useState('')
   const [gfReset, setGfReset] = useState(true)
+  // Block league
+  const [blockCount, setBlockCount] = useState(1)
+  const [playoffAdvance, setPlayoffAdvance] = useState<number | null>(null)
+  const [playoffElimType, setPlayoffElimType] = useState<'single' | 'double'>('single')
 
   const handleCreate = async () => {
     if (!title.trim()) { showToast('タイトルを入力してください', 'error'); return }
@@ -51,7 +55,10 @@ export default function TournamentCreatePage() {
       host_user_id: session.user.id,
       prize: prize.trim() || null,
       rules: rules.trim() || null,
-      gf_reset: eliminationType === 'double' ? gfReset : true,
+      gf_reset: eliminationType === 'double' || playoffElimType === 'double' ? gfReset : true,
+      block_count: format === 'league' ? blockCount : 1,
+      playoff_advance_count: format === 'league' && blockCount >= 2 ? playoffAdvance : null,
+      playoff_elimination_type: format === 'league' && blockCount >= 2 ? playoffElimType : 'single',
     }).select('id').single()
 
     setLoading(false)
@@ -134,8 +141,50 @@ export default function TournamentCreatePage() {
             </div>
           )}
 
+          {/* ブロック設定（リーグ形式のみ） */}
+          {format === 'league' && (
+            <div>
+              <div className="stat-label">ブロック（グループ）数</div>
+              <p className="muted" style={{ fontSize: 11, marginBottom: 8 }}>
+                推奨: {Math.max(1, Math.floor(capacity / 4))}ブロック（1ブロック約{Math.ceil(capacity / Math.max(1, Math.floor(capacity / 4)))}チーム）
+              </p>
+              <select value={blockCount} onChange={e => setBlockCount(Number(e.target.value))} style={{ marginTop: 4 }}>
+                <option value={1}>1（総当たり・ブロック分けなし）</option>
+                {[2, 3, 4, 6, 8].filter(n => n <= capacity / 2).map(n => (
+                  <option key={n} value={n}>{n}ブロック（各{Math.ceil(capacity / n)}チーム）</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* ブロックリーグ決勝設定 */}
+          {format === 'league' && blockCount >= 2 && (
+            <>
+              <div>
+                <label htmlFor="t-advance" className="stat-label">各グループ進出数</label>
+                <p className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
+                  推奨: 各グループ上位{Math.max(1, Math.floor(Math.ceil(capacity / blockCount) / 2))}チーム → 決勝{Math.max(1, Math.floor(Math.ceil(capacity / blockCount) / 2)) * blockCount}チーム
+                </p>
+                <input id="t-advance" type="number" value={playoffAdvance ?? Math.max(1, Math.floor(Math.ceil(capacity / blockCount) / 2))} onChange={e => setPlayoffAdvance(e.target.value ? Number(e.target.value) : null)} min={1} max={Math.ceil(capacity / blockCount) - 1} style={{ marginTop: 4 }} />
+              </div>
+              <div>
+                <div className="stat-label">決勝トーナメント形式</div>
+                <div className="grid grid-2" style={{ marginTop: 8 }}>
+                  <button type="button" className="card" style={{ textAlign: 'center', padding: 16, border: playoffElimType === 'single' ? '2px solid var(--cyan)' : undefined, cursor: 'pointer' }} onClick={() => setPlayoffElimType('single')}>
+                    <div style={{ fontWeight: 700 }}>SINGLE</div>
+                    <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>1敗で敗退</p>
+                  </button>
+                  <button type="button" className="card" style={{ textAlign: 'center', padding: 16, border: playoffElimType === 'double' ? '2px solid var(--cyan)' : undefined, cursor: 'pointer' }} onClick={() => setPlayoffElimType('double')}>
+                    <div style={{ fontWeight: 700 }}>DOUBLE</div>
+                    <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>2敗で敗退</p>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
           {/* GFリセット（ダブルエリミのみ） */}
-          {format === 'tournament' && eliminationType === 'double' && (
+          {((format === 'tournament' && eliminationType === 'double') || (format === 'league' && blockCount >= 2 && playoffElimType === 'double')) && (
             <div>
               <div className="stat-label">Grand Final リセット</div>
               <div className="grid grid-2" style={{ marginTop: 8 }}>
