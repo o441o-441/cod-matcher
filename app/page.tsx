@@ -73,7 +73,7 @@ export default function HomePage() {
   return (
     <main style={{ paddingTop: 28, paddingBottom: 32 }}>
       {/* Hero — compact */}
-      <section style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 24, alignItems: 'end', marginBottom: 22 }}>
+      <section className="rowx" style={{ gap: 24, alignItems: 'flex-end', marginBottom: 22 }}>
         <div>
           <div className="eyebrow">GA COMPLIANT · CoD 4v4 PLATFORM</div>
           <h1 className="display" style={{ fontSize: 'clamp(2.2rem, 5vw, 3.4rem)', marginTop: 6 }}>
@@ -100,8 +100,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 4 Mode Cards */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 18 }}>
+      {/* 4 Mode Cards — 2x2 grid */}
+      <section className="grid-2" style={{ gap: 14, marginBottom: 18 }}>
         {MODES.map((m) => (
           <button key={m.id} type="button" onClick={() => m.id === 'tournament' ? router.push(m.href) : goTo(m.href)} style={{
             position: 'relative', padding: 20, borderRadius: 14, textAlign: 'left', cursor: 'pointer',
@@ -113,7 +113,7 @@ export default function HomePage() {
             onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = 'var(--shadow)' }}
           >
             {/* Big glyph */}
-            <div style={{ position: 'absolute', right: -12, top: -16, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 130, lineHeight: 1, color: m.color, opacity: 0.07, pointerEvents: 'none', userSelect: 'none' }} aria-hidden="true">{m.glyph}</div>
+            <div style={{ position: 'absolute', right: -8, top: -12, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 100, lineHeight: 1, color: m.color, opacity: 0.07, pointerEvents: 'none', userSelect: 'none' }} aria-hidden="true">{m.glyph}</div>
 
             <div className="row" style={{ gap: 12, position: 'relative' }}>
               <div style={{ width: 42, height: 42, borderRadius: 10, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,0.5)', border: `1px solid ${m.border}`, color: m.color, boxShadow: `0 0 16px ${m.soft}` }}>{m.icon}</div>

@@ -8,7 +8,7 @@ import FriendsDrawer from './FriendsDrawer'
 import WinStreakHost from './WinStreakCelebration'
 import QueueStatusBar from './QueueStatusBar'
 
-const HIDE_SHELL_ROUTES = ['/login', '/auth/callback', '/onboarding']
+const HIDE_SHELL_ROUTES = ['/auth/callback', '/onboarding']
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
