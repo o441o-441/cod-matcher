@@ -387,6 +387,10 @@ export default function ScrimQueuePage() {
                 <div className="stat"><span className="stat-label">PEAK AVG</span><span className="mono" style={{ fontSize: 18, fontWeight: 700 }}>{avgPeak}</span></div>
               </div>
               <p className="muted" style={{ fontSize: 13 }}>PEAK平均が近いパーティを検索しています... ソロの場合は助っ人として合流します</p>
+              <div className="card" style={{ marginTop: 16, borderColor: 'rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.05)', padding: '12px 16px' }}>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--amber, #f59e0b)' }}>検索を中止する際は必ず「待機解除」ボタンを押してください。</p>
+                <p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>ボタンを押さずにページを離れると、マッチングがキャンセルされない場合があります。<br />気づかずにマッチングして放置状態となった場合はBAN対象となります。</p>
+              </div>
               <div style={{ marginTop: 12 }}><button onClick={handleCancelQueue} disabled={busy} className="btn-danger">待機解除</button></div>
             </div>
           )}
