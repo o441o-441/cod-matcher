@@ -96,12 +96,16 @@ export default function BracketPage() {
           rating: e.rating_at_entry,
         }))
         const avgRating = members.length > 0 ? Math.round(members.reduce((s, m) => s + (m.rating ?? 0), 0) / members.length) : 0
-        map.set(rep.id, {
+        const teamInfo: TeamInfo = {
           entryId: rep.id,
           teamName: rep.assigned_team_name ?? `Team ${rep.assigned_team_index}`,
           members,
           avgRating,
-        })
+        }
+        // 全メンバーのIDをキーとして登録（どのメンバーのIDでも引けるように）
+        for (const e of group) {
+          map.set(e.id, teamInfo)
+        }
       }
     } else {
       // チームエントリー
