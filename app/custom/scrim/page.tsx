@@ -133,7 +133,17 @@ export default function ScrimQueuePage() {
     return () => clearInterval(iv)
   }, [waitingEntry?.created_at])
 
-  // Auto-match poll
+  // Heartbeat (15s interval)
+  useEffect(() => {
+    if (!isWaiting || !waitingEntry?.id) return
+    const iv = setInterval(() => {
+      void supabase.rpc('rpc_queue_heartbeat', { p_queue_entry_id: waitingEntry.id })
+    }, 15000)
+    void supabase.rpc('rpc_queue_heartbeat', { p_queue_entry_id: waitingEntry.id })
+    return () => clearInterval(iv)
+  }, [isWaiting, waitingEntry?.id])
+
+  // Auto-match poll (5s interval, leader only)
   useEffect(() => {
     if (!isWaiting || !isLeader) return
     const iv = setInterval(async () => {
