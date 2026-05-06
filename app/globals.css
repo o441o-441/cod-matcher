@@ -1646,16 +1646,4 @@ a:focus-visible {
 /* ===================================================================
    Reduced motion — WCAG 2.3.3
    =================================================================== */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-  /* Keep functional animations (radar, search indicators) */
-  .anim-keep, .anim-keep * {
-    animation-duration: revert !important;
-    animation-iteration-count: revert !important;
-  }
-}
+/* reduced-motion: disabled — all animations always run */
