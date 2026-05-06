@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import { LoadingSkeleton } from '@/components/UIState'
+import ConfirmDialog from '@/components/ConfirmDialog'
 
 type TournamentRow = {
   id: string; title: string; description: string | null; format: string; entry_mode: string
@@ -33,6 +34,7 @@ export default function TournamentDetailPage() {
   const [myEntry, setMyEntry] = useState<EntryRow | null>(null)
   const [hostName, setHostName] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   // エントリーフォーム
   const [weaponClass, setWeaponClass] = useState('ar')
@@ -333,7 +335,28 @@ export default function TournamentDetailPage() {
             <button className="btn-ghost" onClick={() => router.push('/tournaments')}>
               一覧に戻る
             </button>
+            <button className="btn-danger btn-sm" onClick={() => setDeleteConfirm(true)} disabled={busy}>
+              大会を削除
+            </button>
           </div>
+          <ConfirmDialog
+            open={deleteConfirm}
+            title="大会を削除"
+            message={`「${tournament.title}」を削除します。エントリー・試合データもすべて削除されます。この操作は元に戻せません。`}
+            confirmText="削除する"
+            cancelText="キャンセル"
+            danger
+            loading={busy}
+            onCancel={() => setDeleteConfirm(false)}
+            onConfirm={async () => {
+              setBusy(true)
+              const { error } = await supabase.rpc('rpc_tournament_delete', { p_tournament_id: tournamentId })
+              setBusy(false)
+              if (error) { showToast(error.message, 'error'); setDeleteConfirm(false); return }
+              showToast('大会を削除しました', 'success')
+              router.push('/tournaments')
+            }}
+          />
         </div>
       )}
     </main>
