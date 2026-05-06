@@ -16,6 +16,8 @@ const MODE_LABEL: Record<string, string> = { hp: 'HARDPOINT', snd: 'SEARCH & DES
 
 type GameRecord = { game: number; mode: string; map: string; bans: string[]; side: string }
 
+type ChatMessage = { id: string; sender_user_id: string | null; body: string; created_at: string; sender_name?: string }
+
 type MatchData = {
   id: string; entry_a_id: string; entry_b_id: string
   selected_mode: string | null; selected_map: string | null
@@ -23,6 +25,7 @@ type MatchData = {
   banpick_status: string; banpick_turn_entry_id: string | null; banpick_action: string | null
   score_a: number; score_b: number; status: string; bracket_side: string
   match_format: string; current_game: number; games: GameRecord[]
+  host_entry_id: string | null
 }
 
 type TeamInfo = { entryId: string; teamName: string; members: { displayName: string }[] }
@@ -41,16 +44,21 @@ export default function TournamentMatchPage() {
   const [myEntryId, setMyEntryId] = useState<string | null>(null)
   const [isHost, setIsHost] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [myUserId, setMyUserId] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     if (!matchId || !tournamentId) return
 
     const { data: { session } } = await supabase.auth.getSession()
     const uid = session?.user?.id ?? null
+    setMyUserId(uid)
 
-    const [{ data: m }, { data: tData }] = await Promise.all([
+    const [{ data: m }, { data: tData }, { data: chatData }] = await Promise.all([
       supabase.from('tournament_matches').select('*').eq('id', matchId).maybeSingle(),
       supabase.from('tournaments').select('host_user_id').eq('id', tournamentId).maybeSingle(),
+      supabase.from('tournament_match_messages').select('*').eq('tournament_match_id', matchId).order('created_at', { ascending: true }),
     ])
     if (!m) { setLoading(false); return }
     setIsHost(uid === (tData as { host_user_id: string } | null)?.host_user_id)
@@ -103,6 +111,14 @@ export default function TournamentMatchPage() {
 
     setTeamA(buildTeam(mData.entry_a_id))
     setTeamB(buildTeam(mData.entry_b_id))
+
+    // チャットメッセージの送信者名解決
+    const msgs = (chatData ?? []) as ChatMessage[]
+    for (const msg of msgs) {
+      if (msg.sender_user_id) msg.sender_name = profileMap.get(msg.sender_user_id) ?? '不明'
+    }
+    setChatMessages(msgs)
+
     setLoading(false)
   }, [matchId, tournamentId])
 
@@ -131,6 +147,28 @@ export default function TournamentMatchPage() {
     })
     setBusy(false)
     if (error) { showToast(error.message, 'error'); return }
+    void loadData()
+  }
+
+  const handleSendChat = async () => {
+    if (!matchId || !chatInput.trim()) return
+    setBusy(true)
+    const { error } = await supabase.rpc('rpc_tournament_match_chat', { p_tournament_match_id: matchId, p_body: chatInput.trim() })
+    setBusy(false)
+    if (error) { showToast(error.message, 'error'); return }
+    setChatInput('')
+    void loadData()
+  }
+
+  const handleSelectHost = async () => {
+    if (!matchId) return
+    setBusy(true)
+    const { data, error } = await supabase.rpc('rpc_tournament_select_host', { p_tournament_match_id: matchId })
+    setBusy(false)
+    if (error) { showToast(error.message, 'error'); return }
+    const hostId = (data as { host: string })?.host
+    const hostName = hostId === match?.entry_a_id ? teamA?.teamName : teamB?.teamName
+    showToast(`ホスト: ${hostName ?? '不明'}`, 'success')
     void loadData()
   }
 
@@ -296,7 +334,7 @@ export default function TournamentMatchPage() {
                 <div className="row" style={{ gap: 12, marginBottom: 4 }}>
                   <span className="badge" style={{ fontSize: 10 }}>GAME {g.game}</span>
                 </div>
-                <div className="grid grid-3" style={{ gap: 8 }}>
+                <div className="grid grid-2" style={{ gap: 8 }}>
                   <div style={{ textAlign: 'center' }}>
                     <div className="muted" style={{ fontSize: 10 }}>モード</div>
                     <div style={{ fontWeight: 700, fontSize: 14, marginTop: 2 }}>{MODE_LABEL[g.mode] ?? g.mode}</div>
@@ -305,9 +343,19 @@ export default function TournamentMatchPage() {
                     <div className="muted" style={{ fontSize: 10 }}>マップ</div>
                     <div style={{ fontWeight: 700, fontSize: 14, marginTop: 2, color: 'var(--success)' }}>{g.map}</div>
                   </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div className="muted" style={{ fontSize: 10 }}>サイド</div>
-                    <div style={{ fontWeight: 700, fontSize: 14, marginTop: 2 }}>{g.side}</div>
+                </div>
+                <div className="grid grid-2" style={{ gap: 8, marginTop: 8 }}>
+                  <div style={{ textAlign: 'center', padding: '6px 8px', borderRadius: 4, background: 'rgba(0,229,255,0.05)', border: '1px solid rgba(0,229,255,0.2)' }}>
+                    <div className="muted" style={{ fontSize: 10 }}>{teamA?.teamName ?? 'A'}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, marginTop: 2, color: 'var(--cyan)' }}>
+                      {g.side === 'JSOC' ? 'JSOC (チーム1)' : 'ギルド (チーム2)'}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'center', padding: '6px 8px', borderRadius: 4, background: 'rgba(255,0,170,0.05)', border: '1px solid rgba(255,0,170,0.2)' }}>
+                    <div className="muted" style={{ fontSize: 10 }}>{teamB?.teamName ?? 'B'}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, marginTop: 2, color: 'var(--magenta)' }}>
+                      {g.side === 'JSOC' ? 'ギルド (チーム2)' : 'JSOC (チーム1)'}
+                    </div>
                   </div>
                 </div>
                 <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>BAN: {g.bans.join(', ')}</p>
@@ -317,11 +365,38 @@ export default function TournamentMatchPage() {
         </div>
       )}
 
+      {/* ホスト抽選 */}
+      {match.banpick_status === 'completed' && (
+        <div className="section card-strong">
+          <h2 style={{ marginTop: 0 }}>ホスト</h2>
+          {match.host_entry_id ? (
+            <div className="row" style={{ gap: 8 }}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>
+                {match.host_entry_id === match.entry_a_id ? teamA?.teamName : teamB?.teamName}
+              </span>
+              <span className="badge" style={{ fontSize: 9 }}>HOST</span>
+            </div>
+          ) : (
+            <div>
+              <p className="muted" style={{ marginBottom: 8 }}>ホストがまだ決まっていません。抽選してください。</p>
+              <button className="btn-primary" onClick={handleSelectHost} disabled={busy}>
+                {busy ? '抽選中...' : 'ホスト抽選'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* チーム情報 */}
       <div className="section grid-2">
         {[teamA, teamB].map((team, i) => (
           <div key={i} className="card-strong">
-            <h3 style={{ marginTop: 0, color: i === 0 ? 'var(--cyan)' : 'var(--magenta)' }}>{team?.teamName ?? '不明'}</h3>
+            <h3 style={{ marginTop: 0, color: i === 0 ? 'var(--cyan)' : 'var(--magenta)' }}>
+              {team?.teamName ?? '不明'}
+              {match.host_entry_id === (i === 0 ? match.entry_a_id : match.entry_b_id) && (
+                <span className="badge" style={{ fontSize: 9, marginLeft: 8 }}>HOST</span>
+              )}
+            </h3>
             <div className="stack-sm">
               {team?.members.map((m, j) => (
                 <div key={j} style={{ fontSize: 13, padding: '4px 8px', background: 'rgba(255,255,255,0.03)', borderRadius: 4 }}>
@@ -331,6 +406,38 @@ export default function TournamentMatchPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* チャット */}
+      <div className="section card-strong">
+        <h2 style={{ marginTop: 0 }}>チャット</h2>
+        <div style={{ height: 300, overflowY: 'auto', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', background: 'rgba(0,0,0,0.2)', padding: 12, marginBottom: 12 }}>
+          {chatMessages.length === 0 ? (
+            <p className="muted" style={{ fontSize: 13 }}>メッセージはまだありません</p>
+          ) : (
+            <div className="stack-sm">
+              {chatMessages.map(msg => (
+                <div key={msg.id} style={{ fontSize: 13, padding: '6px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 4 }}>
+                  <div className="row" style={{ justifyContent: 'space-between', fontSize: 11, opacity: 0.6, marginBottom: 2 }}>
+                    <span>{msg.sender_name ?? 'system'}</span>
+                    <span className="mono">{new Date(msg.created_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  <div>{msg.body}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <input
+            value={chatInput}
+            onChange={e => setChatInput(e.target.value)}
+            placeholder="メッセージを入力"
+            onKeyDown={e => { if (e.key === 'Enter') void handleSendChat() }}
+            style={{ flex: 1 }}
+          />
+          <button className="btn-primary btn-sm" onClick={handleSendChat} disabled={busy || !chatInput.trim()}>送信</button>
+        </div>
       </div>
     </main>
   )
