@@ -106,8 +106,8 @@ export default function FriendsDrawer({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-      <div className="fd-scrim" onClick={onClose} />
-      <aside className="fd" role="dialog" aria-label="フレンド">
+      <div className="fd-scrim" onClick={onClose} aria-hidden="true" />
+      <aside className="fd" role="dialog" aria-modal="true" aria-label="フレンド">
         {/* Header */}
         <div className="fd-head">
           <div className="fd-title">
@@ -207,8 +207,9 @@ export default function FriendsDrawer({ onClose }: { onClose: () => void }) {
                       </div>
                       <div className="fd-row-actions" style={{ opacity: 1 }}>
                         <button
+                          type="button"
                           className="fd-ibtn"
-                          title="DM"
+                          aria-label="ダイレクトメッセージを送信"
                           onClick={(e) => {
                             e.stopPropagation()
                             router.push(`/dm/${f.friend_user_id}`)

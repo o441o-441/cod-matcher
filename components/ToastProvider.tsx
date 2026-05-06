@@ -42,6 +42,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
 
       <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
         style={{
           position: 'fixed',
           top: 20,

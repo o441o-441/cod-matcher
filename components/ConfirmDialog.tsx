@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
+
 type ConfirmDialogProps = {
   open: boolean
   title?: string
@@ -8,7 +10,6 @@ type ConfirmDialogProps = {
   cancelText?: string
   danger?: boolean
   loading?: boolean
-  // handlers may be async; accept Promise<void> as well
   onConfirm: () => void | Promise<void>
   onCancel: () => void | Promise<void>
 }
@@ -24,10 +25,49 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // Focus cancel button on open + trap focus
+  useEffect(() => {
+    if (!open) return
+    cancelRef.current?.focus()
+
+    const el = dialogRef.current
+    if (!el) return
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { onCancel(); return }
+      if (e.key !== 'Tab') return
+
+      const focusable = el.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+      if (focusable.length === 0) return
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus() }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus() }
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open, onCancel])
+
   if (!open) return null
 
   return (
     <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="confirm-dialog-title"
+      aria-describedby="confirm-dialog-msg"
+      ref={dialogRef}
       style={{
         position: 'fixed',
         inset: 0,
@@ -48,12 +88,13 @@ export default function ConfirmDialog({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2>{title}</h2>
-        <p>{message}</p>
+        <h2 id="confirm-dialog-title">{title}</h2>
+        <p id="confirm-dialog-msg">{message}</p>
 
         <div className="section row" style={{ justifyContent: 'flex-end' }}>
           <button
             type="button"
+            ref={cancelRef}
             onClick={onCancel}
             disabled={loading}
             style={{

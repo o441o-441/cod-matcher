@@ -1,9 +1,20 @@
 import './globals.css'
 import './winstreak.css'
+import type { Metadata, Viewport } from 'next'
 import { ToastProvider } from '@/components/ToastProvider'
 import CookieConsent from '@/components/CookieConsent'
 import GlobalNotificationListener from '@/components/GlobalNotificationListener'
 import AppShell from '@/components/AppShell'
+
+export const metadata: Metadata = {
+  title: 'ASCENT',
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+}
 
 export default function RootLayout({
   children,
@@ -21,6 +32,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <a href="#main-content" className="skip-link">メインコンテンツへスキップ</a>
         <ToastProvider>
           <GlobalNotificationListener />
           <AppShell>{children}</AppShell>

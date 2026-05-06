@@ -304,7 +304,9 @@ export default function BracketPage() {
 
   const winnersMatches = matches.filter(m => m.bracket_side === 'winners')
   const losersMatches = matches.filter(m => m.bracket_side === 'losers')
-  const grandFinal = matches.find(m => m.bracket_side === 'grand_final')
+  const grandFinalMatches = matches.filter(m => m.bracket_side === 'grand_final').sort((a, b) => a.round - b.round)
+  const grandFinal = grandFinalMatches[0] ?? null
+  const grandFinalReset = grandFinalMatches[1] ?? null
   const losersMaxRound = losersMatches.reduce((max, m) => Math.max(max, m.round), 0)
 
   return (
@@ -371,9 +373,21 @@ export default function BracketPage() {
       {eliminationType === 'double' && grandFinal && (
         <div className="section">
           <h2 style={{ margin: '0 0 12px', color: 'var(--gold, #ffd700)' }}>Grand Final</h2>
-          <div style={{ maxWidth: 400 }}>
-            {renderMatch(grandFinal, true)}
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 300, maxWidth: 400, flex: 1 }}>
+              <div className="stat-label" style={{ marginBottom: 8, textAlign: 'center', fontSize: 13 }}>GF</div>
+              {renderMatch(grandFinal, !grandFinalReset || grandFinalReset.status === 'bye')}
+            </div>
+            {grandFinalReset && grandFinalReset.status !== 'bye' && (
+              <div style={{ minWidth: 300, maxWidth: 400, flex: 1 }}>
+                <div className="stat-label" style={{ marginBottom: 8, textAlign: 'center', fontSize: 13 }}>GF RESET</div>
+                {renderMatch(grandFinalReset, true)}
+              </div>
+            )}
           </div>
+          {grandFinalReset && grandFinalReset.status !== 'bye' && grandFinal.status !== 'completed' && (
+            <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>Losers側がGFに勝った場合、リセットマッチが行われます</p>
+          )}
         </div>
       )}
     </main>

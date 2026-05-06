@@ -47,7 +47,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         onOpenFriends={toggleFriends}
         friendsOpen={friendsOpen}
       />
-      <div className="page-transition">
+      <div id="main-content" className="page-transition">
         {children}
       </div>
       <Footer />

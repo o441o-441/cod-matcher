@@ -67,6 +67,16 @@ export default function TopBar({
     setMobileNavOpen(false)
   }, [pathname])
 
+  // Escape key closes mobile nav
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileNavOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mobileNavOpen])
+
   const isActive = (path: string) => {
     if (path === '/') return pathname === '/'
     return pathname.startsWith(path)
@@ -82,36 +92,45 @@ export default function TopBar({
     : '??'
 
   return (
-    <div className="topbar">
+    <header className="topbar">
       <div className="container topbar-inner">
-        <div className="brand" onClick={() => handleGoto('/')}>
-          <div className="brand-mark">A</div>
+        <button
+          type="button"
+          className="brand"
+          onClick={() => handleGoto('/')}
+          aria-label="ASCENT トップページ"
+        >
+          <div className="brand-mark" aria-hidden="true">A</div>
           <div className="brand-word">
             ASCENT<em>.</em>
           </div>
-        </div>
+        </button>
 
         {/* Desktop nav — hidden on mobile via responsive.css */}
-        <div className="nav desktop-nav" style={{ flex: 1, justifyContent: 'center' }}>
+        <nav className="nav desktop-nav" aria-label="メインナビゲーション" style={{ flex: 1, justifyContent: 'center' }}>
           {NAV_LINKS.map((l) => (
-            <div
+            <button
               key={l.id}
+              type="button"
               className={`nav-link ${isActive(l.id) ? 'active' : ''}`}
               onClick={() => handleGoto(l.id)}
+              aria-current={isActive(l.id) ? 'page' : undefined}
             >
               {l.label}
-            </div>
+            </button>
           ))}
-        </div>
+        </nav>
 
         <div className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>
           {signedIn && onOpenFriends && (
             <button
+              type="button"
               className={`fd-toggle ${friendsOpen ? 'active' : ''}`}
               onClick={onOpenFriends}
-              title="フレンド (Shift+F)"
+              aria-label={`フレンド${unreadCount > 0 ? `（${unreadCount}件の未読）` : ''}`}
+              aria-expanded={friendsOpen}
             >
-              <svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+              <svg width={15} height={15} viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <circle cx="9" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.6" />
                 <circle cx="17" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.6" />
                 <path
@@ -121,16 +140,18 @@ export default function TopBar({
                   strokeLinecap="round"
                 />
               </svg>
-              {unreadCount > 0 && <span className="fd-toggle-badge">{unreadCount}</span>}
+              {unreadCount > 0 && <span className="fd-toggle-badge" aria-hidden="true">{unreadCount}</span>}
             </button>
           )}
 
           {signedIn && profile ? (
-            <div
+            <button
+              type="button"
               className="user-chip"
               onClick={() => handleGoto('/mypage')}
+              aria-label={`マイページ — ${profile.display_name ?? '不明'} SR ${profile.current_rating ?? '---'}`}
             >
-              <div className="avatar" style={{ width: 28, height: 28, fontSize: 10 }}>
+              <div className="avatar" style={{ width: 28, height: 28, fontSize: 10 }} aria-hidden="true">
                 {initials}
               </div>
               <div style={{ lineHeight: 1.15 }}>
@@ -142,9 +163,10 @@ export default function TopBar({
                   SR {profile.current_rating ?? '---'}
                 </div>
               </div>
-            </div>
+            </button>
           ) : (
             <button
+              type="button"
               className="btn-ghost"
               style={{ padding: '8px 14px' }}
               onClick={() => handleGoto('/login')}
@@ -155,17 +177,19 @@ export default function TopBar({
 
           {/* Burger button — shown on mobile via responsive.css */}
           <button
+            type="button"
             className={`burger ${mobileNavOpen ? 'active' : ''}`}
             onClick={() => setMobileNavOpen((o) => !o)}
             aria-label="メニュー"
-            title="メニュー"
+            aria-expanded={mobileNavOpen}
+            aria-controls="mobile-nav"
           >
             {mobileNavOpen ? (
-              <svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             ) : (
-              <svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+              <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             )}
@@ -176,20 +200,22 @@ export default function TopBar({
       {/* Mobile nav dropdown */}
       {mobileNavOpen && (
         <>
-          <div className="mobile-nav-scrim" onClick={() => setMobileNavOpen(false)} />
-          <div className="mobile-nav">
+          <div className="mobile-nav-scrim" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
+          <nav id="mobile-nav" className="mobile-nav" aria-label="モバイルナビゲーション">
             {NAV_LINKS.map((l) => (
-              <div
+              <button
                 key={l.id}
+                type="button"
                 className={`nav-link ${isActive(l.id) ? 'active' : ''}`}
                 onClick={() => handleGoto(l.id)}
+                aria-current={isActive(l.id) ? 'page' : undefined}
               >
                 {l.label}
-              </div>
+              </button>
             ))}
-          </div>
+          </nav>
         </>
       )}
-    </div>
+    </header>
   )
 }

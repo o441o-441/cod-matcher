@@ -25,6 +25,7 @@ export default function TournamentCreatePage() {
   const [eventStart, setEventStart] = useState('')
   const [prize, setPrize] = useState('')
   const [rules, setRules] = useState('')
+  const [gfReset, setGfReset] = useState(true)
 
   const handleCreate = async () => {
     if (!title.trim()) { showToast('タイトルを入力してください', 'error'); return }
@@ -50,6 +51,7 @@ export default function TournamentCreatePage() {
       host_user_id: session.user.id,
       prize: prize.trim() || null,
       rules: rules.trim() || null,
+      gf_reset: eliminationType === 'double' ? gfReset : true,
     }).select('id').single()
 
     setLoading(false)
@@ -75,13 +77,13 @@ export default function TournamentCreatePage() {
         <div className="card-strong stack">
           {/* タイトル */}
           <div>
-            <div className="stat-label">大会タイトル</div>
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="例: NEON CIRCUIT VOL.08" />
+            <label htmlFor="t-title" className="stat-label">大会タイトル</label>
+            <input id="t-title" value={title} onChange={e => setTitle(e.target.value)} placeholder="例: NEON CIRCUIT VOL.08" aria-required="true" />
           </div>
 
           <div>
-            <div className="stat-label">説明</div>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="大会の説明、ルール等" rows={3} />
+            <label htmlFor="t-desc" className="stat-label">説明</label>
+            <textarea id="t-desc" value={description} onChange={e => setDescription(e.target.value)} placeholder="大会の説明、ルール等" rows={3} />
           </div>
 
           {/* 形式 */}
@@ -132,6 +134,21 @@ export default function TournamentCreatePage() {
             </div>
           )}
 
+          {/* GFリセット（ダブルエリミのみ） */}
+          {format === 'tournament' && eliminationType === 'double' && (
+            <div>
+              <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                <input type="checkbox" checked={gfReset} onChange={e => setGfReset(e.target.checked)} id="gf-reset-toggle" />
+                <label htmlFor="gf-reset-toggle" className="stat-label" style={{ cursor: 'pointer' }}>Grand Final リセットあり</label>
+              </div>
+              <p className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                {gfReset
+                  ? 'Losers側がGFに勝った場合、もう1戦（リセットマッチ）を行います'
+                  : 'GFは1回のみ。Losers側が勝ってもリセットなしで優勝'}
+              </p>
+            </div>
+          )}
+
           {/* エントリー方式 */}
           <div>
             <div className="stat-label">エントリー方式</div>
@@ -158,16 +175,16 @@ export default function TournamentCreatePage() {
           {/* 容量 + マッチ形式 */}
           <div className="grid grid-2">
             <div>
-              <div className="stat-label">{entryMode === 'team' ? 'チーム数' : 'プレイヤー数'}</div>
-              <select value={capacity} onChange={e => setCapacity(Number(e.target.value))} style={{ marginTop: 6 }}>
+              <label htmlFor="t-capacity" className="stat-label">{entryMode === 'team' ? 'チーム数' : 'プレイヤー数'}</label>
+              <select id="t-capacity" value={capacity} onChange={e => setCapacity(Number(e.target.value))} style={{ marginTop: 6 }}>
                 {[4, 8, 16, 32, 64].map(n => (
                   <option key={n} value={n}>{n} {entryMode === 'team' ? 'teams' : 'players'}</option>
                 ))}
               </select>
             </div>
             <div>
-              <div className="stat-label">試合形式</div>
-              <select value={matchFormat} onChange={e => setMatchFormat(e.target.value)} style={{ marginTop: 6 }}>
+              <label htmlFor="t-match-format" className="stat-label">試合形式</label>
+              <select id="t-match-format" value={matchFormat} onChange={e => setMatchFormat(e.target.value)} style={{ marginTop: 6 }}>
                 <option value="bo1">BO1</option>
                 <option value="bo3">BO3</option>
                 <option value="bo5">BO5</option>
@@ -203,12 +220,12 @@ export default function TournamentCreatePage() {
           {/* 日程 */}
           <div className="grid grid-2">
             <div>
-              <div className="stat-label">エントリー締切</div>
-              <input type="datetime-local" value={entryDeadline} onChange={e => setEntryDeadline(e.target.value)} style={{ marginTop: 6 }} />
+              <label htmlFor="t-deadline" className="stat-label">エントリー締切</label>
+              <input id="t-deadline" type="datetime-local" value={entryDeadline} onChange={e => setEntryDeadline(e.target.value)} style={{ marginTop: 6 }} />
             </div>
             <div>
-              <div className="stat-label">開始日時</div>
-              <input type="datetime-local" value={eventStart} onChange={e => setEventStart(e.target.value)} style={{ marginTop: 6 }} />
+              <label htmlFor="t-start" className="stat-label">開始日時</label>
+              <input id="t-start" type="datetime-local" value={eventStart} onChange={e => setEventStart(e.target.value)} style={{ marginTop: 6 }} />
             </div>
           </div>
 
@@ -220,16 +237,17 @@ export default function TournamentCreatePage() {
             </div>
             {rateCapOn && (
               <div style={{ marginTop: 8 }}>
-                <input type="number" value={rateCap} onChange={e => setRateCap(Number(e.target.value))} min={1000} max={3000} step={100} />
-                <p className="muted" style={{ fontSize: 11, marginTop: 4 }}>最高レートがこの値以下のプレイヤー/チームのみ参加可能</p>
+                <label htmlFor="t-ratecap" className="sr-only">レート上限値</label>
+                <input id="t-ratecap" type="number" value={rateCap} onChange={e => setRateCap(Number(e.target.value))} min={1000} max={3000} step={100} aria-describedby="ratecap-hint" />
+                <p id="ratecap-hint" className="muted" style={{ fontSize: 11, marginTop: 4 }}>最高レートがこの値以下のプレイヤー/チームのみ参加可能</p>
               </div>
             )}
           </div>
 
           {/* シード方式 */}
           <div>
-            <div className="stat-label">シード/振り分け方式</div>
-            <select value={seedingMethod} onChange={e => setSeedingMethod(e.target.value)} style={{ marginTop: 6 }}>
+            <label htmlFor="t-seeding" className="stat-label">シード/振り分け方式</label>
+            <select id="t-seeding" value={seedingMethod} onChange={e => setSeedingMethod(e.target.value)} style={{ marginTop: 6 }}>
               <option value="random">ランダム</option>
               <option value="rating">レート考慮（バランス配分）</option>
               <option value="manual">主催者が手動で振り分け</option>
@@ -238,14 +256,14 @@ export default function TournamentCreatePage() {
 
           {/* 賞品 */}
           <div>
-            <div className="stat-label">賞品（任意）</div>
-            <input value={prize} onChange={e => setPrize(e.target.value)} placeholder="例: 500K / コスメティックバンドル" style={{ marginTop: 6 }} />
+            <label htmlFor="t-prize" className="stat-label">賞品（任意）</label>
+            <input id="t-prize" value={prize} onChange={e => setPrize(e.target.value)} placeholder="例: 500K / コスメティックバンドル" style={{ marginTop: 6 }} />
           </div>
 
           {/* 追加ルール */}
           <div>
-            <div className="stat-label">追加ルール（任意）</div>
-            <textarea value={rules} onChange={e => setRules(e.target.value)} placeholder="GA準拠、禁止武器等" rows={2} style={{ marginTop: 6 }} />
+            <label htmlFor="t-rules" className="stat-label">追加ルール（任意）</label>
+            <textarea id="t-rules" value={rules} onChange={e => setRules(e.target.value)} placeholder="GA準拠、禁止武器等" rows={2} style={{ marginTop: 6 }} />
           </div>
 
           {/* 送信 */}
