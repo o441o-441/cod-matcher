@@ -16,6 +16,8 @@ export default function QueueStatusBar() {
   const waitStartRef = useRef<number | null>(null)
   const redirectedRef = useRef<string | null>(null)
   const cachedUidRef = useRef<string | null>(null)
+  const pathnameRef = useRef(pathname)
+  useEffect(() => { pathnameRef.current = pathname }, [pathname])
 
   // キュー画面から離脱した瞬間にキャンセル
   const prevPathnameRef = useRef(pathname)
@@ -106,7 +108,8 @@ export default function QueueStatusBar() {
 
     if (waitingEntries && waitingEntries.length > 0) {
       // マッチ画面・scrimキュー画面以外にいる場合は自動キャンセル
-      if (pathname !== '/match' && !pathname.startsWith('/custom/scrim')) {
+      const currentPath = pathnameRef.current
+      if (currentPath !== '/match' && !currentPath.startsWith('/custom/scrim')) {
         await supabase.rpc('rpc_cancel_queue', { p_queue_entry_id: waitingEntries[0].id })
         setWaiting(false)
         return
