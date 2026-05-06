@@ -39,6 +39,7 @@ export default function TournamentMatchPage() {
   const [teamA, setTeamA] = useState<TeamInfo | null>(null)
   const [teamB, setTeamB] = useState<TeamInfo | null>(null)
   const [myEntryId, setMyEntryId] = useState<string | null>(null)
+  const [isHost, setIsHost] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const loadData = useCallback(async () => {
@@ -47,8 +48,12 @@ export default function TournamentMatchPage() {
     const { data: { session } } = await supabase.auth.getSession()
     const uid = session?.user?.id ?? null
 
-    const { data: m } = await supabase.from('tournament_matches').select('*').eq('id', matchId).maybeSingle()
+    const [{ data: m }, { data: tData }] = await Promise.all([
+      supabase.from('tournament_matches').select('*').eq('id', matchId).maybeSingle(),
+      supabase.from('tournaments').select('host_user_id').eq('id', tournamentId).maybeSingle(),
+    ])
     if (!m) { setLoading(false); return }
+    setIsHost(uid === (tData as { host_user_id: string } | null)?.host_user_id)
     const mData = m as MatchData
     mData.bans = Array.isArray(mData.bans) ? mData.bans : []
     mData.games = Array.isArray(mData.games) ? mData.games : []
@@ -132,7 +137,7 @@ export default function TournamentMatchPage() {
   if (loading) return <main><LoadingSkeleton cards={2} /></main>
   if (!match) return <main><p className="danger">試合が見つかりません</p></main>
 
-  const isMyTurn = myEntryId === match.banpick_turn_entry_id
+  const isMyTurn = isHost || myEntryId === match.banpick_turn_entry_id
   const turnTeamName = match.banpick_turn_entry_id === match.entry_a_id ? teamA?.teamName : teamB?.teamName
   const pool = match.selected_mode ? PHASE_POOLS[match.selected_mode] ?? [] : []
   const bannedMaps = match.bans ?? []
@@ -150,12 +155,12 @@ export default function TournamentMatchPage() {
       </div>
 
       {/* バンピック開始前 */}
-      {match.banpick_status === 'waiting' && (
+      {match.banpick_status === 'waiting' && (isHost || myEntryId) && (
         <div className="section card-strong" style={{ textAlign: 'center', padding: 32 }}>
           <h2 style={{ marginTop: 0 }}>バンピックを開始</h2>
-          <p className="muted">対戦相手が揃っています。バンピックを開始してください。</p>
+          <p className="muted">対戦相手が揃っています。バンピックを開始すると先行チームが抽選されます。</p>
           <button className="btn-primary" onClick={handleStartBanpick} disabled={busy}>
-            {busy ? '開始中...' : 'バンピック開始'}
+            {busy ? '開始中...' : 'バンピック開始（先行抽選）'}
           </button>
         </div>
       )}
@@ -203,7 +208,9 @@ export default function TournamentMatchPage() {
           {/* ターン表示 */}
           <div className="card-strong" style={{ textAlign: 'center', padding: 16, marginBottom: 16, borderLeft: isMyTurn ? '4px solid var(--cyan)' : '4px solid var(--text-soft)' }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: isMyTurn ? 'var(--cyan)' : 'var(--text-soft)' }}>
-              {isMyTurn ? 'あなたのターンです' : `${turnTeamName ?? '相手'} のターン`}
+              {isHost && myEntryId !== match.banpick_turn_entry_id
+                ? `${turnTeamName ?? '不明'} のターン（主催者操作可能）`
+                : isMyTurn ? 'あなたのターンです' : `${turnTeamName ?? '相手'} のターン — 待機中`}
             </div>
             <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
               {match.banpick_action === 'ban' && 'マップを1つBANしてください'}
