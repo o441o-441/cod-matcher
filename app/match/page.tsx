@@ -410,14 +410,15 @@ export default function MatchPage() {
           void supabase.rpc("rpc_queue_heartbeat", { p_queue_entry_id: waitingRes.data.id });
         }
 
-        // 待機中のプレイヤー数を取得
+        // 待機中のプレイヤー数を取得（パーティ人数の合計）
         if (waitingRes.data) {
-          const { count } = await supabase
+          const { data: waitingData } = await supabase
             .from("queue_entries")
-            .select("id", { count: "exact", head: true })
+            .select("party_size")
             .eq("status", "waiting")
             .eq("queue_type", waitingRes.data.queue_type);
-          setQueueWaitingCount(count ?? 0);
+          const totalPlayers = (waitingData ?? []).reduce((sum: number, r: { party_size: number }) => sum + r.party_size, 0);
+          setQueueWaitingCount(totalPlayers);
         } else {
           setQueueWaitingCount(null);
         }
