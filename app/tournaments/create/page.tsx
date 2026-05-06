@@ -137,15 +137,27 @@ export default function TournamentCreatePage() {
           {/* GFリセット（ダブルエリミのみ） */}
           {format === 'tournament' && eliminationType === 'double' && (
             <div>
-              <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-                <input type="checkbox" checked={gfReset} onChange={e => setGfReset(e.target.checked)} id="gf-reset-toggle" />
-                <label htmlFor="gf-reset-toggle" className="stat-label" style={{ cursor: 'pointer' }}>Grand Final リセットあり</label>
+              <div className="stat-label">Grand Final リセット</div>
+              <div className="grid grid-2" style={{ marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="card"
+                  style={{ textAlign: 'center', padding: 16, border: gfReset ? '2px solid var(--cyan)' : undefined, cursor: 'pointer' }}
+                  onClick={() => setGfReset(true)}
+                >
+                  <div style={{ fontWeight: 700 }}>ON</div>
+                  <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>Losers側がGFに勝ったらリセットマッチ</p>
+                </button>
+                <button
+                  type="button"
+                  className="card"
+                  style={{ textAlign: 'center', padding: 16, border: !gfReset ? '2px solid var(--cyan)' : undefined, cursor: 'pointer' }}
+                  onClick={() => setGfReset(false)}
+                >
+                  <div style={{ fontWeight: 700 }}>OFF</div>
+                  <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>GF1回のみ、リセットなし</p>
+                </button>
               </div>
-              <p className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-                {gfReset
-                  ? 'Losers側がGFに勝った場合、もう1戦（リセットマッチ）を行います'
-                  : 'GFは1回のみ。Losers側が勝ってもリセットなしで優勝'}
-              </p>
             </div>
           )}
 
@@ -231,14 +243,31 @@ export default function TournamentCreatePage() {
 
           {/* レート制限 */}
           <div>
-            <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-              <input type="checkbox" checked={rateCapOn} onChange={e => setRateCapOn(e.target.checked)} id="rate-cap-toggle" />
-              <label htmlFor="rate-cap-toggle" className="stat-label" style={{ cursor: 'pointer' }}>ピークレート制限</label>
+            <div className="stat-label">ピークレート制限</div>
+            <div className="grid grid-2" style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                className="card"
+                style={{ textAlign: 'center', padding: 16, border: !rateCapOn ? '2px solid var(--cyan)' : undefined, cursor: 'pointer' }}
+                onClick={() => setRateCapOn(false)}
+              >
+                <div style={{ fontWeight: 700 }}>なし</div>
+                <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>レート制限なし</p>
+              </button>
+              <button
+                type="button"
+                className="card"
+                style={{ textAlign: 'center', padding: 16, border: rateCapOn ? '2px solid var(--cyan)' : undefined, cursor: 'pointer' }}
+                onClick={() => setRateCapOn(true)}
+              >
+                <div style={{ fontWeight: 700 }}>あり</div>
+                <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>ピークレートで参加制限</p>
+              </button>
             </div>
             {rateCapOn && (
               <div style={{ marginTop: 8 }}>
-                <label htmlFor="t-ratecap" className="sr-only">レート上限値</label>
-                <input id="t-ratecap" type="number" value={rateCap} onChange={e => setRateCap(Number(e.target.value))} min={1000} max={3000} step={100} aria-describedby="ratecap-hint" />
+                <label htmlFor="t-ratecap" className="stat-label">レート上限値</label>
+                <input id="t-ratecap" type="number" value={rateCap} onChange={e => setRateCap(Number(e.target.value))} min={1000} max={3000} step={100} aria-describedby="ratecap-hint" style={{ marginTop: 6 }} />
                 <p id="ratecap-hint" className="muted" style={{ fontSize: 11, marginTop: 4 }}>最高レートがこの値以下のプレイヤー/チームのみ参加可能</p>
               </div>
             )}
