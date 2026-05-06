@@ -76,6 +76,7 @@ type ProfileRow = {
   current_rating: number;
   is_banned: boolean;
   is_onboarded: boolean;
+  is_admin: boolean;
 };
 
 type PartyRow = {
@@ -289,7 +290,7 @@ export default function MatchPage() {
 
       // Phase 1: profile + party membership (always), invites + friends + team (initial only)
       const [profileRes, partyMemberRes, pendingInvitesRes, friendsRes, membershipRes] = await Promise.all([
-        supabase.from("profiles").select("id,display_name,current_rating,is_banned,is_onboarded").eq("id", uid).maybeSingle<ProfileRow>(),
+        supabase.from("profiles").select("id,display_name,current_rating,is_banned,is_onboarded,is_admin").eq("id", uid).maybeSingle<ProfileRow>(),
         supabase.from("party_members").select("id,party_id,user_id").eq("user_id", uid).returns<PartyMemberRow[]>(),
         opts?.silent ? Promise.resolve({ data: null, error: null }) : supabase.rpc("rpc_list_my_pending_party_invites"),
         opts?.silent ? Promise.resolve({ data: null, error: null }) : supabase.rpc("rpc_list_my_friends"),
@@ -310,7 +311,7 @@ export default function MatchPage() {
           const { data: upserted, error: upsertError } = await supabase
             .from("profiles")
             .upsert({ id: uid, display_name: legacyUser.display_name, is_onboarded: true }, { onConflict: "id" })
-            .select("id,display_name,current_rating,is_banned,is_onboarded")
+            .select("id,display_name,current_rating,is_banned,is_onboarded,is_admin")
             .maybeSingle<ProfileRow>();
           if (!upsertError && upserted) resolvedProfile = upserted;
         }
@@ -1355,10 +1356,21 @@ export default function MatchPage() {
                     気づかずにマッチングして放置状態となった場合はBAN対象となります。
                   </p>
                 </div>
-                <div style={{ marginTop: 12 }}>
+                <div className="row" style={{ marginTop: 12, gap: 8 }}>
                   <button onClick={handleCancelQueue} disabled={busy} className="btn-danger">
                     待機解除
                   </button>
+                  {profile?.is_admin && (
+                    <button className="btn-ghost btn-sm" style={{ fontSize: 11 }} disabled={busy} onClick={async () => {
+                      setBusy(true);
+                      const { error } = await supabase.rpc("rpc_ranked_fill_test_opponent", { p_target_avg: avgRating || 1500 });
+                      setBusy(false);
+                      if (error) setErrorText(error.message);
+                      else setInfoText("テスト用の相手パーティをキューに追加しました");
+                    }}>
+                      [Admin] テスト相手をキューに追加
+                    </button>
+                  )}
                 </div>
               </div>
             );
