@@ -150,7 +150,7 @@ export default function TournamentCreatePage() {
               </p>
               <select value={blockCount} onChange={e => setBlockCount(Number(e.target.value))} style={{ marginTop: 4 }}>
                 <option value={1}>1（総当たり・ブロック分けなし）</option>
-                {[2, 3, 4, 6, 8].filter(n => n <= capacity / 2).map(n => (
+                {[2, 3, 4, 6, 8, 12, 16].filter(n => n <= capacity / 2).map(n => (
                   <option key={n} value={n}>{n}ブロック（各{Math.ceil(capacity / n)}チーム）</option>
                 ))}
               </select>
