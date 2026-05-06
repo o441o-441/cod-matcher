@@ -41,6 +41,7 @@ export default function TournamentDetailPage() {
   const [weaponClass, setWeaponClass] = useState('ar')
   const [myTeamId, setMyTeamId] = useState<string | null>(null)
   const [myTeamName, setMyTeamName] = useState<string | null>(null)
+  const [myTeamMemberCount, setMyTeamMemberCount] = useState(0)
   const [myRating, setMyRating] = useState<number>(1500)
   const [myPeakRating, setMyPeakRating] = useState<number>(1500)
 
@@ -100,9 +101,14 @@ export default function TournamentDetailPage() {
         // 自分のチーム
         const { data: tm } = await supabase.from('team_members').select('team_id').eq('user_id', uid).maybeSingle()
         if (tm) {
-          setMyTeamId((tm as { team_id: string }).team_id)
-          const { data: teamRow } = await supabase.from('teams').select('name').eq('id', (tm as { team_id: string }).team_id).maybeSingle()
+          const tid = (tm as { team_id: string }).team_id
+          setMyTeamId(tid)
+          const [{ data: teamRow }, { count: memberCount }] = await Promise.all([
+            supabase.from('teams').select('name').eq('id', tid).maybeSingle(),
+            supabase.from('team_members').select('*', { count: 'exact', head: true }).eq('team_id', tid),
+          ])
           setMyTeamName((teamRow as { name: string } | null)?.name ?? null)
+          setMyTeamMemberCount(memberCount ?? 0)
         }
       }
 
@@ -134,6 +140,7 @@ export default function TournamentDetailPage() {
       insertData.weapon_class = weaponClass
     } else {
       if (!myTeamId) { showToast('チームに所属していません', 'error'); setBusy(false); return }
+      if (myTeamMemberCount < 4) { showToast(`チームメンバーが4人以上必要です（現在${myTeamMemberCount}人）`, 'error'); setBusy(false); return }
       insertData.team_id = myTeamId
       insertData.user_id = myUserId
     }
@@ -234,12 +241,15 @@ export default function TournamentDetailPage() {
                 <div className="stack">
                   {myTeamId ? (
                     <>
-                      <p>チーム: <strong>{myTeamName}</strong></p>
+                      <p>チーム: <strong>{myTeamName}</strong> <span className="muted" style={{ fontSize: 12 }}>（{myTeamMemberCount}人）</span></p>
                       <p className="muted" style={{ fontSize: 12 }}>あなたのレート: {myRating} / ピーク: {myPeakRating}</p>
+                      {myTeamMemberCount < 4 && (
+                        <p className="danger" style={{ fontSize: 12 }}>チームメンバーが4人以上必要です（現在{myTeamMemberCount}人）</p>
+                      )}
                       {tournament.rate_cap && myPeakRating > tournament.rate_cap && (
                         <p className="danger" style={{ fontSize: 12 }}>ピークレートが制限を超えています</p>
                       )}
-                      <button className="btn-primary" onClick={handleEntry} disabled={busy || (!!tournament.rate_cap && myPeakRating > tournament.rate_cap)}>
+                      <button className="btn-primary" onClick={handleEntry} disabled={busy || myTeamMemberCount < 4 || (!!tournament.rate_cap && myPeakRating > tournament.rate_cap)}>
                         {busy ? 'エントリー中...' : 'チームでエントリー'}
                       </button>
                     </>
