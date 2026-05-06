@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { id: '/', label: 'HOME', auth: false },
   { id: '/menu', label: 'MENU', auth: true },
   { id: '/match', label: 'MATCH', auth: true },
+  { id: '/custom', label: 'CUSTOM', auth: true },
   { id: '/tournaments', label: 'TOURNAMENTS', auth: false },
   { id: '/ranking', label: 'RANKING', auth: false },
   { id: '/blog', label: 'REVIEWS', auth: false },
