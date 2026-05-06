@@ -450,6 +450,9 @@ BEGIN
         updated_at = now()
     WHERE tournament_id = v_match.tournament_id AND entry_id = v_loser_entry_id;
 
+    -- Update team ratings (Elo)
+    PERFORM _tournament_update_team_ratings(v_match.tournament_id, p_winner_entry_id, v_loser_entry_id);
+
     -- Auto-detect group phase completion for block league
     IF v_tournament.block_count >= 2 THEN
       IF NOT EXISTS (
@@ -465,6 +468,9 @@ BEGIN
 
     RETURN json_build_object('ok', true, 'winner', p_winner_entry_id);
   END IF;
+
+  -- Update team ratings for bracket matches too
+  PERFORM _tournament_update_team_ratings(v_match.tournament_id, p_winner_entry_id, v_loser_entry_id);
 
   -- Compute bracket dimensions from W R1 count (tournament format only)
   SELECT count(*)::int INTO v_w_r1_count
