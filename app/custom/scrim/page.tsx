@@ -34,6 +34,7 @@ export default function ScrimQueuePage() {
   const [myTeam, setMyTeam] = useState<{ id: string; name: string; members: { auth_user_id: string; display_name: string | null }[] } | null>(null)
   const [errorText, setErrorText] = useState<string | null>(null)
   const [infoText, setInfoText] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const isWaiting = !!waitingEntry
   const isLeader = !!myParty && myParty.leader_user_id === myUserId
@@ -56,6 +57,7 @@ export default function ScrimQueuePage() {
       ])
 
       setProfile(prof as ProfileRow | null)
+      if (prof && (prof as { is_admin?: boolean }).is_admin) setIsAdmin(true)
       if (!opts?.silent) setPendingInvites((pendInv as PendingInviteRow[] | null) ?? [])
       if (!opts?.silent) setFriends((fr as { friend_user_id: string; friend_display_name: string | null }[] | null) ?? [])
 
@@ -391,7 +393,20 @@ export default function ScrimQueuePage() {
                 <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--amber, #f59e0b)' }}>検索を中止する際は必ず「待機解除」ボタンを押してください。</p>
                 <p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>ボタンを押さずにページを離れると、マッチングがキャンセルされない場合があります。<br />気づかずにマッチングして放置状態となった場合はBAN対象となります。</p>
               </div>
-              <div style={{ marginTop: 12 }}><button onClick={handleCancelQueue} disabled={busy} className="btn-danger">待機解除</button></div>
+              <div className="row" style={{ marginTop: 12, gap: 8 }}>
+                <button onClick={handleCancelQueue} disabled={busy} className="btn-danger">待機解除</button>
+                {isAdmin && (
+                  <button className="btn-ghost btn-sm" style={{ fontSize: 11 }} disabled={busy} onClick={async () => {
+                    setBusy(true)
+                    const { error } = await supabase.rpc('rpc_scrim_fill_test_opponent', { p_target_avg: avgPeak || 1500 })
+                    setBusy(false)
+                    if (error) setErrorText(error.message)
+                    else setInfoText('テスト用の相手パーティをキューに追加しました')
+                  }}>
+                    [Admin] テスト相手をキューに追加
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
