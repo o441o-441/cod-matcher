@@ -51,7 +51,7 @@ export default function HomePage() {
       const [{ data: tData }, { data: aData }, { data: rData }] = await Promise.all([
         supabase.from('tournaments').select('id, title, format, status, capacity, entry_deadline').in('status', ['recruit', 'live']).order('created_at', { ascending: false }).limit(3),
         supabase.from('announcements').select('id, title, created_at').order('created_at', { ascending: false }).limit(3),
-        supabase.from('blog_posts').select('id, slug, title, excerpt, controller_name, published_at').eq('status', 'published').order('published_at', { ascending: false }).limit(2),
+        supabase.from('posts').select('id, slug, title, excerpt, controller_name, published_at').eq('status', 'published').order('published_at', { ascending: false }).limit(2),
       ])
       setTourneys((tData ?? []) as TourneyRow[])
       setAnnouncements((aData ?? []) as AnnouncementRow[])
