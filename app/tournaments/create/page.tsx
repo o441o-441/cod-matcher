@@ -80,6 +80,12 @@ export default function TournamentCreatePage() {
       </h1>
       <p className="muted">リーグかトーナメントか、チームか個人か。すべてここで決める。</p>
 
+      <div className="card" style={{ padding: '14px 18px', marginTop: 16, borderColor: 'rgba(255,176,32,0.4)', background: 'rgba(255,176,32,0.06)' }}>
+        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.7, color: 'var(--text)' }}>
+          大会を開催する際は <strong>Call of Duty Japan 公式Discordサーバー</strong> に加入し、イベント・大会サポートガイドラインを確認の上、開催の1週間以上前に申請フォームから大会申請をお願いします。
+        </p>
+      </div>
+
       <div className="section" style={{ maxWidth: 800 }}>
         <div className="card-strong stack">
           {/* タイトル */}
