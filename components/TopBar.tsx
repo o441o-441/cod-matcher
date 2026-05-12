@@ -101,10 +101,8 @@ export default function TopBar({
           onClick={() => handleGoto('/')}
           aria-label="ASCENT トップページ"
         >
-          <div className="brand-mark" aria-hidden="true">A</div>
-          <div className="brand-word">
-            ASCENT<em>.</em>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo_yoko.png" alt="ASCENT" className="brand-yoko" />
         </button>
 
         {/* Desktop nav — hidden on mobile via responsive.css */}
