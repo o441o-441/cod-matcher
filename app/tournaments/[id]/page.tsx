@@ -42,6 +42,7 @@ export default function TournamentDetailPage() {
   const [myTeamId, setMyTeamId] = useState<string | null>(null)
   const [myTeamName, setMyTeamName] = useState<string | null>(null)
   const [myTeamMemberCount, setMyTeamMemberCount] = useState(0)
+  const [myTeamMembers, setMyTeamMembers] = useState<{ display_name: string; current_rating: number | null }[]>([])
   const [myRating, setMyRating] = useState<number>(1500)
   const [myPeakRating, setMyPeakRating] = useState<number>(1500)
 
@@ -103,12 +104,15 @@ export default function TournamentDetailPage() {
         if (tm) {
           const tid = (tm as { team_id: string }).team_id
           setMyTeamId(tid)
-          const [{ data: teamRow }, { count: memberCount }] = await Promise.all([
+          const [{ data: teamRow }, { data: membersData }] = await Promise.all([
             supabase.from('teams').select('name').eq('id', tid).maybeSingle(),
-            supabase.from('team_members').select('*', { count: 'exact', head: true }).eq('team_id', tid),
+            supabase.from('team_members').select('user_id, profiles!inner(display_name, current_rating)').eq('team_id', tid),
           ])
           setMyTeamName((teamRow as { name: string } | null)?.name ?? null)
-          setMyTeamMemberCount(memberCount ?? 0)
+          const members = ((membersData ?? []) as unknown as { user_id: string; profiles: { display_name: string | null; current_rating: number | null } }[])
+            .map(m => ({ display_name: m.profiles?.display_name ?? '不明', current_rating: m.profiles?.current_rating ?? null }))
+          setMyTeamMemberCount(members.length)
+          setMyTeamMembers(members)
         }
       }
 
@@ -251,6 +255,17 @@ export default function TournamentDetailPage() {
                   {myTeamId ? (
                     <>
                       <p>チーム: <strong>{myTeamName}</strong> <span className="muted" style={{ fontSize: 12 }}>（{myTeamMemberCount}人）</span></p>
+                      <div className="card" style={{ padding: '10px 14px', marginTop: 4 }}>
+                        <div className="stat-label" style={{ marginBottom: 6 }}>エントリーされるメンバー</div>
+                        <div className="stack-sm">
+                          {myTeamMembers.map((m, i) => (
+                            <div key={i} className="row" style={{ justifyContent: 'space-between', fontSize: 13 }}>
+                              <span style={{ fontWeight: 600 }}>{m.display_name}</span>
+                              <span className="mono" style={{ fontSize: 11, color: 'var(--cyan)' }}>SR {m.current_rating ?? '---'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                       <p className="muted" style={{ fontSize: 12 }}>あなたのレート: {myRating} / ピーク: {myPeakRating}</p>
                       {myTeamMemberCount < 4 && (
                         <p className="danger" style={{ fontSize: 12 }}>チームメンバーが4人以上必要です（現在{myTeamMemberCount}人）</p>
