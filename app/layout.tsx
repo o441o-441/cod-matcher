@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   keywords: ['CoD', 'Call of Duty', 'マッチメイキング', 'トーナメント', '4v4', 'ランキング', 'eスポーツ'],
   authors: [{ name: 'ASCENT' }],
   creator: 'ASCENT',
-  metadataBase: new URL('https://and-and-and.com'),
+  metadataBase: new URL('https://ascent-esports.com'),
   openGraph: {
     type: 'website',
     locale: 'ja_JP',
