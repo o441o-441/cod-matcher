@@ -143,6 +143,15 @@ export default function TournamentDetailPage() {
       if (myTeamMemberCount < 4) { showToast(`チームメンバーが4人以上必要です（現在${myTeamMemberCount}人）`, 'error'); setBusy(false); return }
       insertData.team_id = myTeamId
       insertData.user_id = myUserId
+
+      // Snapshot team members at entry time
+      const { data: memberData } = await supabase
+        .from('team_members')
+        .select('user_id, profiles!inner(display_name, current_rating)')
+        .eq('team_id', myTeamId)
+      const snapshot = ((memberData ?? []) as unknown as { user_id: string; profiles: { display_name: string | null; current_rating: number | null } }[])
+        .map(m => ({ user_id: m.user_id, display_name: m.profiles?.display_name ?? '不明', rating: m.profiles?.current_rating ?? 1500 }))
+      insertData.member_snapshot = snapshot
     }
 
     const { error } = await supabase.from('tournament_entries').insert(insertData)
