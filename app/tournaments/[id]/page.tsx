@@ -276,6 +276,9 @@ export default function TournamentDetailPage() {
                 <div>
                   <p style={{ fontWeight: 700, color: 'var(--success)', margin: 0 }}>エントリー済み</p>
                   {myEntry.weapon_class && <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>武器種: {myEntry.weapon_class.toUpperCase()}</p>}
+                  {tournament.status === 'recruit' && tournament.entry_mode === 'team' && (
+                    <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>メンバーを変更する場合はエントリーを取り消してから再エントリーしてください</p>
+                  )}
                 </div>
                 {tournament.status === 'recruit' && (
                   <button className="btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--danger)' }} disabled={busy} onClick={async () => {
