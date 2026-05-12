@@ -102,7 +102,10 @@ export default function TopBar({
           aria-label="ASCENT トップページ"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo_yoko.png" alt="ASCENT" className="brand-yoko" />
+          <img src="/logo_a.png" alt="A" className="brand-mark-img" />
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, letterSpacing: '0.32em', fontSize: 15, color: 'var(--text-strong)' }}>ASCENT</span>
+          <span className="brand-divider" />
+          <span className="brand-sub">CoD 4v4</span>
         </button>
 
         {/* Desktop nav — hidden on mobile via responsive.css */}

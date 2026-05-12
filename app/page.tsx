@@ -69,39 +69,36 @@ export default function HomePage() {
 
   return (
     <main>
-      {/* Hero frame with HUD elements */}
+      {/* Hero — Variant B: Wordmark center */}
       <section className="hero-frame anim-keep">
         <span className="hud-tick tl" /><span className="hud-tick tr" /><span className="hud-tick bl" /><span className="hud-tick br" />
-        <span className="hero-coord l mono">SEASON 03 · OP. ASCENT</span>
+        <span className="hero-coord l mono">SEASON 03</span>
         <span className="hero-coord r mono">CoD · 4v4 · GA</span>
 
-        <div className="hero-inner">
-          <div>
-            <div className="eyebrow"><span className="dot" style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 999, background: 'var(--cyan)', marginRight: 8, boxShadow: '0 0 10px var(--cyan)', verticalAlign: 'middle' }} />GA COMPLIANT · CoD 4v4 PLATFORM</div>
-            <h1 className="display" style={{ marginTop: 14, fontSize: 'clamp(2.2rem, 5vw, 3.4rem)' }}>
-              {signedIn ? <>今日も、<em>4v4。</em></> : <>4v4を、<em>本気で。</em></>}
-            </h1>
-            <p className="muted" style={{ marginTop: 14, fontSize: 14.5, maxWidth: 520, lineHeight: 1.65 }}>
-              {signedIn
-                ? `おかえりなさい、${displayName ?? 'プレイヤー'}。`
-                : 'ランクマッチ・カスタム・スクリム・大会まで。CoDの競技シーンを1つにまとめた、4v4プレイヤーのためのプラットフォーム。'}
-            </p>
-            <div className="hero-tags">
-              {['Elo Rating', 'BAN/PICK', 'SR Season', 'Custom Tournaments'].map(t => <span key={t} className="hero-tag">{t}</span>)}
-            </div>
-            <div className="hero-cta">
-              {signedIn ? (
-                <><button type="button" className="btn-primary btn-lg" onClick={() => router.push('/match')}>対戦開始 →</button>
-                <button type="button" className="btn-ghost btn-lg" onClick={() => router.push('/mypage')}>マイページ</button></>
-              ) : (
-                <><button type="button" className="btn-primary btn-lg" onClick={() => router.push('/login')}>無料で始める →</button>
-                <button type="button" className="btn-ghost btn-lg" onClick={() => router.push('/rules')}>ルールを読む</button></>
-              )}
-            </div>
-          </div>
-          <div className="hero-logo-mark">
+        <div className="hero-B">
+          <div className="eyebrow"><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 999, background: 'var(--cyan)', marginRight: 8, boxShadow: '0 0 10px var(--cyan)', verticalAlign: 'middle' }} />GA COMPLIANT · CoD 4v4 PLATFORM</div>
+          <div className="hero-B-word">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo_a.png" alt="" />
+            <img src="/logo_yoko.png" alt="ASCENT — GA Compliant CoD 4v4 Platform" />
+          </div>
+          <p className="muted" style={{ fontSize: 15, maxWidth: 580, lineHeight: 1.65, margin: 0 }}>
+            {signedIn
+              ? `おかえりなさい、${displayName ?? 'プレイヤー'}。今日も4v4で。`
+              : 'ランクマッチ・カスタム・スクリム・大会まで。CoDの競技シーンを1つにまとめた、4v4プレイヤーのためのプラットフォーム。'}
+          </p>
+          <div className="hero-cta" style={{ justifyContent: 'center' }}>
+            {signedIn ? (
+              <><button type="button" className="btn-primary btn-xl" onClick={() => router.push('/match')}>対戦開始 →</button>
+              <button type="button" className="btn-ghost btn-xl" onClick={() => router.push('/mypage')}>マイページ</button></>
+            ) : (
+              <><button type="button" className="btn-primary btn-xl" onClick={() => router.push('/login')}>無料で始める →</button>
+              <button type="button" className="btn-ghost btn-xl" onClick={() => router.push('/rules')}>ルールを読む</button></>
+            )}
+          </div>
+          <div className="row" style={{ gap: 18, marginTop: 4, justifyContent: 'center' }}>
+            <span className="badge"><span className="badge-dot" />Elo Rating</span>
+            <span className="badge amber"><span className="badge-dot" />BAN/PICK</span>
+            <span className="badge violet"><span className="badge-dot" />SR Season</span>
           </div>
         </div>
       </section>

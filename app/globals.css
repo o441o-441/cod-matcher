@@ -260,6 +260,19 @@ main {
   display: block;
   filter: drop-shadow(0 0 10px rgba(0, 229, 255, 0.35));
 }
+.brand-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--line-strong);
+}
+.brand-sub {
+  font-family: var(--font-display);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
 .brand-word {
   font-family: var(--font-display);
   font-weight: 700;
@@ -1693,6 +1706,11 @@ a:focus-visible {
 @keyframes hero-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
 .hero-logo-mark::before { content:''; position:absolute; inset:18%; background:radial-gradient(circle,rgba(0,229,255,0.18) 0%,transparent 60%); filter:blur(40px); z-index:-1; animation:hero-pulse 4s ease-in-out infinite; }
 @keyframes hero-pulse { 0%,100%{opacity:0.6;transform:scale(1)} 50%{opacity:1;transform:scale(1.08)} }
+/* Variant B: wordmark center */
+.hero-B { display:flex; flex-direction:column; align-items:center; text-align:center; padding:64px 48px 52px; min-height:380px; justify-content:center; gap:22px; }
+.hero-B-word { width:100%; max-width:700px; margin:0 auto 8px; }
+.hero-B-word img { width:100%; height:auto; filter:drop-shadow(0 0 60px rgba(0,229,255,0.3)) drop-shadow(0 0 120px rgba(139,92,246,0.18)); }
+
 .hero-tags { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
 .hero-tag { font-family:var(--font-display); font-size:10px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:var(--text-soft); padding:6px 12px; border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,0.02); }
 .hero-cta { display: flex; gap: 12px; margin-top: 26px; align-items: center; flex-wrap: wrap; }
