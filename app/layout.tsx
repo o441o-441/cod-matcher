@@ -23,12 +23,14 @@ export const metadata: Metadata = {
     title: 'ASCENT — CoD 4v4 マッチメイキング & トーナメント',
     description:
       'Call of Dutyの4v4対戦マッチメイキング、レート制ランキング、トーナメント運営をワンストップで。',
+    images: [{ url: '/ogp.png', width: 1200, height: 630, alt: 'ASCENT — GA COMPLIANT CoD 4v4 PLATFORM' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'ASCENT — CoD 4v4 マッチメイキング & トーナメント',
     description:
       'Call of Dutyの4v4対戦マッチメイキング、レート制ランキング、トーナメント運営をワンストップで。',
+    images: ['/ogp.png'],
   },
   robots: {
     index: true,
