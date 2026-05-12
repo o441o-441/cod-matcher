@@ -258,6 +258,7 @@ export default function TournamentDetailPage() {
                       {tournament.rate_cap && myPeakRating > tournament.rate_cap && (
                         <p className="danger" style={{ fontSize: 12 }}>ピークレートが制限を超えています</p>
                       )}
+                      <p className="muted" style={{ fontSize: 11, marginTop: 4 }}>エントリー時点のチームメンバーが大会参加者として登録されます</p>
                       <button className="btn-primary" onClick={handleEntry} disabled={busy || myTeamMemberCount < 4 || (!!tournament.rate_cap && myPeakRating > tournament.rate_cap)}>
                         {busy ? 'エントリー中...' : 'チームでエントリー'}
                       </button>
