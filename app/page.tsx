@@ -82,9 +82,7 @@ export default function HomePage() {
             <img src="/logo_yoko.png" alt="ASCENT — GA Compliant CoD 4v4 Platform" />
           </div>
           <p className="muted" style={{ fontSize: 15, maxWidth: 580, lineHeight: 1.65, margin: 0 }}>
-            {signedIn
-              ? `おかえりなさい、${displayName ?? 'プレイヤー'}。今日も4v4で。`
-              : 'ランクマッチ・カスタム・スクリム・大会まで。CoDの競技シーンを1つにまとめた、4v4プレイヤーのためのプラットフォーム。'}
+            ランクマッチ・カスタム・スクリム・大会まで。CoDの競技シーンを1つにまとめた、4v4プレイヤーのためのプラットフォーム。
           </p>
           <div className="hero-cta" style={{ justifyContent: 'center' }}>
             {signedIn ? (
