@@ -79,7 +79,7 @@ export default function HomePage() {
           <div className="eyebrow"><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 999, background: 'var(--cyan)', marginRight: 8, boxShadow: '0 0 10px var(--cyan)', verticalAlign: 'middle' }} />GA COMPLIANT · CoD 4v4 PLATFORM</div>
           <div className="hero-B-word">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo_yoko_anim.gif" alt="ASCENT — GA Compliant CoD 4v4 Platform" />
+            <img src="/logo_yoko.png" alt="ASCENT — GA Compliant CoD 4v4 Platform" />
           </div>
           <p className="muted" style={{ fontSize: 15, maxWidth: 580, lineHeight: 1.65, margin: 0 }}>
             ランクマッチ・カスタム・スクリム・大会まで。CoDの競技シーンを1つにまとめた、4v4プレイヤーのためのプラットフォーム。
