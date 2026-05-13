@@ -8,9 +8,20 @@ import { LoadingSkeleton } from '@/components/UIState'
 
 type TimelinePost = {
   id: string; author_id: string; body: string
+  kind: string; event_kind: string | null; event_value: string | null
   reactions_gg: number; reactions_fire: number; created_at: string
   author_name: string; author_rating: number | null
   my_gg: boolean; my_fire: boolean
+}
+
+const EVENT_STYLE: Record<string, { icon: string; color: string; label: string }> = {
+  winstreak: { icon: '🔥', color: 'var(--amber)', label: '連勝' },
+  first_win: { icon: '🎉', color: 'var(--success)', label: '初勝利' },
+  peak_rating: { icon: '📈', color: 'var(--cyan)', label: '最高SR更新' },
+  matches_milestone: { icon: '🏅', color: 'var(--amber)', label: '試合達成' },
+  tier_up: { icon: '⬆️', color: 'var(--violet)', label: 'ティア昇格' },
+  comeback: { icon: '💪', color: 'var(--magenta)', label: '復活' },
+  tournament_win: { icon: '🏆', color: 'var(--gold, #ffd166)', label: '大会優勝' },
 }
 
 type Tab = 'all' | 'following' | 'popular' | 'mine'
@@ -40,11 +51,11 @@ export default function TimelinePage() {
     // Get posts
     const { data: postData } = await supabase
       .from('timeline_posts')
-      .select('id, author_id, body, reactions_gg, reactions_fire, created_at')
+      .select('id, author_id, body, kind, event_kind, event_value, reactions_gg, reactions_fire, created_at')
       .order('created_at', { ascending: false })
       .limit(100)
 
-    const rows = (postData ?? []) as { id: string; author_id: string; body: string; reactions_gg: number; reactions_fire: number; created_at: string }[]
+    const rows = (postData ?? []) as { id: string; author_id: string; body: string; kind: string; event_kind: string | null; event_value: string | null; reactions_gg: number; reactions_fire: number; created_at: string }[]
 
     const authorIds = [...new Set(rows.map(r => r.author_id))]
     const { data: profiles } = authorIds.length > 0
@@ -213,6 +224,22 @@ export default function TimelinePage() {
                     </button>
                   )}
                 </div>
+                {/* Event banner */}
+                {p.kind === 'event' && p.event_kind && EVENT_STYLE[p.event_kind] && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 'var(--r-md)', marginBottom: 6,
+                    background: `linear-gradient(135deg, ${EVENT_STYLE[p.event_kind].color}15, transparent)`,
+                    border: `1px solid ${EVENT_STYLE[p.event_kind].color}40`,
+                  }}>
+                    <span style={{ fontSize: 20 }}>{EVENT_STYLE[p.event_kind].icon}</span>
+                    <div>
+                      <span style={{ fontSize: 11, fontFamily: 'var(--font-display)', fontWeight: 700, letterSpacing: '0.12em', color: EVENT_STYLE[p.event_kind].color, textTransform: 'uppercase' }}>
+                        {EVENT_STYLE[p.event_kind].label}
+                      </span>
+                      {p.event_value && <span className="mono" style={{ marginLeft: 8, fontSize: 16, fontWeight: 800, color: EVENT_STYLE[p.event_kind].color }}>{p.event_value}</span>}
+                    </div>
+                  </div>
+                )}
                 <p style={{ margin: 0, fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{p.body}</p>
                 <div className="row" style={{ gap: 16, marginTop: 10 }}>
                   <button type="button" className="row" onClick={() => handleReaction(p.id, 'gg')}
