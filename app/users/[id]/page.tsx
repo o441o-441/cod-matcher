@@ -235,8 +235,8 @@ export default function UserProfilePage() {
 
       {/* Follow stats + button */}
       <div className="row" style={{ gap: 16, marginTop: 8 }}>
-        <span style={{ fontSize: 13 }}><strong>{followingCount}</strong> <span className="muted" style={{ fontSize: 12 }}>フォロー中</span></span>
-        <span style={{ fontSize: 13 }}><strong>{followersCount}</strong> <span className="muted" style={{ fontSize: 12 }}>フォロワー</span></span>
+        <span style={{ fontSize: 13, cursor: 'pointer' }} onClick={() => router.push(`/users/${userId}/follows?tab=following`)}><strong>{followingCount}</strong> <span className="muted" style={{ fontSize: 12 }}>フォロー中</span></span>
+        <span style={{ fontSize: 13, cursor: 'pointer' }} onClick={() => router.push(`/users/${userId}/follows?tab=followers`)}><strong>{followersCount}</strong> <span className="muted" style={{ fontSize: 12 }}>フォロワー</span></span>
         {signedIn && !isMe && (
           <button type="button" className={isFollowing ? 'btn-ghost btn-sm' : 'btn-primary btn-sm'} style={{ fontSize: 11 }}
             onClick={async () => {
