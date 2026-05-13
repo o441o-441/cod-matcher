@@ -45,6 +45,10 @@ export default function UserProfilePage() {
   const [isMe, setIsMe] = useState(false)
   const [signedIn, setSignedIn] = useState(false)
   const [sendingFriend, setSendingFriend] = useState(false)
+  const [followingCount, setFollowingCount] = useState(0)
+  const [followersCount, setFollowersCount] = useState(0)
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [myUid, setMyUid] = useState<string | null>(null)
 
   type SeasonOption = { id: string; name: string; start_date: string; end_date: string; is_active: boolean }
   const [seasons, setSeasons] = useState<SeasonOption[]>([])
@@ -64,19 +68,27 @@ export default function UserProfilePage() {
       const {
         data: { session },
       } = await supabase.auth.getSession()
-      setIsMe(session?.user?.id === userId)
-      setSignedIn(!!session?.user)
+      const myId = session?.user?.id ?? null
+      setMyUid(myId)
+      setIsMe(myId === userId)
+      setSignedIn(!!myId)
 
-      // Parallel: profiles, users, team_members, seasons
-      const [profileRes, legacyRes, memberRes, seasonRes] = await Promise.all([
+      // Parallel: profiles, users, team_members, seasons, follow counts
+      const [profileRes, legacyRes, memberRes, seasonRes, { count: fwingCount }, { count: fwerCount }, { data: amFollowing }] = await Promise.all([
         supabase.from('profiles').select('id, display_name, current_rating, is_banned, is_monitor, is_approved, bio').eq('id', userId).maybeSingle<ProfileRow>(),
         supabase.from('users').select('controller, activision_id, discord_name, platform').eq('auth_user_id', userId).maybeSingle<LegacyUser>(),
         supabase.from('team_members').select('team_id').eq('user_id', userId).maybeSingle<{ team_id: string }>(),
         supabase.from('seasons').select('id, name, start_date, end_date, is_active').order('start_date', { ascending: false }),
+        supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId),
+        supabase.from('follows').select('*', { count: 'exact', head: true }).eq('followee_id', userId),
+        myId ? supabase.from('follows').select('follower_id').eq('follower_id', myId).eq('followee_id', userId).maybeSingle() : Promise.resolve({ data: null }),
       ])
 
       setProfile(profileRes.data ?? null)
       setLegacy(legacyRes.data ?? null)
+      setFollowingCount(fwingCount ?? 0)
+      setFollowersCount(fwerCount ?? 0)
+      setIsFollowing(!!amFollowing)
 
       if (memberRes.data?.team_id) {
         const { data: teamRow } = await supabase
@@ -220,6 +232,23 @@ export default function UserProfilePage() {
       </h1>
       {teamName && <p className="muted">{teamName}</p>}
       {!teamName && <p className="muted">プレイヤープロフィール</p>}
+
+      {/* Follow stats + button */}
+      <div className="row" style={{ gap: 16, marginTop: 8 }}>
+        <span style={{ fontSize: 13 }}><strong>{followingCount}</strong> <span className="muted" style={{ fontSize: 12 }}>フォロー中</span></span>
+        <span style={{ fontSize: 13 }}><strong>{followersCount}</strong> <span className="muted" style={{ fontSize: 12 }}>フォロワー</span></span>
+        {signedIn && !isMe && (
+          <button type="button" className={isFollowing ? 'btn-ghost btn-sm' : 'btn-primary btn-sm'} style={{ fontSize: 11 }}
+            onClick={async () => {
+              if (isFollowing) await supabase.rpc('rpc_unfollow_user', { p_target_id: userId })
+              else await supabase.rpc('rpc_follow_user', { p_target_id: userId })
+              setIsFollowing(!isFollowing)
+              setFollowersCount(c => isFollowing ? c - 1 : c + 1)
+            }}>
+            {isFollowing ? 'フォロー中' : 'フォローする'}
+          </button>
+        )}
+      </div>
 
       {/* Avatar + rating hero */}
       <div className="section">
