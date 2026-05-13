@@ -350,6 +350,31 @@ export default function MenuPage() {
           </div>
         </div>
 
+        {/* Tournament */}
+        <div className="card-strong">
+          <div style={{ width: 32, height: 32, borderRadius: 'var(--r-sm)', background: 'var(--amber-soft)', display: 'grid', placeItems: 'center', marginBottom: 12 }}>
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+              <path d="M7 4h10v5a5 5 0 01-10 0V4zM5 5H3v2a3 3 0 003 3M19 5h2v2a3 3 0 01-3 3M9 19h6M12 14v5" stroke="var(--amber)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>大会</div>
+          <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>大会の参加・開催</div>
+          <div className="stack" style={{ marginTop: 16 }}>
+            <button className="btn-ghost btn-block" onClick={() => router.push('/tournaments/my')}>
+              出場予定の大会
+              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            <button className="btn-ghost btn-block" onClick={() => router.push('/tournaments')}>
+              大会一覧
+              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            <button className="btn-ghost btn-block" onClick={() => router.push('/tournaments/create')}>
+              大会を開催
+              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          </div>
+        </div>
+
         {/* Community */}
         <div className="card-strong">
           <div style={{ width: 32, height: 32, borderRadius: 'var(--r-sm)', background: 'var(--cyan-dim)', display: 'grid', placeItems: 'center', marginBottom: 12 }}>

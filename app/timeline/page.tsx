@@ -38,6 +38,7 @@ export default function TimelinePage() {
   const [body, setBody] = useState('')
   const [posting, setPosting] = useState(false)
   const [tab, setTab] = useState<Tab>('all')
+  const [hideEvents, setHideEvents] = useState(false)
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set())
   // Reply/Quote modal
   const [replyTo, setReplyTo] = useState<TimelinePost | null>(null)
@@ -118,6 +119,7 @@ export default function TimelinePage() {
   }, [loadFeed])
 
   const filteredPosts = posts.filter(p => {
+    if (hideEvents && p.kind === 'event') return false
     if (tab === 'following') return followingIds.has(p.author_id)
     if (tab === 'popular') return (p.reactions_gg + p.reactions_fire) >= 1
     if (tab === 'mine') return p.author_id === myUserId
@@ -306,12 +308,17 @@ export default function TimelinePage() {
       </div>
 
       {/* Tabs */}
-      <div className="row" style={{ gap: 6, marginTop: 18, marginBottom: 14 }}>
-        {tabs.map(t => (
-          <button key={t.id} type="button" className={`btn-sm ${tab === t.id ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab(t.id)} style={{ minWidth: 70 }}>
-            {t.label} <span className="mono" style={{ fontSize: 10, marginLeft: 4, opacity: 0.7 }}>{t.count}</span>
-          </button>
-        ))}
+      <div className="row" style={{ gap: 6, marginTop: 18, marginBottom: 14, justifyContent: 'space-between' }}>
+        <div className="row" style={{ gap: 6 }}>
+          {tabs.map(t => (
+            <button key={t.id} type="button" className={`btn-sm ${tab === t.id ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab(t.id)} style={{ minWidth: 70 }}>
+              {t.label} <span className="mono" style={{ fontSize: 10, marginLeft: 4, opacity: 0.7 }}>{t.count}</span>
+            </button>
+          ))}
+        </div>
+        <button type="button" className={`btn-sm ${hideEvents ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setHideEvents(h => !h)} style={{ fontSize: 11 }}>
+          {hideEvents ? '自動投稿を表示' : '自動投稿を非表示'}
+        </button>
       </div>
 
       {/* Feed */}
