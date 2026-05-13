@@ -19,14 +19,14 @@ type TimelinePost = {
 
 type Tab = 'all' | 'following' | 'popular' | 'mine'
 
-const EVENT_STYLE: Record<string, { icon: string; color: string; label: string }> = {
-  winstreak: { icon: '🔥', color: 'var(--amber)', label: '連勝' },
-  first_win: { icon: '🎉', color: 'var(--success)', label: '初勝利' },
-  peak_rating: { icon: '📈', color: 'var(--cyan)', label: '最高SR更新' },
-  matches_milestone: { icon: '🏅', color: 'var(--amber)', label: '試合達成' },
-  tier_up: { icon: '⬆️', color: 'var(--violet)', label: 'ティア昇格' },
-  comeback: { icon: '💪', color: 'var(--magenta)', label: '復活' },
-  tournament_win: { icon: '🏆', color: 'var(--gold, #ffd166)', label: '大会優勝' },
+const EVENT_STYLE: Record<string, { glyph: string; label: string }> = {
+  winstreak: { glyph: '🔥', label: 'WIN STREAK' },
+  first_win: { glyph: '🎉', label: 'FIRST WIN' },
+  peak_rating: { glyph: '📈', label: 'PEAK SR' },
+  matches_milestone: { glyph: '🏅', label: 'MILESTONE' },
+  tier_up: { glyph: '⬆️', label: 'TIER UP' },
+  comeback: { glyph: '💪', label: 'COMEBACK' },
+  tournament_win: { glyph: '🏆', label: 'CHAMPION' },
 }
 
 export default function TimelinePage() {
@@ -227,17 +227,16 @@ export default function TimelinePage() {
           </div>
 
           {p.kind === 'event' && p.event_kind && EVENT_STYLE[p.event_kind] && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 'var(--r-md)', marginBottom: 6,
-              background: `linear-gradient(135deg, ${EVENT_STYLE[p.event_kind].color}15, transparent)`, border: `1px solid ${EVENT_STYLE[p.event_kind].color}40` }}>
-              <span style={{ fontSize: 20 }}>{EVENT_STYLE[p.event_kind].icon}</span>
-              <div>
-                <span style={{ fontSize: 11, fontFamily: 'var(--font-display)', fontWeight: 700, letterSpacing: '0.12em', color: EVENT_STYLE[p.event_kind].color, textTransform: 'uppercase' }}>{EVENT_STYLE[p.event_kind].label}</span>
-                {p.event_value && <span className="mono" style={{ marginLeft: 8, fontSize: 16, fontWeight: 800, color: EVENT_STYLE[p.event_kind].color }}>{p.event_value}</span>}
+            <div className={`tl-event ${p.event_kind}`}>
+              <div className="tl-event-glyph">{p.event_value || EVENT_STYLE[p.event_kind].glyph}</div>
+              <div className="tl-event-body">
+                <div className="tl-event-eyebrow">{EVENT_STYLE[p.event_kind].label}</div>
+                <div className="tl-event-title">{p.body}</div>
               </div>
             </div>
           )}
 
-          <p style={{ margin: 0, fontSize: compact ? 13 : 14, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{p.body}</p>
+          {p.kind !== 'event' && <p style={{ margin: 0, fontSize: compact ? 13 : 14, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{p.body}</p>}
 
           {/* Quoted post */}
           {p.quote && (

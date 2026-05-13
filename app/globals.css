@@ -1780,4 +1780,48 @@ a:focus-visible {
   .foot-grid { grid-template-columns:1fr; }
 }
 
+/* ===================================================================
+   Timeline system event cards (HUD style)
+   =================================================================== */
+.tl-event {
+  position: relative; border-radius: 12px; padding: 16px 18px;
+  overflow: hidden; display: flex; align-items: center; gap: 16px;
+}
+.tl-event::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle at 100% 0%, currentColor, transparent 60%), linear-gradient(135deg, rgba(0,0,0,0.4), rgba(0,0,0,0.1));
+  opacity: 0.12;
+}
+.tl-event::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image: linear-gradient(currentColor 1px, transparent 1px), linear-gradient(90deg, currentColor 1px, transparent 1px);
+  background-size: 28px 28px; opacity: 0.04;
+  mask-image: linear-gradient(135deg, black 20%, transparent 70%);
+}
+.tl-event.winstreak { background: linear-gradient(120deg, rgba(255,176,32,0.14), rgba(255,77,109,0.1)); border: 1px solid rgba(255,176,32,0.35); color: var(--amber); }
+.tl-event.tier_up { background: linear-gradient(120deg, rgba(181,168,255,0.14), rgba(255,43,214,0.08)); border: 1px solid rgba(181,168,255,0.4); color: var(--violet); }
+.tl-event.tournament_win { background: linear-gradient(120deg, rgba(255,209,102,0.16), rgba(255,176,32,0.08)); border: 1px solid rgba(255,209,102,0.45); color: #ffd166; }
+.tl-event.comeback { background: linear-gradient(120deg, rgba(255,43,214,0.14), rgba(139,92,246,0.1)); border: 1px solid rgba(255,43,214,0.4); color: var(--magenta); }
+.tl-event.first_win { background: linear-gradient(120deg, rgba(0,245,160,0.14), rgba(0,229,255,0.08)); border: 1px solid rgba(0,245,160,0.4); color: var(--success); }
+.tl-event.peak_rating { background: linear-gradient(120deg, rgba(0,229,255,0.16), rgba(255,255,255,0.04)); border: 1px solid rgba(0,229,255,0.45); color: var(--cyan); }
+.tl-event.matches_milestone { background: linear-gradient(120deg, rgba(255,176,32,0.12), rgba(139,92,246,0.08)); border: 1px solid rgba(255,176,32,0.35); color: var(--amber); }
+
+.tl-event-glyph {
+  font-family: var(--font-display); font-weight: 900; font-size: 56px; line-height: 1;
+  letter-spacing: -0.04em; position: relative; z-index: 1;
+  filter: drop-shadow(0 0 14px currentColor); flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.tl-event-body { position: relative; z-index: 1; flex: 1; min-width: 0; }
+.tl-event-eyebrow {
+  font-family: var(--font-display); font-size: 10px; font-weight: 700;
+  letter-spacing: 0.28em; text-transform: uppercase; opacity: 0.85;
+}
+.tl-event-title {
+  font-family: var(--font-display); font-weight: 800; font-size: 20px;
+  letter-spacing: -0.01em; color: #fff; margin: 2px 0 4px;
+  text-shadow: 0 0 24px currentColor;
+}
+.tl-event-sub { color: var(--text-soft); font-size: 12px; }
+
 /* reduced-motion: disabled — all animations always run */
