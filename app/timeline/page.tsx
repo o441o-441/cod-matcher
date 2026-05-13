@@ -7,17 +7,13 @@ import { useToast } from '@/components/ToastProvider'
 import { LoadingSkeleton } from '@/components/UIState'
 
 type TimelinePost = {
-  id: string
-  author_id: string
-  body: string
-  reactions_gg: number
-  reactions_fire: number
-  created_at: string
-  author_name: string
-  author_rating: number | null
-  my_gg: boolean
-  my_fire: boolean
+  id: string; author_id: string; body: string
+  reactions_gg: number; reactions_fire: number; created_at: string
+  author_name: string; author_rating: number | null
+  my_gg: boolean; my_fire: boolean
 }
+
+type Tab = 'all' | 'following' | 'popular' | 'mine'
 
 export default function TimelinePage() {
   const router = useRouter()
@@ -27,7 +23,8 @@ export default function TimelinePage() {
   const [posts, setPosts] = useState<TimelinePost[]>([])
   const [body, setBody] = useState('')
   const [posting, setPosting] = useState(false)
-  const feedRef = useRef<HTMLDivElement>(null)
+  const [tab, setTab] = useState<Tab>('all')
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set())
 
   const loadFeed = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -35,16 +32,20 @@ export default function TimelinePage() {
     setMyUserId(uid)
     if (!uid) { router.push('/login'); return }
 
+    // Get follows
+    const { data: followData } = await supabase.from('follows').select('followee_id').eq('follower_id', uid)
+    const fIds = new Set((followData ?? []).map((f: { followee_id: string }) => f.followee_id))
+    setFollowingIds(fIds)
+
     // Get posts
     const { data: postData } = await supabase
       .from('timeline_posts')
       .select('id, author_id, body, reactions_gg, reactions_fire, created_at')
       .order('created_at', { ascending: false })
-      .limit(50)
+      .limit(100)
 
     const rows = (postData ?? []) as { id: string; author_id: string; body: string; reactions_gg: number; reactions_fire: number; created_at: string }[]
 
-    // Resolve author names
     const authorIds = [...new Set(rows.map(r => r.author_id))]
     const { data: profiles } = authorIds.length > 0
       ? await supabase.from('profiles').select('id, display_name, current_rating').in('id', authorIds)
@@ -52,7 +53,6 @@ export default function TimelinePage() {
     const profileMap = new Map((profiles ?? []).map((p: { id: string; display_name: string | null; current_rating: number | null }) =>
       [p.id, { name: p.display_name ?? '不明', rating: p.current_rating }]))
 
-    // Get my reactions
     const postIds = rows.map(r => r.id)
     const { data: myReactions } = postIds.length > 0
       ? await supabase.from('timeline_reactions').select('post_id, kind').eq('user_id', uid).in('post_id', postIds)
@@ -71,7 +71,6 @@ export default function TimelinePage() {
 
   useEffect(() => { void loadFeed() }, [loadFeed])
 
-  // Realtime
   useEffect(() => {
     const ch = supabase.channel('timeline-feed')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'timeline_posts' }, () => void loadFeed())
@@ -79,6 +78,14 @@ export default function TimelinePage() {
       .subscribe()
     return () => { void supabase.removeChannel(ch) }
   }, [loadFeed])
+
+  // Filtered posts by tab
+  const filteredPosts = posts.filter(p => {
+    if (tab === 'following') return followingIds.has(p.author_id)
+    if (tab === 'popular') return (p.reactions_gg + p.reactions_fire) >= 1
+    if (tab === 'mine') return p.author_id === myUserId
+    return true
+  })
 
   const handlePost = async () => {
     if (!body.trim() || body.length > 280) return
@@ -91,15 +98,22 @@ export default function TimelinePage() {
   }
 
   const handleReaction = async (postId: string, kind: 'gg' | 'fire') => {
-    const { error } = await supabase.rpc('rpc_timeline_toggle_reaction', { p_post_id: postId, p_kind: kind })
-    if (error) { showToast(error.message, 'error'); return }
+    await supabase.rpc('rpc_timeline_toggle_reaction', { p_post_id: postId, p_kind: kind })
     void loadFeed()
   }
 
   const handleDelete = async (postId: string) => {
     if (!confirm('この投稿を削除しますか？')) return
-    const { error } = await supabase.rpc('rpc_timeline_delete_post', { p_post_id: postId })
-    if (error) { showToast(error.message, 'error'); return }
+    await supabase.rpc('rpc_timeline_delete_post', { p_post_id: postId })
+    void loadFeed()
+  }
+
+  const handleFollow = async (targetId: string) => {
+    if (followingIds.has(targetId)) {
+      await supabase.rpc('rpc_unfollow_user', { p_target_id: targetId })
+    } else {
+      await supabase.rpc('rpc_follow_user', { p_target_id: targetId })
+    }
     void loadFeed()
   }
 
@@ -115,6 +129,13 @@ export default function TimelinePage() {
   const charOver = charCount > 280
   const charPct = Math.min(charCount / 280, 1)
 
+  const tabs: { id: Tab; label: string; count: number }[] = [
+    { id: 'all', label: 'すべて', count: posts.length },
+    { id: 'following', label: 'フォロー中', count: posts.filter(p => followingIds.has(p.author_id)).length },
+    { id: 'popular', label: '注目', count: posts.filter(p => (p.reactions_gg + p.reactions_fire) >= 1).length },
+    { id: 'mine', label: '自分', count: posts.filter(p => p.author_id === myUserId).length },
+  ]
+
   if (loading) return <main><LoadingSkeleton cards={3} /></main>
 
   return (
@@ -126,17 +147,10 @@ export default function TimelinePage() {
 
       {/* Composer */}
       <div className="card-strong" style={{ marginTop: 20 }}>
-        <textarea
-          value={body}
-          onChange={e => setBody(e.target.value)}
-          placeholder="いま何してる？"
-          rows={3}
-          style={{ resize: 'none', minHeight: 80 }}
-          aria-label="投稿内容"
-        />
+        <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="いま何してる？" rows={3}
+          style={{ resize: 'none', minHeight: 80 }} aria-label="投稿内容" />
         <div className="row" style={{ justifyContent: 'space-between', marginTop: 10 }}>
           <div className="row" style={{ gap: 8 }}>
-            {/* Character ring */}
             <svg width={28} height={28} viewBox="0 0 28 28">
               <circle cx="14" cy="14" r="12" fill="none" stroke="var(--line)" strokeWidth="2" />
               <circle cx="14" cy="14" r="12" fill="none"
@@ -144,9 +158,7 @@ export default function TimelinePage() {
                 strokeWidth="2" strokeDasharray={`${charPct * 75.4} 75.4`}
                 strokeLinecap="round" transform="rotate(-90 14 14)" />
             </svg>
-            <span className="mono" style={{ fontSize: 12, color: charOver ? 'var(--danger)' : 'var(--text-dim)' }}>
-              {charCount}/280
-            </span>
+            <span className="mono" style={{ fontSize: 12, color: charOver ? 'var(--danger)' : 'var(--text-dim)' }}>{charCount}/280</span>
           </div>
           <button type="button" className="btn-primary btn-sm" onClick={handlePost} disabled={posting || !body.trim() || charOver}>
             {posting ? '投稿中...' : '投稿する'}
@@ -154,35 +166,54 @@ export default function TimelinePage() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="row" style={{ gap: 6, marginTop: 18, marginBottom: 14 }}>
+        {tabs.map(t => (
+          <button key={t.id} type="button" className={`btn-sm ${tab === t.id ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setTab(t.id)} style={{ minWidth: 70 }}>
+            {t.label} <span className="mono" style={{ fontSize: 10, marginLeft: 4, opacity: 0.7 }}>{t.count}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Feed */}
-      <div ref={feedRef} className="stack" style={{ marginTop: 20, gap: 0 }}>
-        {posts.length === 0 && (
-          <div className="empty" style={{ padding: 40 }}>まだ投稿がありません。最初の投稿をしてみましょう！</div>
+      <div className="stack" style={{ gap: 0 }}>
+        {filteredPosts.length === 0 && (
+          <div className="empty" style={{ padding: 40 }}>
+            {tab === 'following' ? 'フォロー中のユーザーの投稿はまだありません' :
+             tab === 'mine' ? 'まだ投稿していません' :
+             tab === 'popular' ? '注目の投稿はまだありません' :
+             'まだ投稿がありません。最初の投稿をしてみましょう！'}
+          </div>
         )}
-        {posts.map(p => (
+        {filteredPosts.map(p => (
           <div key={p.id} style={{ padding: '16px 0', borderBottom: '1px solid var(--line)' }}>
             <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
-              {/* Avatar */}
               <div className="avatar" style={{ width: 40, height: 40, fontSize: 14, flexShrink: 0, cursor: 'pointer' }}
                 onClick={() => router.push(`/users/${p.author_id}`)}>
                 {p.author_name.charAt(0).toUpperCase()}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                {/* Header */}
                 <div className="row" style={{ gap: 8, marginBottom: 4 }}>
                   <span style={{ fontWeight: 700, fontSize: 14, cursor: 'pointer' }} onClick={() => router.push(`/users/${p.author_id}`)}>
                     {p.author_name}
                   </span>
                   <span className="mono" style={{ fontSize: 11, color: 'var(--cyan)' }}>SR {p.author_rating ?? '---'}</span>
                   <span className="muted" style={{ fontSize: 11 }}>· {timeAgo(p.created_at)}</span>
-                  {p.author_id === myUserId && (
+
+                  {/* Follow / Unfollow / Delete */}
+                  {p.author_id === myUserId ? (
                     <button type="button" className="btn-ghost btn-sm" style={{ fontSize: 10, padding: '2px 6px', marginLeft: 'auto', color: 'var(--danger)' }}
                       onClick={() => handleDelete(p.id)}>削除</button>
+                  ) : (
+                    <button type="button" className="btn-ghost btn-sm"
+                      style={{ fontSize: 10, padding: '2px 8px', marginLeft: 'auto', color: followingIds.has(p.author_id) ? 'var(--text-dim)' : 'var(--cyan)' }}
+                      onClick={() => handleFollow(p.author_id)}>
+                      {followingIds.has(p.author_id) ? 'フォロー中' : 'フォロー'}
+                    </button>
                   )}
                 </div>
-                {/* Body */}
                 <p style={{ margin: 0, fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{p.body}</p>
-                {/* Reactions */}
                 <div className="row" style={{ gap: 16, marginTop: 10 }}>
                   <button type="button" className="row" onClick={() => handleReaction(p.id, 'gg')}
                     style={{ gap: 4, background: 'none', border: 'none', padding: 0, boxShadow: 'none', cursor: 'pointer', fontSize: 13, color: p.my_gg ? 'var(--cyan)' : 'var(--text-dim)', fontWeight: p.my_gg ? 700 : 400, textTransform: 'none', letterSpacing: 0 }}>
