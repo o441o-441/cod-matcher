@@ -131,9 +131,9 @@ type MatchMessageRow = {
 };
 
 const PHASE_POOLS: Record<"hp" | "snd" | "ovl", string[]> = {
-  hp: ["酒", "コロッサス", "デン", "スカー", "グリッドロック"],
-  snd: ["プラザ", "デン", "グリッドロック", "レイド", "スカー", "フリンジ"],
-  ovl: ["デン", "エクスポージャー", "スカー"],
+  hp: ["酒", "コロッサス", "デン", "スカー", "グリッドロック", "ハシエンダ"],
+  snd: ["デン", "グリッドロック", "レイド", "フリンジ", "酒", "ハシエンダ"],
+  ovl: ["デン", "エクスポージャー", "スカー", "グリッドロック"],
 };
 
 const PHASE_LABEL: Record<BanpickPhase, string> = {
@@ -164,7 +164,7 @@ const MAP_META: Record<string, { id: string; en: string }> = {
 
   "スカー": { id: "scar", en: "Scar" },
   "グリッドロック": { id: "gridlock", en: "Gridlock" },
-  "プラザ": { id: "plaza", en: "Plaza" },
+  "ハシエンダ": { id: "hacienda", en: "Hacienda" },
   "レイド": { id: "raid", en: "Raid" },
   "フリンジ": { id: "fringe", en: "Fringe" },
   "エクスポージャー": { id: "exposure", en: "Exposure" },

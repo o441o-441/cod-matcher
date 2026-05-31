@@ -11,6 +11,7 @@ const MAP_GRADS: Record<string, [string, string, string]> = {
   rampart:  ['#1a1a2e', '#424280', '#aaaaff'],
   pier:     ['#0a1e2e', '#205878', '#7cd8ff'],
   orbit:    ['#0a0a2e', '#2828a0', '#8080ff'],
+  hacienda: ['#2e1a0a', '#8a5a2a', '#ffc870'],
 }
 
 export default function MapThumb({

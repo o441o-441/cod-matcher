@@ -79,7 +79,7 @@ export default function CustomPage() {
     router.push(`/custom/eights/${lobbyId}`)
   }
 
-  const HP_MAPS = ['酒', 'コロッサス', 'デン', 'スカー', 'グリッドロック']
+  const HP_MAPS = ['酒', 'コロッサス', 'デン', 'スカー', 'グリッドロック', 'ハシエンダ']
 
   return (
     <main>

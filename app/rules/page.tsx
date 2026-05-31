@@ -49,14 +49,26 @@ export default function RulesPage() {
         <div className="card-strong">
           <div className="grid grid-3">
             <div className="card">
+              <h3>ハードポイント</h3>
+              <ul>
+                <li>酒</li>
+                <li>コロッサス</li>
+                <li>デン</li>
+                <li>スカー</li>
+                <li>グリッドロック</li>
+                <li>ハシエンダ</li>
+              </ul>
+            </div>
+
+            <div className="card">
               <h3>サーチ&amp;デストロイ</h3>
               <ul>
-                <li>プラザ</li>
                 <li>デン</li>
                 <li>グリッドロック</li>
                 <li>レイド</li>
-                <li>スカー</li>
                 <li>フリンジ</li>
+                <li>酒</li>
+                <li>ハシエンダ</li>
               </ul>
             </div>
 
@@ -65,17 +77,6 @@ export default function RulesPage() {
               <ul>
                 <li>デン</li>
                 <li>エクスポージャー</li>
-                <li>スカー</li>
-              </ul>
-            </div>
-
-            <div className="card">
-              <h3>ハードポイント</h3>
-              <ul>
-                <li>酒</li>
-                <li>コロッサス</li>
-                <li>デン</li>
-
                 <li>スカー</li>
                 <li>グリッドロック</li>
               </ul>
