@@ -95,6 +95,15 @@ export default function ScrimQueuePage() {
         .in('status', ['lobby', 'end_requested']).maybeSingle()
       if (scrim) { router.push(`/custom/scrim/${(scrim as { id: string }).id}`); return }
 
+      // Fallback: party is matched but scrim not found by direct party match (multi-party team case)
+      const { data: partyCheck } = await supabase.from('parties').select('status').eq('id', partyId).maybeSingle()
+      if ((partyCheck as { status: string } | null)?.status === 'matched') {
+        const { data: recentScrim } = await supabase.from('scrim_sessions')
+          .select('id').in('status', ['lobby', 'end_requested'])
+          .order('created_at', { ascending: false }).limit(1).maybeSingle()
+        if (recentScrim) { router.push(`/custom/scrim/${(recentScrim as { id: string }).id}`); return }
+      }
+
       const { data: partyData } = await supabase.from('parties').select('id,leader_user_id,party_type,status').eq('id', partyId).maybeSingle()
       setMyParty(partyData as PartyRow | null)
 
@@ -161,11 +170,16 @@ export default function ScrimQueuePage() {
   useEffect(() => {
     if (!isWaiting || !isLeader) return
     const iv = setInterval(async () => {
-      await supabase.rpc('rpc_scrim_create_match')
-      void loadState({ silent: true })
+      const { data: matchResult } = await supabase.rpc('rpc_scrim_create_match')
+      const result = matchResult as { matched: boolean; scrim_id?: string } | null
+      if (result?.matched && result.scrim_id) {
+        router.push(`/custom/scrim/${result.scrim_id}`)
+      } else {
+        void loadState({ silent: true })
+      }
     }, 5000)
     return () => clearInterval(iv)
-  }, [isWaiting, isLeader, loadState])
+  }, [isWaiting, isLeader, loadState, router])
 
   const handleCreateParty = async () => {
     setBusy(true); setErrorText(null)
@@ -401,9 +415,15 @@ export default function ScrimQueuePage() {
                     const { error } = await supabase.rpc('rpc_scrim_fill_test_opponent', { p_target_avg: avgPeak || 1500 })
                     if (error) { setBusy(false); setErrorText(error.message); return }
                     setInfoText('テスト用の相手パーティをキューに追加しました。マッチング中...')
-                    await supabase.rpc('rpc_scrim_create_match')
+                    const { data: matchResult } = await supabase.rpc('rpc_scrim_create_match')
                     setBusy(false)
-                    void loadState()
+                    const result = matchResult as { matched: boolean; scrim_id?: string } | null
+                    if (result?.matched && result.scrim_id) {
+                      router.push(`/custom/scrim/${result.scrim_id}`)
+                    } else {
+                      setErrorText('マッチングに失敗しました。キューの状態を確認してください。')
+                      void loadState()
+                    }
                   }}>
                     [Admin] テスト相手をキューに追加
                   </button>
