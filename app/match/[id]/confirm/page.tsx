@@ -126,6 +126,7 @@ export default function MatchConfirmPage() {
   const [busy, setBusy] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [myUserId, setMyUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [match, setMatch] = useState<MatchRow | null>(null);
   const [teams, setTeams] = useState<MatchTeamRow[]>([]);
@@ -162,6 +163,10 @@ export default function MatchConfirmPage() {
           cachedUidRef.current = uid;
         }
         setMyUserId(uid);
+        if (uid) {
+          const { data: prof } = await supabase.from("profiles").select("is_admin").eq("id", uid).maybeSingle();
+          if ((prof as { is_admin?: boolean } | null)?.is_admin) setIsAdmin(true);
+        }
 
         const teamIdsRes = await supabase.from("match_teams").select("id").eq("match_id", matchId);
         const teamIds = (teamIdsRes.data ?? []).map((t: { id: string }) => t.id);
@@ -736,6 +741,17 @@ export default function MatchConfirmPage() {
                 </div>
               );
             })}
+            {isAdmin && (
+              <button className="btn-ghost btn-sm" style={{ marginTop: 8, fontSize: 11 }} disabled={busy} onClick={async () => {
+                setBusy(true);
+                const { error } = await supabase.rpc("rpc_admin_auto_assign_roles", { p_match_id: matchId });
+                setBusy(false);
+                if (error) { setErrorText(error.message); return; }
+                void loadAll();
+              }}>
+                [Admin] ロール自動割当
+              </button>
+            )}
           </div>
 
           {/* Banpick Results */}

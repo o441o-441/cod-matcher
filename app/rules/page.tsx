@@ -30,7 +30,7 @@ export default function RulesPage() {
               <li>プライベートマッチ</li>
               <li>プライベートマッチを作成</li>
               <li>モード、マップを設定</li>
-              <li>ルールを設定（S&Dのみ）</li>
+              <li>ルールを設定</li>
               <li>ロビーコードをASCENTに送信</li>
               <li>勢力を確認（メンバーがJSOC、ギルドに正しく振り分けられているか）</li>
               <li>試合開始</li>
@@ -132,7 +132,7 @@ export default function RulesPage() {
             <div className="card">
               <h3>AR</h3>
               <p className="mono">M15 MOD 0</p>
-              <p className="muted">マズル禁止 / 等倍サイト必須</p>
+              <p className="muted">マズル、マガジン禁止 / 等倍サイト必須</p>
             </div>
 
             <div className="card">

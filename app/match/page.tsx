@@ -982,6 +982,35 @@ export default function MatchPage() {
     return myWaitingEntry.avg_rating;
   }, [myWaitingEntry, profile]);
 
+  // ── ランクマッチ準備中フラグ ──
+  const RANKED_DISABLED = true;
+
+  if (RANKED_DISABLED) {
+    return (
+      <main className="page">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', textAlign: 'center' }}>
+          <span className="badge amber" style={{ marginBottom: 24, fontSize: 12 }}>
+            <span className="badge-dot" />
+            COMING SOON
+          </span>
+          <h1 style={{ marginBottom: 8 }}>ランクマッチは現在準備中です</h1>
+          <p className="muted" style={{ fontSize: 15, maxWidth: 480, lineHeight: 1.7 }}>
+            ランクマッチ機能は現在調整中のため、一時的にご利用いただけません。<br />
+            準備が整い次第、お知らせいたします。
+          </p>
+          <button
+            type="button"
+            className="btn-ghost"
+            style={{ marginTop: 24 }}
+            onClick={() => router.push('/menu')}
+          >
+            メニューに戻る
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   if (loading) {
     return (
       <main><LoadingSkeleton cards={3} /></main>
