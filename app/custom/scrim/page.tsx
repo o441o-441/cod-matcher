@@ -399,9 +399,11 @@ export default function ScrimQueuePage() {
                   <button className="btn-ghost btn-sm" style={{ fontSize: 11 }} disabled={busy} onClick={async () => {
                     setBusy(true)
                     const { error } = await supabase.rpc('rpc_scrim_fill_test_opponent', { p_target_avg: avgPeak || 1500 })
+                    if (error) { setBusy(false); setErrorText(error.message); return }
+                    setInfoText('テスト用の相手パーティをキューに追加しました。マッチング中...')
+                    await supabase.rpc('rpc_scrim_create_match')
                     setBusy(false)
-                    if (error) setErrorText(error.message)
-                    else setInfoText('テスト用の相手パーティをキューに追加しました')
+                    void loadState()
                   }}>
                     [Admin] テスト相手をキューに追加
                   </button>
