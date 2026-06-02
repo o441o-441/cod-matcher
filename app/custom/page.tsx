@@ -21,10 +21,24 @@ export default function CustomPage() {
   const [createTitle, setCreateTitle] = useState('')
   const [createRateCap, setCreateRateCap] = useState<number | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [myLobbyId, setMyLobbyId] = useState<string | null>(null)
 
   const loadLobbies = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
-    setMyUserId(session?.user?.id ?? null)
+    const uid = session?.user?.id ?? null
+    setMyUserId(uid)
+
+    // Check if user is already in an active lobby
+    if (uid) {
+      const { data: myMembership } = await supabase
+        .from('eights_lobby_members')
+        .select('lobby_id, eights_lobbies!inner(id, status)')
+        .eq('user_id', uid)
+        .in('eights_lobbies.status', ['open', 'drafting'])
+        .limit(1)
+        .maybeSingle()
+      setMyLobbyId((myMembership as { lobby_id: string } | null)?.lobby_id ?? null)
+    }
 
     const { data } = await supabase
       .from('eights_lobbies')
@@ -72,6 +86,8 @@ export default function CustomPage() {
   }
 
   const handleJoin = async (lobbyId: string) => {
+    // Already in this lobby — just navigate
+    if (myLobbyId === lobbyId) { router.push(`/custom/eights/${lobbyId}`); return }
     setBusy(true)
     const { error } = await supabase.rpc('rpc_eights_join_lobby', { p_lobby_id: lobbyId })
     setBusy(false)
@@ -125,6 +141,15 @@ export default function CustomPage() {
             8sを開催すると <span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> の #8s-lobby に @everyone 通知が自動送信されます
           </p>
 
+          {myLobbyId && (
+            <div className="card" style={{ borderColor: 'rgba(0,245,160,0.35)', background: 'var(--success-soft)', marginBottom: 16, padding: '14px 18px' }}>
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>参加中のロビーがあります</span>
+                <button className="btn-primary btn-sm" onClick={() => router.push(`/custom/eights/${myLobbyId}`)}>ロビーに戻る</button>
+              </div>
+            </div>
+          )}
+
           {lobbies.length === 0 ? (
             <div className="empty">現在開催中の8sロビーはありません</div>
           ) : (
@@ -143,7 +168,9 @@ export default function CustomPage() {
                       ) : (
                         <span className="badge" style={{ fontSize: 9 }}>制限なし</span>
                       )}
-                      <button className="btn-primary btn-sm" disabled={busy} onClick={e => { e.stopPropagation(); handleJoin(l.id) }}>参加</button>
+                      <button className={`${myLobbyId === l.id ? 'btn-ghost' : 'btn-primary'} btn-sm`} disabled={busy} onClick={e => { e.stopPropagation(); handleJoin(l.id) }}>
+                        {myLobbyId === l.id ? '戻る' : '参加'}
+                      </button>
                     </div>
                   </div>
                 </div>
