@@ -210,10 +210,9 @@ export default function MenuPage() {
             <div className="row" style={{ marginTop: 20, gap: 16, flexWrap: 'wrap' }}>
               <button
                 className="btn-primary btn-xl"
-                disabled
-                style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                onClick={() => router.push('/match')}
               >
-                ランクマッチ準備中
+                対戦開始
               </button>
 
               <div className="row" style={{ gap: 20 }}>

@@ -12,7 +12,7 @@ type ReviewRow = { id: string; slug: string; title: string; excerpt: string | nu
 const MODES = [
   { id: 'ranked', name: 'RANKED', sub: 'ランクマッチ', color: 'var(--cyan)', border: 'rgba(0,229,255,0.3)', soft: 'rgba(0,229,255,0.06)', glyph: 'R',
     headline: 'Eloレート 4v4', desc: 'BAN/PICK制でマップとサイドを選択。勝敗でレートが変動するメインモード。',
-    bullets: ['Eloレート制', 'BAN/PICK', 'シーズン集計'], cta: '準備中', href: '/match', disabled: true,
+    bullets: ['Eloレート制', 'BAN/PICK', 'シーズン集計'], cta: 'マッチング開始', href: '/match',
     icon: <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.5"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg> },
   { id: 'eights', name: '8s', sub: '8人カスタム', color: 'var(--violet)', border: 'rgba(139,92,246,0.3)', soft: 'rgba(139,92,246,0.06)', glyph: '8',
     headline: '即席カスタム', desc: '8人ロビーで即席4v4。レート + 武器ロールを考慮した自動振り分け。レート変動なし。',
@@ -86,7 +86,7 @@ export default function HomePage() {
           </p>
           <div className="hero-cta" style={{ justifyContent: 'center' }}>
             {signedIn ? (
-              <><button type="button" className="btn-primary btn-xl" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>ランクマッチ準備中</button>
+              <><button type="button" className="btn-primary btn-xl" onClick={() => router.push('/match')}>対戦開始 →</button>
               <button type="button" className="btn-ghost btn-xl" onClick={() => router.push('/mypage')}>マイページ</button></>
             ) : (
               <><button type="button" className="btn-primary btn-xl" onClick={() => router.push('/login')}>無料で始める →</button>

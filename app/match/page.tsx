@@ -983,7 +983,7 @@ export default function MatchPage() {
   }, [myWaitingEntry, profile]);
 
   // ── ランクマッチ準備中フラグ ──
-  const RANKED_DISABLED = true;
+  const RANKED_DISABLED = false;
 
   if (RANKED_DISABLED) {
     return (
