@@ -101,7 +101,10 @@ export default function RulesPage() {
         <div className="card-strong">
           <div className="card">
             <h3>CDL ハードポイント</h3>
-            <p>「CDL ハードポイント」を選択。<strong>ルール設定の変更はありません。</strong></p>
+            <p>「CDL ハードポイント」を選択。ルール設定から以下を変更してください。</p>
+            <ul>
+              <li>ゲームプレイタブ → オーバークロック無効：<strong>オフ</strong></li>
+            </ul>
           </div>
         </div>
       </div>
@@ -111,7 +114,10 @@ export default function RulesPage() {
         <div className="card-strong">
           <div className="card">
             <h3>CDL サーチ&amp;デストロイ</h3>
-            <p>「CDL サーチアンドデストロイ」を選択。<strong>ルール設定の変更はありません。</strong></p>
+            <p>「CDL サーチアンドデストロイ」を選択。ルール設定から以下を変更してください。</p>
+            <ul>
+              <li>ゲームプレイタブ → オーバークロック無効：<strong>オフ</strong></li>
+            </ul>
             <p className="muted">※デス後のカメラバグは修正済みです。</p>
           </div>
         </div>
@@ -121,7 +127,11 @@ export default function RulesPage() {
         <p className="sec-title">オーバーロード設定</p>
         <div className="card-strong">
           <div className="card">
-            <p>「CDL オーバーロード」を選択してください。<strong>ルール設定の変更は不要です。</strong></p>
+            <p>「CDL オーバーロード」を選択してください。ルール設定から以下を変更してください。</p>
+            <ul>
+              <li>ゲームプレイタブ → オーバークロック無効：<strong>オフ</strong></li>
+              <li>アドバンスタブ → エリア外でのデバイスリセット：<strong>オフ</strong></li>
+            </ul>
           </div>
         </div>
       </div>
@@ -139,7 +149,7 @@ export default function RulesPage() {
             <div className="card">
               <h3>SMG</h3>
               <p className="mono">DRAVEC 45 / MPC-25</p>
-              <p className="muted">マズルは KuHN ポートコンプ以外使用不可 / バレルは 13.1&quot;レイザーバックバレル以外使用不可 / フローガードフォアグリップ使用不可 / 強装弾使用不可</p>
+              <p className="muted">マズル使用不可 / バレルは 13.1&quot;レイザーバックバレル以外使用不可 / フローガードフォアグリップ使用不可 / クイックシフトグリップ使用不可 / 強装弾使用不可</p>
             </div>
 
             <div className="card">
