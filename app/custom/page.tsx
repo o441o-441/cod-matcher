@@ -223,6 +223,17 @@ export default function CustomPage() {
               </button>
             </div>
           </div>
+          <div className="card-strong" style={{ marginTop: 16 }}>
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <div>
+                <p style={{ fontWeight: 700, margin: 0 }}>交流戦ボード <span className="badge violet" style={{ fontSize: 9, marginLeft: 6 }}>PREVIEW</span></p>
+                <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>チームの空き時間を出し合って、今晩の相手をその場で確定</p>
+              </div>
+              <button className="btn-primary" onClick={() => router.push('/custom/board')}>
+                ボードへ
+              </button>
+            </div>
+          </div>
           <div className="card" style={{ marginTop: 16, padding: '14px 18px' }}>
             <div className="stat-label" style={{ marginBottom: 8 }}>HARDPOINT マッププール</div>
             <div className="row" style={{ gap: 6 }}>
