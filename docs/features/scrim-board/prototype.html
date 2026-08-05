@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCENT — 交流戦ボード</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+1+Code:wght@400;500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --void:#0A0D12;
+  --deep:#10151D;
+  --raise:#171E28;
+  --raise-hi:#1D2632;
+  --line:#232C3A;
+  --line-hi:#33415A;
+  --ink:#E8EDF4;
+  --ink-dim:#8794A6;
+  --ink-mute:#59636F;
+  --jade:#4FB286;
+  --jade-ink:#8FDCB8;
+  --amber:#E9A23B;
+  --amber-ink:#F5C77E;
+  --rust:#C4553D;
+  --slot-w:minmax(78px,1fr);
+  --label-w:150px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--void);
+  color:var(--ink);
+  font-family:"Zen Kaku Gothic New",system-ui,sans-serif;
+  font-size:15px;
+  line-height:1.7;
+  -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:"M PLUS 1 Code",ui-monospace,monospace;font-feature-settings:"tnum"}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px 80px}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:3px}
+
+/* ---------- header ---------- */
+header{
+  border-bottom:1px solid var(--line);
+  background:
+    repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,transparent 1px 3px),
+    var(--deep);
+  margin-bottom:28px;
+}
+.hd{max-width:1080px;margin:0 auto;padding:20px;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.mark{display:flex;align-items:baseline;gap:12px}
+.mark b{font-weight:900;font-size:22px;letter-spacing:.28em;margin:0}
+.mark span{font-size:11px;letter-spacing:.2em;color:var(--ink-mute)}
+.date{text-align:right}
+.date .d{font-size:19px;font-weight:500;letter-spacing:.04em}
+.date .s{font-size:11px;letter-spacing:.16em;color:var(--ink-mute)}
+
+/* ---------- panels ---------- */
+.panel{background:var(--deep);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:20px}
+.ptitle{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.ptitle h2{margin:0;font-size:14px;font-weight:500;letter-spacing:.05em}
+.eyebrow{font-size:10px;letter-spacing:.22em;color:var(--ink-mute);display:block;margin-bottom:3px}
+.hint{font-size:12px;color:var(--ink-dim);margin:0}
+
+/* ---------- availability chips ---------- */
+.chips{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+.chip{
+  appearance:none;font-family:"M PLUS 1 Code",monospace;font-size:12px;
+  background:var(--raise);color:var(--ink-mute);
+  border:1px solid var(--line);border-radius:6px;
+  padding:11px 0;cursor:pointer;transition:.12s;
+}
+.chip:hover{border-color:var(--line-hi);color:var(--ink-dim)}
+.chip[aria-pressed="true"]{background:rgba(79,178,134,.16);border-color:rgba(79,178,134,.5);color:var(--jade-ink)}
+.rosterline{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.rmem{font-size:11px;letter-spacing:.03em;color:var(--ink-mute);background:var(--raise);border-radius:4px;padding:3px 8px}
+
+/* ---------- board ---------- */
+.boardscroll{overflow-x:auto;overflow-y:visible;padding-bottom:4px}
+.board{min-width:760px;position:relative}
+.brow{display:grid;grid-template-columns:var(--label-w) repeat(8,var(--slot-w));gap:5px;align-items:center}
+.brow+.brow{margin-top:5px}
+.thead{margin-bottom:9px}
+.thead div{font-family:"M PLUS 1 Code",monospace;font-size:11px;color:var(--ink-mute);text-align:center;letter-spacing:.02em}
+
+.tname{min-width:0;padding-right:6px;border-left:2px solid transparent;padding-left:10px}
+.tname .n{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tname .t{font-family:"M PLUS 1 Code",monospace;font-size:10.5px;color:var(--ink-mute);letter-spacing:.04em}
+.is-me .tname{border-left-color:var(--amber)}
+.is-me .tname .t{color:var(--amber)}
+.dimmed{opacity:.3}
+
+.cell{
+  position:relative;height:52px;border-radius:6px;border:1px solid transparent;
+  background:var(--raise);display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;transition:.12s;
+}
+.cell .num{font-family:"M PLUS 1 Code",monospace;font-size:15px;line-height:1;color:var(--ink-mute)}
+.cell .bars{display:flex;gap:2px}
+.cell .bars i{width:4px;height:3px;border-radius:1px;background:var(--line-hi);display:block}
+.cell.s-none{background:#12161D}
+.cell.s-none .num{color:#333C48;font-size:12px}
+.cell.s-thin{background:rgba(79,178,134,.09);border:1px dashed rgba(79,178,134,.38);cursor:pointer}
+.cell.s-thin .num{color:var(--jade)}
+.cell.s-thin .bars i.on{background:var(--jade)}
+.cell.s-open{background:rgba(79,178,134,.17);border-color:rgba(79,178,134,.5);cursor:pointer}
+.cell.s-open .num{color:var(--jade-ink)}
+.cell.s-open .bars i.on{background:var(--jade-ink)}
+.cell.s-set{background:rgba(233,162,59,.15);border-color:rgba(233,162,59,.55)}
+.cell.s-set .num{font-size:11px;color:var(--amber-ink);letter-spacing:.06em}
+.cell.s-thin:hover,.cell.s-open:hover{border-color:var(--jade-ink);background:rgba(79,178,134,.26)}
+.cell.runlit{box-shadow:inset 0 0 0 1px rgba(143,220,184,.45)}
+.is-me .cell.s-thin,.is-me .cell.s-open{cursor:default}
+.is-me .cell.s-thin:hover,.is-me .cell.s-open:hover{border-color:rgba(79,178,134,.38);background:rgba(79,178,134,.13)}
+.tag-unrated{font-size:9.5px;letter-spacing:.1em;color:var(--ink-mute);border:1px solid var(--line-hi);border-radius:3px;padding:0 4px;margin-left:5px;vertical-align:1px}
+
+/* now line */
+#nowline{position:absolute;top:-4px;bottom:-4px;width:1px;background:var(--amber);pointer-events:none;z-index:3;opacity:.85}
+#nowline::before{content:"";position:absolute;top:0;left:-3px;width:7px;height:7px;border-radius:50%;background:var(--amber)}
+#nowlabel{position:absolute;top:-24px;transform:translateX(-50%);font-family:"M PLUS 1 Code",monospace;font-size:10px;color:var(--amber);letter-spacing:.08em;white-space:nowrap;z-index:3;pointer-events:none}
+@media (prefers-reduced-motion:no-preference){
+  #nowline::before{animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+}
+
+/* ---------- legend / toggle ---------- */
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.legend span{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink-dim)}
+.sw{width:13px;height:13px;border-radius:3px;flex:none}
+.switch{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-dim);cursor:pointer;user-select:none}
+.switch input{appearance:none;width:32px;height:18px;border-radius:9px;background:var(--raise-hi);border:1px solid var(--line-hi);position:relative;cursor:pointer;transition:.15s;margin:0}
+.switch input::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--ink-mute);transition:.15s}
+.switch input:checked{background:rgba(233,162,59,.25);border-color:var(--amber)}
+.switch input:checked::after{left:16px;background:var(--amber)}
+
+/* ---------- dialog ---------- */
+.scrim{position:fixed;inset:0;background:rgba(5,7,10,.72);display:none;align-items:center;justify-content:center;padding:20px;z-index:50}
+.scrim.on{display:flex}
+.modal{background:var(--deep);border:1px solid var(--line-hi);border-radius:12px;width:100%;max-width:420px;padding:22px}
+.modal h3{margin:0;font-size:17px;font-weight:500}
+.modal .sub{font-family:"M PLUS 1 Code",monospace;font-size:12.5px;color:var(--amber-ink);letter-spacing:.04em;margin-top:2px}
+.mrow{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:6px 0}
+.mrow dt{color:var(--ink-dim);margin:0}
+.mrow dd{margin:0;text-align:right}
+.mdiv{border-top:1px solid var(--line);margin:14px 0 8px}
+.durs{display:flex;gap:6px;margin-top:8px}
+.dur{flex:1;appearance:none;font-family:"M PLUS 1 Code",monospace;font-size:12px;background:var(--raise);color:var(--ink-dim);border:1px solid var(--line);border-radius:6px;padding:9px 0;cursor:pointer}
+.dur[aria-pressed="true"]{background:rgba(233,162,59,.16);border-color:var(--amber);color:var(--amber-ink)}
+.warn{display:flex;gap:9px;background:rgba(196,85,61,.13);border:1px solid rgba(196,85,61,.4);border-radius:7px;padding:10px 12px;margin-top:14px;font-size:12px;color:#E9A08C;line-height:1.6}
+.acts{display:flex;gap:8px;margin-top:18px}
+.btn{flex:1;appearance:none;font-family:"Zen Kaku Gothic New",sans-serif;font-size:13.5px;padding:11px 0;border-radius:7px;cursor:pointer;transition:.12s;border:1px solid var(--line-hi);background:transparent;color:var(--ink-dim)}
+.btn:hover{background:var(--raise);color:var(--ink)}
+.btn.pri{background:var(--amber);border-color:var(--amber);color:#241704;font-weight:500}
+.btn.pri:hover{background:var(--amber-ink)}
+
+/* ---------- toast ---------- */
+#toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,140%);background:var(--raise-hi);border:1px solid var(--line-hi);border-left:2px solid var(--amber);border-radius:8px;padding:13px 18px;font-size:13px;z-index:60;transition:transform .28s cubic-bezier(.2,.9,.3,1);max-width:min(92vw,420px)}
+#toast.on{transform:translate(-50%,0)}
+#toast .tt{font-weight:500;font-size:13.5px}
+#toast .ts{font-size:11.5px;color:var(--ink-dim);margin-top:2px}
+
+@media (max-width:640px){
+  .wrap{padding:0 14px 60px}
+  .chips{grid-template-columns:repeat(4,1fr)}
+  :root{--label-w:120px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hd">
+    <div class="mark">
+      <b>ASCENT</b>
+      <span class="mono">SCRIM BOARD</span>
+    </div>
+    <div class="date">
+      <div class="d mono" id="dateline">8月5日 (水)</div>
+      <div class="s mono">BLACK OPS 7 · 4v4 · UNRATED</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section class="panel">
+    <div class="ptitle">
+      <div>
+        <span class="eyebrow mono">STEP 1</span>
+        <h2>自分の空き時間を入れる</h2>
+      </div>
+      <p class="hint mono" id="mystat">—</p>
+    </div>
+    <div class="chips" id="chips"></div>
+    <p class="hint" style="margin-top:12px">押した時間があなたの空きになります。チームで4人揃った枠だけが下のボードに募集として出ます。</p>
+    <div class="rosterline" id="roster"></div>
+  </section>
+
+  <section class="panel">
+    <div class="ptitle">
+      <div>
+        <span class="eyebrow mono">STEP 2</span>
+        <h2>相手チームの枠を選ぶ</h2>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="fltr">近い帯のみ表示
+      </label>
+    </div>
+
+    <div class="boardscroll">
+      <div class="board" id="board"></div>
+    </div>
+
+    <div class="legend">
+      <span><i class="sw" style="background:rgba(79,178,134,.17);border:1px solid rgba(79,178,134,.5)"></i>5人以上・安定</span>
+      <span><i class="sw" style="background:rgba(79,178,134,.09);border:1px dashed rgba(79,178,134,.38)"></i>4人ちょうど</span>
+      <span><i class="sw" style="background:rgba(233,162,59,.15);border:1px solid rgba(233,162,59,.55)"></i>成立済み</span>
+      <span><i class="sw" style="background:#12161D;border:1px solid var(--line)"></i>人数不足</span>
+    </div>
+  </section>
+
+</div>
+
+<div class="scrim" id="scrim" role="dialog" aria-modal="true" aria-labelledby="mtitle">
+  <div class="modal" id="modal"></div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const SLOTS=["20:00","20:30","21:00","21:30","22:00","22:30","23:00","23:30"];
+const TIER=["未計測","ブロンズ","シルバー","ゴールド","プラチナ","ダイヤ","マスター"];
+const ME="t0";
+
+const others=[
+  {n:"canon_taka",s:[0,1,1,1,1,1,0,0]},
+  {n:"REN",       s:[0,0,1,1,1,0,0,0]},
+  {n:"shiba",     s:[0,0,1,1,1,1,1,0]},
+  {n:"yuki",      s:[0,0,1,0,1,1,1,1]},
+  {n:"KAI",       s:[0,0,1,1,0,0,0,0]},
+  {n:"tora",      s:[0,0,0,1,1,0,0,0]}
+];
+let mine=[0,0,1,1,1,1,1,0];
+
+const teams=[
+  {id:"t0",name:"Kunitachi FC",tag:"KNT",tier:4,pos:"下位",span:"ゴールド 〜 ダイヤ",games:12,ns:0,accept:"similar",unr:true,av:null},
+  {id:"t1",name:"Zeta Riders",tag:"ZTR",tier:5,pos:"中位",span:"プラチナ 〜 マスター",games:24,ns:1,accept:"similar",unr:false,av:[0,4,5,6,6,5,0,0]},
+  {id:"t2",name:"Nocturne",tag:"NCT",tier:4,pos:"中位",span:"ゴールド 〜 ダイヤ",games:18,ns:0,accept:"similar",unr:true,av:[0,0,0,7,7,6,5,4]},
+  {id:"t3",name:"Aoyama Pulse",tag:"AOP",tier:3,pos:"上位",span:"シルバー 〜 プラチナ",games:9,ns:2,accept:"any",unr:true,av:[4,4,0,0,4,5,5,0]},
+  {id:"t4",name:"Meridian",tag:"MRD",tier:6,pos:"下位",span:"ダイヤ 〜 マスター",games:41,ns:0,accept:"similar",unr:false,av:[0,0,6,6,6,6,4,0]},
+  {id:"t5",name:"立川 Vanguard",tag:"TCV",tier:0,pos:"",span:"—",games:0,ns:0,accept:"any",unr:true,av:[0,0,4,4,4,4,0,0]}
+];
+
+const matched={};
+const myTeam=()=>teams[0];
+const myAv=()=>SLOTS.map((_,i)=>mine[i]+others.reduce((a,m)=>a+m.s[i],0));
+const av=t=>t.id===ME?myAv():t.av;
+const tierName=t=>t.tier===0?"未計測":TIER[t.tier]+(t.pos?" "+t.pos:"");
+const gap=t=>t.tier===0?null:Math.abs(t.tier-myTeam().tier);
+const inRange=t=>{const g=gap(t);if(g===null)return t.unr;return t.accept==="any"||g<=1;};
+
+function runs(t){
+  const a=av(t),out=[];let s=-1;
+  for(let i=0;i<=8;i++){
+    const ok=i<8&&a[i]>=4&&!matched[t.id+":"+i];
+    if(ok&&s<0)s=i;
+    if(!ok&&s>=0){out.push([s,i-1]);s=-1;}
+  }
+  return out;
+}
+const runAt=(t,i)=>runs(t).find(r=>i>=r[0]&&i<=r[1]);
+
+function drawChips(){
+  const c=document.getElementById("chips");c.innerHTML="";
+  SLOTS.forEach((s,i)=>{
+    const b=document.createElement("button");
+    b.className="chip mono";b.textContent=s;
+    b.setAttribute("aria-pressed",mine[i]?"true":"false");
+    b.onclick=()=>{mine[i]=mine[i]?0:1;drawChips();drawBoard();};
+    c.appendChild(b);
+  });
+  const a=myAv(),open=a.filter(v=>v>=4).length;
+  document.getElementById("mystat").textContent=open?open+" 枠が募集中":"募集に出ている枠はありません";
+  const r=document.getElementById("roster");
+  r.innerHTML='<span class="rmem mono" style="color:var(--amber)">o441o (あなた)</span>'
+    +others.map(m=>'<span class="rmem mono">'+m.n+"</span>").join("");
+}
+
+function drawBoard(){
+  const b=document.getElementById("board");
+  const near=document.getElementById("fltr").checked;
+  b.innerHTML='<div class="brow thead"><div></div>'+SLOTS.map(s=>"<div>"+s+"</div>").join("")+"</div>";
+
+  teams.forEach(t=>{
+    const row=document.createElement("div");
+    row.className="brow"+(t.id===ME?" is-me":"")+(near&&t.id!==ME&&!inRange(t)?" dimmed":"");
+    const lbl=document.createElement("div");
+    lbl.className="tname";
+    lbl.innerHTML='<div class="n">'+t.name+(t.tier===0?'<span class="tag-unrated mono">未計測</span>':"")
+      +'</div><div class="t">'+t.tag+" · "+tierName(t)+"</div>";
+    row.appendChild(lbl);
+
+    const a=av(t);
+    a.forEach((c,i)=>{
+      const d=document.createElement("div");
+      const set=matched[t.id+":"+i];
+      const cls=set?"s-set":c>=5?"s-open":c>=4?"s-thin":"s-none";
+      d.className="cell "+cls;
+      if(set){d.innerHTML='<span class="num mono">成立</span>';}
+      else if(c>=4){
+        let bars="";for(let k=0;k<8;k++)bars+='<i class="'+(k<c?"on":"")+'"></i>';
+        d.innerHTML='<span class="num mono">'+c+'</span><span class="bars">'+bars+"</span>";
+      } else {d.innerHTML='<span class="num mono">·</span>';}
+
+      if(c>=4&&!set){
+        const r=runAt(t,i);
+        d.dataset.run=t.id+"-"+r[0];
+        d.onmouseenter=()=>document.querySelectorAll('[data-run="'+d.dataset.run+'"]').forEach(x=>x.classList.add("runlit"));
+        d.onmouseleave=()=>document.querySelectorAll(".runlit").forEach(x=>x.classList.remove("runlit"));
+        if(t.id!==ME){d.onclick=()=>openModal(t,r);d.tabIndex=0;d.setAttribute("role","button");
+          d.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openModal(t,r);}};}
+      }
+      row.appendChild(d);
+    });
+    b.appendChild(row);
+  });
+
+  const nl=document.createElement("div");nl.id="nowline";
+  const lb=document.createElement("div");lb.id="nowlabel";
+  b.appendChild(nl);b.appendChild(lb);
+  placeNow();
+}
+
+function placeNow(){
+  const b=document.getElementById("board"),nl=document.getElementById("nowline"),lb=document.getElementById("nowlabel");
+  if(!nl)return;
+  const cells=b.querySelectorAll(".brow:not(.thead)")[0];
+  if(!cells)return;
+  const kids=cells.children,first=kids[1],last=kids[8];
+  if(!first||!last)return;
+  const x0=first.offsetLeft,x1=last.offsetLeft+last.offsetWidth;
+  const now=new Date();let mins=now.getHours()*60+now.getMinutes(),demo=false;
+  if(mins<1200||mins>=1440){mins=1275;demo=true;}
+  const f=(mins-1200)/240;
+  const x=x0+(x1-x0)*f;
+  nl.style.left=x+"px";lb.style.left=x+"px";
+  const hh=String(Math.floor(mins/60)).padStart(2,"0"),mm=String(mins%60).padStart(2,"0");
+  lb.textContent=hh+":"+mm+(demo?" (デモ)":" 現在");
+}
+window.addEventListener("resize",placeNow);
+
+let sel={t:null,r:null,d:2};
+function openModal(t,r){
+  sel={t:t,r:r,d:Math.min(2,r[1]-r[0]+1)};
+  renderModal();
+  document.getElementById("scrim").classList.add("on");
+}
+function renderModal(){
+  const t=sel.t,r=sel.r,len=r[1]-r[0]+1,a=av(t);
+  const pool=Math.min(...a.slice(r[0],r[0]+sel.d));
+  const end=r[0]+sel.d;
+  const range=SLOTS[r[0]]+" – "+(end>=8?"24:00":SLOTS[end]);
+  const g=gap(t),bad=!inRange(t);
+  const opts=[1,2,3,4].filter(n=>n<=len);
+  const label=n=>n===1?"30分":n%2?Math.floor(n/2)+"時間30分":n/2+"時間";
+
+  document.getElementById("modal").innerHTML=
+    '<h3 id="mtitle">'+t.name+'</h3><div class="sub mono">'+range+'</div>'
+    +'<div class="mdiv"></div>'
+    +'<dl style="margin:0">'
+    +row("出場可能帯",tierName(t))
+    +row("幅",t.span)
+    +row("この時間の人数",pool+" 人")
+    +row("交流戦実績",t.games?t.games+" 戦 / 無断キャンセル "+t.ns:"なし（新規チーム）")
+    +row("受付",t.accept==="any"?"誰でも歓迎":"同格 ±1帯"+(t.unr?" · 未計測OK":" · 未計測NG"))
+    +'</dl>'
+    +'<div class="mdiv"></div>'
+    +'<div style="font-size:12px;color:var(--ink-dim)">長さを選ぶ</div>'
+    +'<div class="durs">'+opts.map(n=>'<button class="dur" data-n="'+n+'" aria-pressed="'+(n===sel.d)+'">'+label(n)+"</button>").join("")+"</div>"
+    +(bad?'<div class="warn"><span>▲</span><span>'+(g===null
+        ?"相手は未計測チームの受付を許可していません。申請は送れますが断られる可能性があります。"
+        :"あなたのチームは "+g+" 帯下です。この枠の受付範囲外ですが、申請は送れます。")+"</span></div>":"")
+    +'<div class="acts">'
+    +'<button class="btn" id="cancel">閉じる</button>'
+    +'<button class="btn pri" id="go">この枠で対戦する</button></div>';
+
+  document.querySelectorAll(".dur").forEach(b=>b.onclick=()=>{sel.d=+b.dataset.n;renderModal();});
+  document.getElementById("cancel").onclick=close;
+  document.getElementById("go").onclick=confirm;
+}
+const row=(k,v)=>'<div class="mrow"><dt>'+k+"</dt><dd>"+v+"</dd></div>";
+const close=()=>document.getElementById("scrim").classList.remove("on");
+document.getElementById("scrim").onclick=e=>{if(e.target.id==="scrim")close();};
+document.addEventListener("keydown",e=>{if(e.key==="Escape")close();});
+
+function confirm(){
+  const t=sel.t,st=sel.r[0],en=st+sel.d;
+  for(let i=st;i<en;i++){matched[t.id+":"+i]=true;matched[ME+":"+i]=true;}
+  close();drawBoard();
+  const range=SLOTS[st]+" – "+(en>=8?"24:00":SLOTS[en]);
+  toast("対戦が成立しました","vs "+t.name+" · "+range+" · 両チームの Discord に通知を送信");
+}
+let tt;
+function toast(a,b){
+  const e=document.getElementById("toast");
+  e.innerHTML='<div class="tt">'+a+'</div><div class="ts">'+b+"</div>";
+  e.classList.add("on");clearTimeout(tt);tt=setTimeout(()=>e.classList.remove("on"),4600);
+}
+
+const d=new Date(),W=["日","月","火","水","木","金","土"];
+document.getElementById("dateline").textContent=(d.getMonth()+1)+"月"+d.getDate()+"日 ("+W[d.getDay()]+")";
+document.getElementById("fltr").onchange=drawBoard;
+drawChips();drawBoard();
+</script>
+</body>
+</html>
