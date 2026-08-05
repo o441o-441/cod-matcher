@@ -19,6 +19,7 @@ export default function DmListPage() {
   const [loading, setLoading] = useState(true)
   const [conversations, setConversations] = useState<ConversationRow[]>([])
   const [myUserId, setMyUserId] = useState<string | null>(null)
+  const [errorText, setErrorText] = useState<string | null>(null)
 
   usePageView('/dm')
 
@@ -34,12 +35,18 @@ export default function DmListPage() {
       const uid = session.user.id
       setMyUserId(uid)
 
-      const { data: msgs } = await supabase
+      const { data: msgs, error: msgsError } = await supabase
         .from('direct_messages')
         .select('id, sender_user_id, receiver_user_id, body, is_read, created_at')
         .or(`sender_user_id.eq.${uid},receiver_user_id.eq.${uid}`)
         .order('created_at', { ascending: false })
 
+      if (msgsError) {
+        console.error('direct_messages error:', msgsError)
+        setErrorText('メッセージの読み込みに失敗しました。再読み込みしてください。')
+        setLoading(false)
+        return
+      }
       if (!msgs) { setLoading(false); return }
 
       const convMap = new Map<string, { last: typeof msgs[0]; unread: number }>()
@@ -55,7 +62,7 @@ export default function DmListPage() {
       }
 
       const partnerIds = [...convMap.keys()]
-      let nameMap: Record<string, string> = {}
+      const nameMap: Record<string, string> = {}
       if (partnerIds.length > 0) {
         const { data: profiles } = await supabase
           .from('profiles')
@@ -78,7 +85,11 @@ export default function DmListPage() {
       setConversations(convList)
       setLoading(false)
     }
-    void Promise.resolve().then(init)
+    void Promise.resolve().then(init).catch((e) => {
+      console.error('dm init error:', e)
+      setErrorText('メッセージの読み込みに失敗しました。再読み込みしてください。')
+      setLoading(false)
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -99,6 +110,11 @@ export default function DmListPage() {
       <p className="muted">やりとりの一覧</p>
 
       <div className="section">
+        {errorText && (
+          <div className="card" style={{ borderColor: 'rgba(255,77,109,0.35)', background: 'var(--danger-soft)', marginBottom: 16 }}>
+            <span className="danger" style={{ fontSize: 14 }}>{errorText}</span>
+          </div>
+        )}
         {conversations.length === 0 ? (
           <EmptyCard title="まだメッセージはありません" message="ユーザーのプロフィールからDMを送れます。" />
         ) : (

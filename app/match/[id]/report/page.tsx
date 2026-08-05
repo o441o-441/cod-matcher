@@ -188,12 +188,15 @@ export default function ReportPage() {
   ]);
 
   const [reportRemainingSec, setReportRemainingSec] = useState<number | null>(null);
+  // 期限超過後に毎秒RPCを連打しないための一度きりガード (trophy timeout と同じパターン)
+  const reportTimeoutTriggeredRef = useRef(false);
 
   useEffect(() => {
     if (!report?.deadline_at || report.status !== "pending") {
       setReportRemainingSec(null);
       return;
     }
+    reportTimeoutTriggeredRef.current = false;
     const deadline = new Date(report.deadline_at).getTime();
     const tick = () => {
       setReportRemainingSec(Math.floor((deadline - Date.now()) / 1000));
@@ -208,6 +211,8 @@ export default function ReportPage() {
     if (reportRemainingSec > 0) return;
     if (!matchId) return;
     if (report?.status !== "pending") return;
+    if (reportTimeoutTriggeredRef.current) return;
+    reportTimeoutTriggeredRef.current = true;
     void (async () => {
       try {
         await supabase.rpc("rpc_resolve_report_timeout", { p_match_id: matchId });

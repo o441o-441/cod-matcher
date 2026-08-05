@@ -138,7 +138,11 @@ export default function MenuPage() {
       setLoading(false)
     }
 
-    void Promise.resolve().then(init)
+    void Promise.resolve().then(init).catch((e) => {
+      // 例外時に「読み込み中...」のまま固まらないようにする
+      console.error('menu init error:', e)
+      setLoading(false)
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

@@ -86,7 +86,7 @@ export default function TimelinePage() {
 
     // Resolve quoted posts
     const quoteIds = rows.filter(r => r.quote_post_id).map(r => r.quote_post_id!)
-    let quoteMap = new Map<string, TimelinePost>()
+    const quoteMap = new Map<string, TimelinePost>()
     if (quoteIds.length > 0) {
       const { data: quoteData } = await supabase.from('timeline_posts').select('id, author_id, body, kind, event_kind, event_value, created_at').in('id', quoteIds)
       const qAuthorIds = [...new Set(((quoteData ?? []) as { author_id: string }[]).map(q => q.author_id))]
@@ -154,24 +154,29 @@ export default function TimelinePage() {
   }
 
   const handleRepost = async (postId: string) => {
-    await supabase.rpc('rpc_timeline_toggle_repost', { p_post_id: postId })
+    const { error } = await supabase.rpc('rpc_timeline_toggle_repost', { p_post_id: postId })
+    if (error) { showToast(error.message, 'error'); return }
     void loadFeed()
   }
 
   const handleReaction = async (postId: string, kind: 'gg' | 'fire') => {
-    await supabase.rpc('rpc_timeline_toggle_reaction', { p_post_id: postId, p_kind: kind })
+    const { error } = await supabase.rpc('rpc_timeline_toggle_reaction', { p_post_id: postId, p_kind: kind })
+    if (error) { showToast(error.message, 'error'); return }
     void loadFeed()
   }
 
   const handleDelete = async (postId: string) => {
     if (!confirm('この投稿を削除しますか？')) return
-    await supabase.rpc('rpc_timeline_delete_post', { p_post_id: postId })
+    const { error } = await supabase.rpc('rpc_timeline_delete_post', { p_post_id: postId })
+    if (error) { showToast(error.message, 'error'); return }
     void loadFeed()
   }
 
   const handleFollow = async (targetId: string) => {
-    if (followingIds.has(targetId)) await supabase.rpc('rpc_unfollow_user', { p_target_id: targetId })
-    else await supabase.rpc('rpc_follow_user', { p_target_id: targetId })
+    const { error } = followingIds.has(targetId)
+      ? await supabase.rpc('rpc_unfollow_user', { p_target_id: targetId })
+      : await supabase.rpc('rpc_follow_user', { p_target_id: targetId })
+    if (error) { showToast(error.message, 'error'); return }
     void loadFeed()
   }
 

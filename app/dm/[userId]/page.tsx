@@ -92,7 +92,8 @@ export default function DmConversationPage() {
       .channel(`dm-${[myUserId, partnerId].sort().join('-')}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'direct_messages' },
+        // 自分宛のINSERTのみに絞る (自分の送信分は送信処理側で再読込される)
+        { event: 'INSERT', schema: 'public', table: 'direct_messages', filter: `receiver_user_id=eq.${myUserId}` },
         () => void loadMessages(myUserId, partnerId)
       )
       .subscribe()

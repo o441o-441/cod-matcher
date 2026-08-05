@@ -197,13 +197,18 @@ export default function ScrimQueuePage() {
     if (error) { setBusy(false); setErrorText(error.message); return }
     // Find new party and invite team members
     const { data: newP } = await supabase.from('parties').select('id').eq('leader_user_id', myUserId!).in('status', ['open']).order('created_at', { ascending: false }).limit(1).maybeSingle()
+    let sent = 0
+    let failed = 0
     if (newP) {
       for (const m of myTeam.members) {
-        await supabase.rpc('rpc_invite_to_party', { p_party_id: (newP as { id: string }).id, p_invitee_user_id: m.auth_user_id })
+        const { error: invErr } = await supabase.rpc('rpc_invite_to_party', { p_party_id: (newP as { id: string }).id, p_invitee_user_id: m.auth_user_id })
+        if (invErr) { console.error('rpc_invite_to_party error:', invErr); failed++ } else { sent++ }
       }
     }
     setBusy(false)
-    setInfoText(`パーティを作成し、${myTeam.members.length}名に招待を送信しました`)
+    setInfoText(failed > 0
+      ? `パーティを作成し、${sent}/${myTeam.members.length}名に招待を送信しました（${failed}件失敗）`
+      : `パーティを作成し、${sent}名に招待を送信しました`)
     void loadState()
   }
 
@@ -219,13 +224,17 @@ export default function ScrimQueuePage() {
 
   const handleAcceptInvite = async (id: string) => {
     setBusy(true)
-    await supabase.rpc('rpc_accept_party_invite', { p_invite_id: id })
-    setBusy(false); void loadState()
+    const { error } = await supabase.rpc('rpc_accept_party_invite', { p_invite_id: id })
+    setBusy(false)
+    if (error) { setErrorText(error.message); return }
+    void loadState()
   }
   const handleRejectInvite = async (id: string) => {
     setBusy(true)
-    await supabase.rpc('rpc_reject_party_invite', { p_invite_id: id })
-    setBusy(false); void loadState()
+    const { error } = await supabase.rpc('rpc_reject_party_invite', { p_invite_id: id })
+    setBusy(false)
+    if (error) { setErrorText(error.message); return }
+    void loadState()
   }
 
   const handleStartQueue = async () => {
@@ -241,23 +250,29 @@ export default function ScrimQueuePage() {
   const handleCancelQueue = async () => {
     if (!waitingEntry?.id) return
     setBusy(true)
-    await supabase.rpc('rpc_cancel_queue', { p_queue_entry_id: waitingEntry.id })
-    setBusy(false); setInfoText('キューをキャンセルしました')
+    const { error } = await supabase.rpc('rpc_cancel_queue', { p_queue_entry_id: waitingEntry.id })
+    setBusy(false)
+    if (error) { setErrorText(error.message); return }
+    setInfoText('キューをキャンセルしました')
     void loadState()
   }
 
   const handleDisband = async () => {
     if (!myParty?.id) return
     setBusy(true)
-    await supabase.rpc('rpc_disband_party', { p_party_id: myParty.id })
-    setBusy(false); void loadState()
+    const { error } = await supabase.rpc('rpc_disband_party', { p_party_id: myParty.id })
+    setBusy(false)
+    if (error) { setErrorText(error.message); return }
+    void loadState()
   }
 
   const handleLeave = async () => {
     if (!myParty?.id) return
     setBusy(true)
-    await supabase.rpc('rpc_leave_party', { p_party_id: myParty.id })
-    setBusy(false); void loadState()
+    const { error } = await supabase.rpc('rpc_leave_party', { p_party_id: myParty.id })
+    setBusy(false)
+    if (error) { setErrorText(error.message); return }
+    void loadState()
   }
 
   const avgPeak = useMemo(() => {

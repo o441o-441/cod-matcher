@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/components/ToastProvider'
 import { LoadingSkeleton } from '@/components/UIState'
 
 type FollowUser = { id: string; display_name: string; current_rating: number | null; is_following: boolean }
@@ -12,6 +13,7 @@ export default function FollowsPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { showToast } = useToast()
   const userId = typeof params.id === 'string' ? params.id : ''
   const initialTab = searchParams.get('tab') === 'followers' ? 'followers' : 'following'
 
@@ -74,10 +76,12 @@ export default function FollowsPage() {
 
   const handleToggleFollow = async (targetId: string) => {
     if (myFollowingIds.has(targetId)) {
-      await supabase.rpc('rpc_unfollow_user', { p_target_id: targetId })
+      const { error } = await supabase.rpc('rpc_unfollow_user', { p_target_id: targetId })
+      if (error) { showToast(error.message, 'error'); return }
       setMyFollowingIds(prev => { const s = new Set(prev); s.delete(targetId); return s })
     } else {
-      await supabase.rpc('rpc_follow_user', { p_target_id: targetId })
+      const { error } = await supabase.rpc('rpc_follow_user', { p_target_id: targetId })
+      if (error) { showToast(error.message, 'error'); return }
       setMyFollowingIds(prev => new Set(prev).add(targetId))
     }
     // Update lists

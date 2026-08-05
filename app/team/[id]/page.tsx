@@ -499,8 +499,12 @@ export default function TeamDetailPage() {
                   className="btn-primary btn-sm"
                   onClick={async () => {
                     if (!team?.id) return
-                    await navigator.clipboard.writeText(`${window.location.origin}/team/join?id=${team.id}`)
-                    showToast('招待リンクをコピーしました。参加してほしい人に送ってください', 'success')
+                    try {
+                      await navigator.clipboard.writeText(`${window.location.origin}/team/join?id=${team.id}`)
+                      showToast('招待リンクをコピーしました。参加してほしい人に送ってください', 'success')
+                    } catch {
+                      showToast('コピーに失敗しました。下のチームIDを手動で共有してください', 'error')
+                    }
                   }}
                 >
                   招待リンクをコピー
@@ -511,8 +515,12 @@ export default function TeamDetailPage() {
                 className="btn-sm"
                 onClick={async () => {
                   if (!team?.id) return
-                  await navigator.clipboard.writeText(team.id)
-                  showToast('チームIDをコピーしました', 'success')
+                  try {
+                    await navigator.clipboard.writeText(team.id)
+                    showToast('チームIDをコピーしました', 'success')
+                  } catch {
+                    showToast('コピーに失敗しました。表示されているIDを手動でコピーしてください', 'error')
+                  }
                 }}
               >
                 IDをコピー

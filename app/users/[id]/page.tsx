@@ -240,8 +240,10 @@ export default function UserProfilePage() {
         {signedIn && !isMe && (
           <button type="button" className={isFollowing ? 'btn-ghost btn-sm' : 'btn-primary btn-sm'} style={{ fontSize: 11 }}
             onClick={async () => {
-              if (isFollowing) await supabase.rpc('rpc_unfollow_user', { p_target_id: userId })
-              else await supabase.rpc('rpc_follow_user', { p_target_id: userId })
+              const { error } = isFollowing
+                ? await supabase.rpc('rpc_unfollow_user', { p_target_id: userId })
+                : await supabase.rpc('rpc_follow_user', { p_target_id: userId })
+              if (error) { showToast(error.message, 'error'); return }
               setIsFollowing(!isFollowing)
               setFollowersCount(c => isFollowing ? c - 1 : c + 1)
             }}>

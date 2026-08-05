@@ -32,12 +32,15 @@ export default function QueueStatusBar() {
       const uid = cachedUidRef.current
       if (!uid) return
       void (async () => {
-        const { data: pm } = await supabase.from('party_members').select('party_id').eq('user_id', uid)
+        const { data: pm, error: pmErr } = await supabase.from('party_members').select('party_id').eq('user_id', uid)
+        if (pmErr) { console.error('party_members read error:', pmErr); return }
         const pids = (pm ?? []).map((r: { party_id: string }) => r.party_id)
         if (pids.length === 0) return
-        const { data: qe } = await supabase.from('queue_entries').select('id').in('party_id', pids).eq('status', 'waiting').limit(1).maybeSingle()
+        const { data: qe, error: qeErr } = await supabase.from('queue_entries').select('id').in('party_id', pids).eq('status', 'waiting').limit(1).maybeSingle()
+        if (qeErr) { console.error('queue_entries read error:', qeErr); return }
         if (qe?.id) {
-          await supabase.rpc('rpc_cancel_queue', { p_queue_entry_id: qe.id })
+          const { error: cancelErr } = await supabase.rpc('rpc_cancel_queue', { p_queue_entry_id: qe.id })
+          if (cancelErr) { console.error('auto cancel queue error:', cancelErr); return }
           setWaiting(false)
         }
       })()
@@ -110,7 +113,13 @@ export default function QueueStatusBar() {
       // マッチ画面・scrimキュー画面以外にいる場合は自動キャンセル
       const currentPath = pathnameRef.current
       if (currentPath !== '/match' && !currentPath.startsWith('/custom/scrim')) {
-        await supabase.rpc('rpc_cancel_queue', { p_queue_entry_id: waitingEntries[0].id })
+        const { error: cancelErr } = await supabase.rpc('rpc_cancel_queue', { p_queue_entry_id: waitingEntries[0].id })
+        if (cancelErr) {
+          // キャンセルできていないのに「未参加」表示にしない (実際はまだキュー中)
+          console.error('auto cancel queue error:', cancelErr)
+          setWaiting(true)
+          return
+        }
         setWaiting(false)
         return
       }

@@ -756,9 +756,11 @@ a:focus-visible {
 .flicker { animation: flicker 4s infinite; }
 .enter { animation: slide-up-fade 0.4s ease both; }
 
-/* Router page transitions */
-.page { animation: slide-up-fade 0.3s ease both; }
-.page-transition { animation: slide-up-fade 0.3s ease both; }
+/* Router page transitions.
+   fill を both にすると終了後も transform が残り、配下の position:fixed が
+   ビューポート基準にならなくなる(モーダル/トーストのずれの原因)ため backwards を使う */
+.page { animation: slide-up-fade 0.3s ease backwards; }
+.page-transition { animation: slide-up-fade 0.3s ease backwards; }
 
 /* ===================================================================
    Footer

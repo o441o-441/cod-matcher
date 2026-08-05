@@ -79,12 +79,14 @@ export default function EightsLobbyPage() {
   }, [lobbyId, loadData])
 
   const setRole = async (role: string) => {
-    await supabase.rpc('rpc_eights_set_role', { p_lobby_id: lobbyId, p_role: role })
+    const { error } = await supabase.rpc('rpc_eights_set_role', { p_lobby_id: lobbyId, p_role: role })
+    if (error) { showToast(error.message, 'error'); return }
     void loadData()
   }
 
   const leaveLobby = async () => {
-    await supabase.rpc('rpc_eights_leave_lobby', { p_lobby_id: lobbyId })
+    const { error } = await supabase.rpc('rpc_eights_leave_lobby', { p_lobby_id: lobbyId })
+    if (error) { showToast(error.message, 'error'); return }
     router.push('/custom')
   }
 
@@ -97,9 +99,10 @@ export default function EightsLobbyPage() {
   }
 
   const movePlayer = async (userId: string, toSide: string, swapWith?: string) => {
-    await supabase.rpc('rpc_eights_move_player', {
+    const { error } = await supabase.rpc('rpc_eights_move_player', {
       p_lobby_id: lobbyId, p_user_id: userId, p_to_side: toSide, p_swap_with: swapWith ?? null,
     })
+    if (error) { showToast(error.message, 'error'); return }
     void loadData()
   }
 

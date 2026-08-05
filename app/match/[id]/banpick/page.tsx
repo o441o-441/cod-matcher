@@ -339,12 +339,15 @@ export default function BanpickPage() {
   }, [session?.current_turn_match_team_id, teamAssignment]);
 
   const [remainingSec, setRemainingSec] = useState<number | null>(null);
+  // 期限超過後に毎秒RPCを連打しないための一度きりガード (trophy timeout と同じパターン)
+  const banpickTimeoutTriggeredRef = useRef(false);
 
   useEffect(() => {
     if (!session?.deadline_at || session.status !== "in_progress") {
       setRemainingSec(null);
       return;
     }
+    banpickTimeoutTriggeredRef.current = false;
     const deadline = new Date(session.deadline_at).getTime();
     const tick = () => {
       const diff = Math.floor((deadline - Date.now()) / 1000);
@@ -360,6 +363,8 @@ export default function BanpickPage() {
     if (remainingSec > 0) return;
     if (!matchId) return;
     if (session?.status !== "in_progress") return;
+    if (banpickTimeoutTriggeredRef.current) return;
+    banpickTimeoutTriggeredRef.current = true;
     void (async () => {
       try {
         await supabase.rpc("rpc_resolve_banpick_timeout", { p_match_id: matchId });
