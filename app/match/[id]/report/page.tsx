@@ -21,6 +21,7 @@ function useSoundOnChange<T>(value: T, soundFn: () => void) {
   }, [value, soundFn]);
 }
 import { Tutorial } from "@/components/Tutorial";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { LoadingSkeleton } from "@/components/UIState";
 import RatingDelta from "@/components/RatingDelta";
 import { triggerWinStreak } from "@/components/WinStreakCelebration";
@@ -175,6 +176,8 @@ export default function ReportPage() {
   const [scoreSummary, setScoreSummary] = useState("2-0");
   const [notes, setNotes] = useState("");
   const [rejectReason, setRejectReason] = useState("");
+  // 誤タップ防止: 勝者ボタンは一度確認を挟んでから申請する
+  const [pendingWinner, setPendingWinner] = useState<{ id: string; label: string } | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [oldRating, setOldRating] = useState<number | null>(null);
   const [newRating, setNewRating] = useState<number | null>(null);
@@ -674,7 +677,7 @@ export default function ReportPage() {
       )}
 
       {/* ── MAIN 2-COLUMN LAYOUT ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+      <div className="grid-side-340">
 
         {/* ═══ LEFT COLUMN ═══ */}
         <div className="stack">
@@ -690,7 +693,7 @@ export default function ReportPage() {
               <div className="g2">
                 <button
                   className="btn btn-lg glow-hover"
-                  onClick={() => alphaTeam && void handleSubmitReportWith(alphaTeam.id)}
+                  onClick={() => alphaTeam && setPendingWinner({ id: alphaTeam.id, label: `ALPHA (${alphaTeam.display_name ?? "ALPHA"})` })}
                   disabled={busy || !alphaTeam}
                   style={{
                     border: '1px solid var(--alpha)',
@@ -711,7 +714,7 @@ export default function ReportPage() {
 
                 <button
                   className="btn btn-lg glow-hover"
-                  onClick={() => bravoTeam && void handleSubmitReportWith(bravoTeam.id)}
+                  onClick={() => bravoTeam && setPendingWinner({ id: bravoTeam.id, label: `BRAVO (${bravoTeam.display_name ?? "BRAVO"})` })}
                   disabled={busy || !bravoTeam}
                   style={{
                     border: '1px solid var(--bravo)',
@@ -817,6 +820,21 @@ export default function ReportPage() {
                       </p>
                     </div>
                   )}
+
+                  <div style={{ marginBottom: 12 }}>
+                    <label htmlFor="reject-reason" className="stat-label">却下理由（却下する場合・任意）</label>
+                    <input
+                      id="reject-reason"
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      placeholder="例: スコアが実際と異なる"
+                      maxLength={200}
+                      style={{ marginTop: 6 }}
+                    />
+                    <p className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                      理由は相手チームに表示されます。まずはチャットでの確認もおすすめです。
+                    </p>
+                  </div>
 
                   <div className="row" style={{ gap: 10 }}>
                     <button
@@ -1071,8 +1089,12 @@ export default function ReportPage() {
               }}>
                 {reportRemainingSec > 0 ? formatTimer(reportRemainingSec) : "0:00"}
               </div>
-              {reportRemainingSec <= 0 && (
+              {reportRemainingSec <= 0 ? (
                 <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>自動承認処理中...</p>
+              ) : (
+                <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>
+                  期限内に操作がない場合、申請内容のまま自動承認されます。
+                </p>
               )}
               {visitInfo && (
                 <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
@@ -1177,6 +1199,22 @@ export default function ReportPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!pendingWinner}
+        title="勝敗を申請しますか？"
+        message={pendingWinner ? `${pendingWinner.label} の勝利として申請します。相手チームの承認後、レートと戦績に反映されます。` : ""}
+        confirmText={busy ? "申請中..." : "この内容で申請する"}
+        cancelText="戻る"
+        onConfirm={async () => {
+          if (!pendingWinner) return;
+          await handleSubmitReportWith(pendingWinner.id);
+          setPendingWinner(null);
+        }}
+        onCancel={() => {
+          if (!busy) setPendingWinner(null);
+        }}
+      />
     </main>
   );
 }

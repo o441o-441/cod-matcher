@@ -792,6 +792,27 @@ a:focus-visible {
   button, input, select, textarea { max-width: 100%; }
 }
 
+/* 狭い画面で非表示にする補助情報 (ランキングの勝敗数など) */
+@media (max-width: 520px) {
+  .hide-sm { display: none !important; }
+}
+
+/* メイン+サイドバーの2カラム (狭い画面では1カラムに折り返す) */
+.grid-side-340 { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
+.grid-side-360 { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
+@media (max-width: 900px) {
+  .grid-side-340, .grid-side-360 { grid-template-columns: 1fr; }
+}
+
+/* 小さいアイコンボタンの当たり判定を44px相当まで拡大 (見た目は不変)
+   28-38px のボタンはタッチでは押しにくい */
+.fd-ibtn, .fd-close, .fd-toggle, .topbar .burger { position: relative; }
+.fd-ibtn::after, .fd-close::after, .fd-toggle::after, .topbar .burger::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
 /* ===================================================================
    Toast overlay
    =================================================================== */

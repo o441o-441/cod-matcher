@@ -67,7 +67,7 @@ const MATCH_TUTORIAL = [
   { title: "マッチング画面", body: "ここで対戦相手を探します。パーティを作成してキューに参加すると、自動でマッチングが行われます。" },
   { title: "ソロ参加", body: "パーティを作成して「対戦開始」を押すとキューに入ります。1人でもパーティを作れるので、チームメンバーがいなくてもOKです。" },
   { title: "パーティ参加", body: "チームメンバーやフレンドを招待してパーティを組むこともできます。パーティリーダーがキューに入れます。" },
-  { title: "自動マッチング", body: "キューに入ると3秒ごとに自動でマッチングを試みます。マッチが成立するとバンピック画面に自動遷移します。" },
+  { title: "自動マッチング", body: "キューに入ると5秒ごとに自動でマッチングを試みます。マッチが成立するとバンピック画面に自動遷移します。" },
 ];
 
 type ProfileRow = {
@@ -625,11 +625,28 @@ export default function MatchPage() {
     waitingEntryIdForCleanupRef.current = myWaitingEntry?.id ?? null;
   }, [isWaiting, myWaitingEntry?.id]);
 
+  // タブを閉じた時のキャンセル用にアクセストークンを保持
+  // (rpc_cancel_queue は auth.uid() を要求するため Authorization が必須)
+  const accessTokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      accessTokenRef.current = session?.access_token ?? null;
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
+      accessTokenRef.current = s?.access_token ?? null;
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   useEffect(() => {
     const cancelQueue = () => {
       if (!isWaitingRef.current || !waitingEntryIdForCleanupRef.current) return;
       const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/rpc_cancel_queue`;
-      const headers = { 'Content-Type': 'application/json', 'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' };
+      const headers = {
+        'Content-Type': 'application/json',
+        'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+        'Authorization': `Bearer ${accessTokenRef.current ?? ''}`,
+      };
       const body = JSON.stringify({ p_queue_entry_id: waitingEntryIdForCleanupRef.current });
       // sendBeaconはヘッダーを送れないのでfetch keepaliveを使用
       void fetch(url, { method: 'POST', headers, body, keepalive: true });
@@ -639,19 +656,6 @@ export default function MatchPage() {
     window.addEventListener('pagehide', cancelQueue);
     return () => window.removeEventListener('pagehide', cancelQueue);
   }, []);
-
-  // beforeunload: ブラウザを閉じる時にキャンセル試行
-  useEffect(() => {
-    if (!isWaiting || !myWaitingEntry?.id) return;
-    const handleBeforeUnload = () => {
-      // sendBeaconでfire-and-forget
-      const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/rpc_cancel_queue`;
-      const body = JSON.stringify({ p_queue_entry_id: myWaitingEntry.id });
-      navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isWaiting, myWaitingEntry?.id]);
 
   const handleCreateParty = async () => {
     clearMessages();
@@ -1075,7 +1079,7 @@ export default function MatchPage() {
       )}
 
       {/* ── 2-column grid ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20, alignItems: 'start' }}>
+      <div className="grid-side-360">
 
         {/* ════════ LEFT COLUMN ════════ */}
         <div className="stack">
@@ -1305,7 +1309,7 @@ export default function MatchPage() {
 
           {/* ── Queue waiting state ── */}
           {isWaiting && (() => {
-            const pct = Math.min(waitingSeconds / 330, 1);
+            const pct = Math.min(waitingSeconds / 330, 0.95); // 100%表示は「もうすぐ成立」と誤解させるため95%で頭打ち
             const phase =
               waitingSeconds < 90 ? 0
               : waitingSeconds < 120 ? 1
@@ -1327,7 +1331,7 @@ export default function MatchPage() {
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
                   <QueueRadar size={160} waitingCount={queueWaitingCount ?? undefined} />
                   <div style={{ flex: 1 }}>
                     {/* Large searching text */}
@@ -1527,7 +1531,7 @@ export default function MatchPage() {
               </div>
               <div className="muted">
                 <span style={{ color: 'var(--cyan)', marginRight: 6 }}>&#8226;</span>
-                3秒間隔で自動マッチング試行
+                5秒間隔で自動マッチング試行
               </div>
             </div>
 
@@ -1560,7 +1564,7 @@ export default function MatchPage() {
               <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>1.</span>パーティを作成します（ソロでもOK）</div>
               <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>2.</span>チームメンバーやフレンドを招待</div>
               <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>3.</span>「対戦開始」でキューイン</div>
-              <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>4.</span>自動マッチング（3秒間隔）</div>
+              <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>4.</span>自動マッチング（5秒間隔）</div>
               <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>5.</span>マッチ成立でバンピック画面へ自動遷移</div>
             </div>
           </div>

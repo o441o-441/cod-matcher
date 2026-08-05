@@ -3,10 +3,32 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/components/ToastProvider'
 import { CONTROLLER_GROUPS } from '@/lib/controllers'
+
+function RequiredBadge() {
+  return (
+    <span
+      style={{
+        marginLeft: 8,
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: '0.1em',
+        color: 'var(--danger)',
+        border: '1px solid rgba(255,77,109,0.4)',
+        borderRadius: 4,
+        padding: '1px 6px',
+        verticalAlign: 1,
+      }}
+    >
+      必須
+    </span>
+  )
+}
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const { showToast } = useToast()
   const [displayName, setDisplayName] = useState('')
   const [activisionId, setActivisionId] = useState('')
   const [controller, setController] = useState('')
@@ -18,7 +40,11 @@ export default function OnboardingPage() {
   useEffect(() => {
     const loadExisting = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) { setInitialLoading(false); return }
+      if (!session?.user) {
+        // シェル(ナビ)なしページなので、未ログインのまま留まると行き止まりになる
+        router.replace('/login')
+        return
+      }
 
       const { data } = await supabase
         .from('users')
@@ -35,9 +61,10 @@ export default function OnboardingPage() {
       setInitialLoading(false)
     }
     void loadExisting()
-  }, [])
+  }, [router])
 
-  const handleSave = async () => {
+  const handleSave = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     setLoading(true)
 
     const {
@@ -45,13 +72,20 @@ export default function OnboardingPage() {
     } = await supabase.auth.getSession()
 
     if (!session?.user) {
-      alert('ログイン情報が見つかりません')
+      showToast('ログイン情報が見つかりません。再度ログインしてください', 'error')
+      setLoading(false)
+      router.replace('/login')
+      return
+    }
+
+    if (!displayName.trim()) {
+      showToast('表示名を入力してください', 'error')
       setLoading(false)
       return
     }
 
     if (!skillLevel) {
-      alert('スキルレベルを選択してください')
+      showToast('スキルレベルを選択してください', 'error')
       setLoading(false)
       return
     }
@@ -65,7 +99,7 @@ export default function OnboardingPage() {
         p_activision_id: activisionId.trim(),
       })
       if (reuseCheck?.blocked) {
-        alert(reuseCheck.reason || 'このActivision IDは使用できません')
+        showToast(reuseCheck.reason || 'このActivision IDは使用できません', 'error')
         setLoading(false)
         return
       }
@@ -87,7 +121,7 @@ export default function OnboardingPage() {
       .upsert(
         {
           id: user.id,
-          display_name: displayName,
+          display_name: displayName.trim(),
           is_onboarded: true,
           current_rating: initialRating,
           initial_rating: initialRating,
@@ -97,7 +131,7 @@ export default function OnboardingPage() {
       )
 
     if (profileError) {
-      alert('プロフィール同期に失敗: ' + profileError.message)
+      showToast('プロフィール同期に失敗: ' + profileError.message, 'error')
       setLoading(false)
       return
     }
@@ -106,7 +140,7 @@ export default function OnboardingPage() {
     const { error } = await supabase
       .from('users')
       .update({
-        display_name: displayName,
+        display_name: displayName.trim(),
         activision_id: activisionId,
         controller: controller || null,
         platform: platform || null,
@@ -115,7 +149,7 @@ export default function OnboardingPage() {
       .eq('auth_user_id', user.id)
 
     if (error) {
-      alert('保存失敗: ' + error.message)
+      showToast('保存失敗: ' + error.message, 'error')
       setLoading(false)
       return
     }
@@ -142,19 +176,22 @@ export default function OnboardingPage() {
         ASCENT <em>プロフィール登録</em>
       </h1>
 
-      <div className="section card-strong stack">
+      <form className="section card-strong stack" onSubmit={handleSave}>
         <div>
-          <div className="stat-label">表示名</div>
+          <label htmlFor="ob-name" className="stat-label">表示名<RequiredBadge /></label>
           <input
+            id="ob-name"
             value={displayName}
             onChange={e => setDisplayName(e.target.value)}
             placeholder="表示名を入力"
+            maxLength={30}
           />
         </div>
 
         <div>
-          <div className="stat-label">ACTIVISION ID</div>
+          <label htmlFor="ob-actid" className="stat-label">ACTIVISION ID</label>
           <input
+            id="ob-actid"
             value={activisionId}
             onChange={e => setActivisionId(e.target.value)}
             placeholder="Activision IDを入力"
@@ -162,8 +199,9 @@ export default function OnboardingPage() {
         </div>
 
         <div>
-          <div className="stat-label">使用デバイス</div>
+          <label htmlFor="ob-controller" className="stat-label">使用デバイス</label>
           <select
+            id="ob-controller"
             value={controller}
             onChange={(e) => setController(e.target.value)}
           >
@@ -181,8 +219,9 @@ export default function OnboardingPage() {
         </div>
 
         <div>
-          <div className="stat-label">プラットフォーム</div>
+          <label htmlFor="ob-platform" className="stat-label">プラットフォーム</label>
           <select
+            id="ob-platform"
             value={platform}
             onChange={(e) => setPlatform(e.target.value)}
           >
@@ -195,11 +234,12 @@ export default function OnboardingPage() {
         </div>
 
         <div>
-          <div className="stat-label">スキルレベル</div>
+          <label htmlFor="ob-skill" className="stat-label">スキルレベル<RequiredBadge /></label>
           <p className="muted" style={{ marginTop: 4 }}>
             ランクマッチでの最高ランクを基準に選択してください。初期レートに反映されます。
           </p>
           <select
+            id="ob-skill"
             value={skillLevel}
             onChange={(e) => setSkillLevel(e.target.value)}
           >
@@ -210,10 +250,10 @@ export default function OnboardingPage() {
           </select>
         </div>
 
-        <button className="btn-primary btn-block btn-lg" onClick={handleSave} disabled={loading}>
+        <button type="submit" className="btn-primary btn-block btn-lg" disabled={loading}>
           {loading ? '保存中...' : '保存'}
         </button>
-      </div>
+      </form>
     </main>
   )
 }

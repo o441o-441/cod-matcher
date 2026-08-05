@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/components/ToastProvider'
 import { usePageView } from '@/lib/usePageView'
 
 type TourneyRow = { id: string; title: string; format: string; status: string }
@@ -30,6 +31,7 @@ const MODES = [
 
 export default function HomePage() {
   const router = useRouter()
+  const { showToast } = useToast()
   const [signedIn, setSignedIn] = useState(false)
   const [loading, setLoading] = useState(true)
   const [displayName, setDisplayName] = useState<string | null>(null)
@@ -63,9 +65,14 @@ export default function HomePage() {
 
   useEffect(() => { void loadData() }, [loadData])
 
-  const go = (path: string) => router.push(signedIn ? path : '/login')
+  const go = (path: string) => {
+    if (signedIn) { router.push(path); return }
+    showToast('この機能の利用にはログインが必要です', 'info')
+    router.push('/login')
+  }
 
-  if (loading) return <main><div className="card" style={{ textAlign: 'center', padding: 40 }}><span className="muted">読み込み中...</span></div></main>
+  // ヒーローとモードカードは静的コンテンツなので即描画する
+  // (初回訪問者に「読み込み中...」だけを見せない — 下部フィードのみデータ待ち)
 
   return (
     <main>
@@ -120,7 +127,7 @@ export default function HomePage() {
       </section>
 
       {/* Bottom: Tournament strip (logged out) or 3-col feed (logged in) */}
-      {!signedIn ? (
+      {loading ? null : !signedIn ? (
         tourneys.length > 0 && (
           <section className="tour-strip">
             <div className="row" style={{ gap: 10 }}>

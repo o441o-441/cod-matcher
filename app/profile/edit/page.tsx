@@ -178,8 +178,9 @@ export default function ProfileEditPage() {
 
           <div className="stack">
             <div>
-              <label className="stat-label">DISPLAY NAME</label>
+              <label htmlFor="pe-name" className="stat-label">DISPLAY NAME</label>
               <input
+                id="pe-name"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="表示名を入力"
@@ -188,8 +189,9 @@ export default function ProfileEditPage() {
             </div>
 
             <div>
-              <label className="stat-label">ACTIVISION ID</label>
+              <label htmlFor="pe-actid" className="stat-label">ACTIVISION ID</label>
               <input
+                id="pe-actid"
                 value={activisionId}
                 onChange={(e) => setActivisionId(e.target.value)}
                 placeholder="Activision IDを入力"
@@ -198,8 +200,9 @@ export default function ProfileEditPage() {
             </div>
 
             <div>
-              <label className="stat-label">DEVICE</label>
+              <label htmlFor="pe-device" className="stat-label">DEVICE</label>
               <select
+                id="pe-device"
                 value={controller}
                 onChange={(e) => setController(e.target.value)}
                 style={{ marginTop: 6 }}
@@ -218,8 +221,9 @@ export default function ProfileEditPage() {
             </div>
 
             <div>
-              <label className="stat-label">PLATFORM</label>
+              <label htmlFor="pe-platform" className="stat-label">PLATFORM</label>
               <select
+                id="pe-platform"
                 value={platform}
                 onChange={(e) => setPlatform(e.target.value)}
                 style={{ marginTop: 6 }}
@@ -243,8 +247,9 @@ export default function ProfileEditPage() {
             </div>
 
             <div>
-              <label className="stat-label">BIO</label>
+              <label htmlFor="pe-bio" className="stat-label">BIO</label>
               <textarea
+                id="pe-bio"
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="プレイスタイルや得意な役割など、自由に書いてください"

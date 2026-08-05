@@ -37,6 +37,25 @@ export default function FriendsPage() {
   const [sent, setSent] = useState<SentRequestRow[]>([])
 
   const [searchName, setSearchName] = useState('')
+  const [suggestions, setSuggestions] = useState<{ id: string; display_name: string }[]>([])
+
+  // 入力途中でも候補を出す (完全一致を手で打たせない)
+  useEffect(() => {
+    const q = searchName.trim()
+    if (q.length < 2) { setSuggestions([]); return }
+    const t = setTimeout(async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, display_name')
+        .ilike('display_name', `%${q}%`)
+        .limit(8)
+      const list = ((data ?? []) as { id: string; display_name: string | null }[])
+        .filter(u => !!u.display_name && u.display_name !== q)
+        .map(u => ({ id: u.id, display_name: u.display_name! }))
+      setSuggestions(list)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchName])
   const [sending, setSending] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [showGuide, setShowGuide] = useState(false)
@@ -199,12 +218,12 @@ export default function FriendsPage() {
             <div>
               <p style={{ fontWeight: 700, marginTop: 0 }}>フレンドの追加方法</p>
               <ol style={{ margin: '8px 0', paddingLeft: 20, lineHeight: 1.8 }}>
-                <li>下の「フレンド申請を送る」欄に、追加したい相手の<strong>表示名</strong>を正確に入力</li>
+                <li>下の「フレンド申請を送る」欄に相手の<strong>表示名</strong>を入力（一部でOK・候補から選択）</li>
                 <li>「申請を送る」ボタンを押す</li>
                 <li>相手が「受信した申請」から承認すると、フレンド一覧に追加されます</li>
               </ol>
               <p className="muted" style={{ fontSize: 13 }}>
-                表示名はマイページやプロフィール画面で確認できます。大文字・小文字も一致させてください。
+                表示名はマイページやプロフィール画面で確認できます。プロフィールページの「フレンド申請」ボタンからも送れます。
               </p>
             </div>
             <button
@@ -235,8 +254,23 @@ export default function FriendsPage() {
               {sending ? '送信中...' : '申請を送る'}
             </button>
           </div>
+          {suggestions.length > 0 && (
+            <div className="stack-sm" style={{ marginTop: 10 }}>
+              {suggestions.map(u => (
+                <button
+                  key={u.id}
+                  type="button"
+                  className="btn-ghost btn-sm"
+                  style={{ justifyContent: 'flex-start', textAlign: 'left' }}
+                  onClick={() => { setSearchName(u.display_name); setSuggestions([]) }}
+                >
+                  {u.display_name}
+                </button>
+              ))}
+            </div>
+          )}
           <p className="muted mt-xs">
-            表示名の完全一致で検索します
+            名前の一部を入力すると候補が表示されます。候補を選んでから「申請を送る」を押してください
           </p>
         </div>
       </div>

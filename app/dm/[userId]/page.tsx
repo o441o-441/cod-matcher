@@ -33,6 +33,8 @@ export default function DmConversationPage() {
   const [sending, setSending] = useState(false)
 
   const bottomRef = useRef<HTMLDivElement | null>(null)
+  const chatBoxRef = useRef<HTMLDivElement | null>(null)
+  const prevCountRef = useRef(0)
 
   usePageView('/dm/conversation')
 
@@ -82,7 +84,16 @@ export default function DmConversationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partnerId])
 
-  // chat auto-scroll disabled
+  // 最新メッセージが見えるように、読み込み時と新着時にチャット枠内を最下部へスクロール
+  // (ユーザーが履歴を遡っている最中は動かさない)
+  useEffect(() => {
+    const box = chatBoxRef.current
+    if (!box || messages.length === 0) return
+    const isFirst = prevCountRef.current === 0
+    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120
+    if (isFirst || nearBottom) box.scrollTop = box.scrollHeight
+    prevCountRef.current = messages.length
+  }, [messages])
 
   // Realtime + polling
   useEffect(() => {
@@ -135,6 +146,8 @@ export default function DmConversationPage() {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // IME変換確定のEnterでは送信しない (日本語入力対応)
+    if (e.nativeEvent.isComposing) return
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       void handleSend()
@@ -164,6 +177,7 @@ export default function DmConversationPage() {
 
       <div className="section card-strong">
         <div
+          ref={chatBoxRef}
           style={{
             height: 450,
             overflowY: 'auto',

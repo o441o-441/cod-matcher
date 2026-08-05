@@ -34,6 +34,38 @@ export default function NewBlogPostPage() {
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [dailyLimitReached, setDailyLimitReached] = useState(false)
+  const draftRestoredRef = useRef(false)
+
+  // リロードや誤操作で書きかけの本文が消えないよう、下書きを自動保存する
+  const DRAFT_KEY = 'blog-new-draft'
+  useEffect(() => {
+    if (draftRestoredRef.current) return
+    draftRestoredRef.current = true
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY)
+      if (!raw) return
+      const d = JSON.parse(raw) as { title?: string; controllerName?: string; ratingValue?: number; excerpt?: string; body?: string }
+      if (d.title) setTitle(d.title)
+      if (d.controllerName) setControllerName(d.controllerName)
+      if (d.ratingValue) setRatingValue(d.ratingValue)
+      if (d.excerpt) setExcerpt(d.excerpt)
+      if (d.body) setBody(d.body)
+      if (d.title || d.body) showToast('前回の下書きを復元しました', 'info')
+    } catch { /* 破損した下書きは無視 */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => {
+    if (!draftRestoredRef.current) return
+    const t = setTimeout(() => {
+      try {
+        if (title || body || excerpt || controllerName) {
+          localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, controllerName, ratingValue, excerpt, body }))
+        }
+      } catch { /* ストレージ不可の環境では保存しない */ }
+    }, 500)
+    return () => clearTimeout(t)
+  }, [title, controllerName, ratingValue, excerpt, body])
 
   useEffect(() => {
     const init = async () => {
@@ -61,6 +93,18 @@ export default function NewBlogPostPage() {
 
       const { data: adminFlag } = await supabase.rpc('is_admin')
       setIsAdmin(!!adminFlag)
+
+      // 書き始める前に1日1件制限に達しているか知らせる
+      if (!adminFlag) {
+        const todayStart = new Date()
+        todayStart.setHours(0, 0, 0, 0)
+        const { count: todayCount } = await supabase
+          .from('posts')
+          .select('id', { count: 'exact', head: true })
+          .eq('author_user_id', me.id)
+          .gte('created_at', todayStart.toISOString())
+        if (todayCount && todayCount >= 1) setDailyLimitReached(true)
+      }
 
       setLoading(false)
     }
@@ -175,6 +219,7 @@ export default function NewBlogPostPage() {
       return
     }
 
+    try { localStorage.removeItem(DRAFT_KEY) } catch { /* noop */ }
     showToast('保存しました', 'success')
     router.push(`/blog/${data.slug}`)
   }
@@ -198,6 +243,14 @@ export default function NewBlogPostPage() {
         <em>New</em> Review
       </h1>
       <p className="muted">Markdown 形式で記述できます</p>
+
+      {dailyLimitReached && (
+        <div className="card" style={{ borderColor: 'rgba(255,176,32,0.4)', background: 'var(--amber-soft)', marginTop: 16 }}>
+          <p style={{ margin: 0, color: 'var(--amber)', fontSize: 13, fontWeight: 600 }}>
+            本日はすでに投稿済みです。投稿は1日1件までのため、明日また投稿してください（下書きは自動保存されます）。
+          </p>
+        </div>
+      )}
 
       <div className="section card-strong">
         <div className="sec-title">タイトル</div>
@@ -290,7 +343,7 @@ export default function NewBlogPostPage() {
 
       <div className="row" style={{ justifyContent: 'flex-end', marginTop: 24 }}>
         <button className="btn-ghost" onClick={() => router.push('/blog')}>キャンセル</button>
-        <button className="btn-primary" onClick={handleSubmit} disabled={submitting}>
+        <button className="btn-primary" onClick={handleSubmit} disabled={submitting || dailyLimitReached}>
           {submitting ? '保存中...' : '保存'}
         </button>
       </div>

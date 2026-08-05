@@ -16,6 +16,7 @@ export function TutorialButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
+      aria-label="チュートリアルを開く"
       style={{
         width: 32,
         height: 32,
@@ -43,16 +44,34 @@ export function Tutorial({ pageKey, steps }: TutorialProps) {
     }
   }, [pageKey])
 
+  // 明示的に閉じた時だけ「見た」扱いにする
   const close = () => {
     setVisible(false)
     setStep(0)
     localStorage.setItem(`tutorial_seen_${pageKey}`, '1')
   }
 
+  // 背景タップは誤操作が多いので、閉じるだけで既読にはしない
+  // (次回訪問時に再表示される)
+  const dismissWithoutSeen = () => {
+    setVisible(false)
+    setStep(0)
+  }
+
   const reopen = () => {
     setStep(0)
     setVisible(true)
   }
+
+  // Escapeで閉じる (背景タップと同じく既読にしない)
+  useEffect(() => {
+    if (!visible) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') dismissWithoutSeen()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [visible])
 
   if (!visible) {
     return <TutorialButton onClick={reopen} />
@@ -73,9 +92,12 @@ export function Tutorial({ pageKey, steps }: TutorialProps) {
           justifyContent: 'center',
           backgroundColor: 'rgba(0, 0, 0, 0.7)',
         }}
-        onClick={close}
+        onClick={dismissWithoutSeen}
       >
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={current.title}
           style={{
             maxWidth: 480,
             width: '90%',
@@ -104,7 +126,7 @@ export function Tutorial({ pageKey, steps }: TutorialProps) {
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={close}>閉じる</button>
               {step < steps.length - 1 && (
-                <button onClick={() => setStep(step + 1)}>次へ</button>
+                <button className="btn-primary" onClick={() => setStep(step + 1)}>次へ</button>
               )}
             </div>
           </div>

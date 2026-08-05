@@ -125,13 +125,33 @@ export default function EightsLobbyPage() {
   const bravoAvg = bravoTeam.length > 0 ? Math.round(bravoTeam.reduce((s, m) => s + m.peak_rating, 0) / bravoTeam.length) : 0
   const diff = Math.abs(alphaAvg - bravoAvg)
 
+  // タップ操作 (タッチ端末はHTML5 DnDが効かないためのフォールバック):
+  // カードをタップで選択 → 相手チームのパネル/カードをタップで移動・入れ替え
+  const handleCardTap = (m: Member) => {
+    if (!isHost || !isDrafting) return
+    if (!dragUser) { setDragUser(m.user_id); return }
+    if (dragUser === m.user_id) { setDragUser(null); return }
+    const from = members.find(x => x.user_id === dragUser)
+    if (from && from.team_side !== m.team_side) {
+      handleDrop(m.team_side as 'alpha' | 'bravo', m.user_id)
+    } else {
+      setDragUser(m.user_id)
+    }
+  }
+
   const renderMemberCard = (m: Member) => (
     <div
       key={m.user_id}
       className="card"
-      style={{ padding: '10px 14px', cursor: isHost && isDrafting ? 'grab' : undefined }}
+      style={{
+        padding: '10px 14px',
+        cursor: isHost && isDrafting ? 'grab' : undefined,
+        borderColor: dragUser === m.user_id ? 'var(--cyan)' : undefined,
+        boxShadow: dragUser === m.user_id ? '0 0 14px rgba(0,229,255,0.25)' : undefined,
+      }}
       draggable={isHost && isDrafting}
       onDragStart={() => setDragUser(m.user_id)}
+      onClick={() => handleCardTap(m)}
     >
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div>
@@ -160,6 +180,12 @@ export default function EightsLobbyPage() {
         style={{ borderColor: side === 'alpha' ? 'rgba(0,229,255,0.3)' : 'rgba(255,43,214,0.3)' }}
         onDragOver={e => e.preventDefault()}
         onDrop={() => handleDrop(side)}
+        onClick={() => {
+          // 選択中メンバーがいる状態でパネルの空き領域をタップ → このチームへ移動
+          if (!dragUser) return
+          const from = members.find(x => x.user_id === dragUser)
+          if (from && from.team_side !== side) handleDrop(side)
+        }}
       >
         <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
           <div className="row" style={{ gap: 8 }}>
@@ -177,7 +203,7 @@ export default function EightsLobbyPage() {
         </div>
         <div className="stack" style={{ gap: 8 }}>
           {team.map(m => (
-            <div key={m.user_id} onDragOver={e => e.preventDefault()} onDrop={e => { e.stopPropagation(); handleDrop(side, m.user_id) }}>
+            <div key={m.user_id} onDragOver={e => e.preventDefault()} onDrop={e => { e.stopPropagation(); handleDrop(side, m.user_id) }} onClick={e => e.stopPropagation()}>
               {renderMemberCard(m)}
             </div>
           ))}
@@ -270,7 +296,7 @@ export default function EightsLobbyPage() {
               </div>
             )}
           </div>
-          {isHost && <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>ドラッグ&ドロップでプレイヤーをチーム間で移動できます。</p>}
+          {isHost && <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>ドラッグ&ドロップ、またはタップで選択→移動先チームをタップしてプレイヤーを移動できます。</p>}
 
           {/* Balance meter */}
           <div className="card" style={{ padding: '14px 18px', marginBottom: 16 }}>

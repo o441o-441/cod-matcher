@@ -153,16 +153,29 @@ export default function TimelinePage() {
     setModalBody(''); setQuoteTo(null); showToast('引用しました', 'success'); void loadFeed()
   }
 
+  // リアクション/リポストは楽観更新 (タップ即反映)。失敗時のみ再読込で巻き戻す
   const handleRepost = async (postId: string) => {
+    setPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p
+      const on = !p.my_repost
+      return { ...p, my_repost: on, reposts_count: Math.max(0, p.reposts_count + (on ? 1 : -1)) }
+    }))
     const { error } = await supabase.rpc('rpc_timeline_toggle_repost', { p_post_id: postId })
-    if (error) { showToast(error.message, 'error'); return }
-    void loadFeed()
+    if (error) { showToast(error.message, 'error'); void loadFeed() }
   }
 
   const handleReaction = async (postId: string, kind: 'gg' | 'fire') => {
+    setPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p
+      if (kind === 'gg') {
+        const on = !p.my_gg
+        return { ...p, my_gg: on, reactions_gg: Math.max(0, p.reactions_gg + (on ? 1 : -1)) }
+      }
+      const on = !p.my_fire
+      return { ...p, my_fire: on, reactions_fire: Math.max(0, p.reactions_fire + (on ? 1 : -1)) }
+    }))
     const { error } = await supabase.rpc('rpc_timeline_toggle_reaction', { p_post_id: postId, p_kind: kind })
-    if (error) { showToast(error.message, 'error'); return }
-    void loadFeed()
+    if (error) { showToast(error.message, 'error'); void loadFeed() }
   }
 
   const handleDelete = async (postId: string) => {

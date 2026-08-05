@@ -179,6 +179,16 @@ export default function FriendsDrawer({ onClose }: { onClose: () => void }) {
                 <div className="fd-empty">
                   <strong>{q ? '一致するフレンドなし' : 'フレンドがいません'}</strong>
                   {q ? '検索条件を変更してください' : 'フレンドを追加してみましょう'}
+                  {!q && (
+                    <button
+                      type="button"
+                      className="btn-primary btn-sm"
+                      style={{ marginTop: 10 }}
+                      onClick={() => router.push('/friends')}
+                    >
+                      フレンドを探す
+                    </button>
+                  )}
                 </div>
               ) : (
                 <>

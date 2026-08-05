@@ -176,7 +176,9 @@ export default function TournamentDetailPage() {
   if (!tournament) return <main><p className="danger">大会が見つかりません</p></main>
 
   const isHost = myUserId === tournament.host_user_id
-  const canEntry = tournament.status === 'recruit' && !myEntry
+  // 表示だけだった締切を実際に効かせる
+  const entryDeadlinePassed = !!tournament.entry_deadline && Date.now() > new Date(tournament.entry_deadline).getTime()
+  const canEntry = tournament.status === 'recruit' && !myEntry && !entryDeadlinePassed
 
   return (
     <main>
@@ -228,7 +230,16 @@ export default function TournamentDetailPage() {
             )}
           </div>
 
-          {/* エント��ーフォーム */}
+          {/* 締切済みの案内 */}
+          {tournament.status === 'recruit' && !myEntry && entryDeadlinePassed && (
+            <div className="card" style={{ borderColor: 'rgba(255,176,32,0.4)', background: 'var(--amber-soft)' }}>
+              <p style={{ margin: 0, color: 'var(--amber)', fontSize: 13, fontWeight: 600 }}>
+                エントリー締切を過ぎています（{new Date(tournament.entry_deadline!).toLocaleString('ja-JP')} 締切）
+              </p>
+            </div>
+          )}
+
+          {/* エントリーフォーム */}
           {canEntry && (
             <div className="card-strong" style={{ borderLeft: '3px solid var(--cyan)' }}>
               <h2 style={{ marginTop: 0 }}>エントリー</h2>

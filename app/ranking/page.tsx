@@ -262,12 +262,13 @@ export default function RankingPage() {
                     </div>
 
                     {/* Name + tag */}
-                    <div style={{ minWidth: 0 }}>
+                    <div style={{ minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       <span style={{ fontWeight: 700 }}>
                         {p.display_name || '(名前未設定)'}
                       </span>
                       {teamNames[p.user_id] && (
                         <span
+                          className="hide-sm"
                           style={{
                             fontFamily: 'var(--font-mono)',
                             fontSize: 11,
@@ -280,9 +281,9 @@ export default function RankingPage() {
                       )}
                     </div>
 
-                    {/* Tier badge */}
+                    {/* Tier badge (狭い画面では非表示 — 名前の表示幅を優先) */}
                     <span
-                      className="badge"
+                      className="badge hide-sm"
                       style={{
                         color: tier.color,
                         borderColor: tier.color,
@@ -295,8 +296,9 @@ export default function RankingPage() {
                       {tier.label}
                     </span>
 
-                    {/* Win / Loss */}
+                    {/* Win / Loss (狭い画面では非表示にして名前の幅を確保) */}
                     <span
+                      className="hide-sm"
                       style={{
                         fontFamily: 'var(--font-mono)',
                         fontVariantNumeric: 'tabular-nums',

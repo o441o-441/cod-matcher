@@ -300,7 +300,7 @@ export default function ScrimQueuePage() {
       {errorText && <div className="card" style={{ borderColor: 'rgba(255,77,109,0.35)', background: 'var(--danger-soft)', marginBottom: 16 }}><span className="danger" style={{ fontSize: 14 }}>{errorText}</span></div>}
       {infoText && <div className="card" style={{ borderColor: 'rgba(0,245,160,0.35)', background: 'var(--success-soft)', marginBottom: 16 }}><span className="success" style={{ fontSize: 14 }}>{infoText}</span></div>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20, alignItems: 'start' }}>
+      <div className="grid-side-360">
         {/* LEFT */}
         <div className="stack">
           {/* Pending invites */}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
@@ -29,6 +29,24 @@ export default function BracketPage() {
 
   const [loading, setLoading] = useState(true)
   const [matches, setMatches] = useState<MatchRow[]>([])
+  const winnersScrollRef = useRef<HTMLDivElement | null>(null)
+  const autoScrolledRef = useRef(false)
+
+  // 初回表示時、進行中(pending)の最初のラウンドまで横スクロールする
+  // (終わったラウンドを毎回スワイプで飛ばさなくて済むように)
+  useEffect(() => {
+    if (autoScrolledRef.current || matches.length === 0) return
+    const box = winnersScrollRef.current
+    if (!box) return
+    const pendingRounds = matches
+      .filter(m => m.bracket_side === 'winners' && m.status !== 'completed')
+      .map(m => m.round)
+    if (pendingRounds.length === 0) return
+    const firstPending = Math.min(...pendingRounds)
+    if (firstPending <= 1) { autoScrolledRef.current = true; return }
+    box.scrollLeft = (firstPending - 1) * 320
+    autoScrolledRef.current = true
+  }, [matches])
   const [teamMap, setTeamMap] = useState<Map<string, TeamInfo>>(new Map())
   const [tournamentTitle, setTournamentTitle] = useState('')
   const [entryMode, setEntryMode] = useState('team')
@@ -361,7 +379,7 @@ export default function BracketPage() {
       {/* Winners Bracket */}
       <div className="section">
         {eliminationType === 'double' && <h2 style={{ margin: '0 0 12px', color: 'var(--cyan)' }}>Winners Bracket</h2>}
-        <div style={{ overflowX: 'auto' }}>
+        <div ref={winnersScrollRef} style={{ overflowX: 'auto' }}>
           <div style={{ display: 'flex', gap: 20, minWidth: maxRound * 320 }}>
             {Array.from({ length: maxRound }, (_, i) => i + 1).map(round => {
               const roundMs = winnersMatches.filter(m => m.round === round)

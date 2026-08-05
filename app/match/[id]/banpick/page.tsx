@@ -1078,11 +1078,25 @@ export default function BanpickPage() {
                   <span className="muted" style={{ fontSize: 12 }}>
                     {PHASE_NAME[currentPhase]}
                   </span>
+                  {isMyTurn && (
+                    <span className="badge amber"><span className="badge-dot" />あなたの番です</span>
+                  )}
                 </div>
                 {remainingSec !== null && session.status === "in_progress" && (
-                  <TimerRing seconds={remainingSec > 0 ? remainingSec : 0} max={300} size={60} />
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                    <TimerRing seconds={remainingSec > 0 ? remainingSec : 0} max={300} size={60} />
+                    <span style={{ fontSize: 10, color: "var(--danger)", whiteSpace: "nowrap" }}>時間切れ＝操作側の敗北</span>
+                  </div>
                 )}
               </div>
+              {/* 自分のチームを常に明示 (ALPHA/BRAVOのどちらか分からなくなる問題への対処) */}
+              {myMatchTeamId && (
+                <p className="muted" style={{ fontSize: 12, margin: "0 0 12px" }}>
+                  あなたのチーム: <span className={`side-chip ${teams.find(t => t.id === myMatchTeamId)?.side ?? ""}`} style={{ fontSize: 10 }}>
+                    {(teams.find(t => t.id === myMatchTeamId)?.side ?? "").toUpperCase()}
+                  </span>
+                </p>
+              )}
 
               {/* Ban / Pick map grid */}
               {(session.current_action_type === "ban" || session.current_action_type === "pick_map") && (

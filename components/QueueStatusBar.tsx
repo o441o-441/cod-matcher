@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/components/ToastProvider'
 import { playMatchFound } from '@/lib/sounds'
 
 type ActiveMatch = { id: string; status: string }
@@ -10,6 +11,7 @@ type ActiveMatch = { id: string; status: string }
 export default function QueueStatusBar() {
   const router = useRouter()
   const pathname = usePathname()
+  const { showToast } = useToast()
   const [waiting, setWaiting] = useState(false)
   const [activeMatch, setActiveMatch] = useState<ActiveMatch | null>(null)
   const [waitSec, setWaitSec] = useState(0)
@@ -42,10 +44,11 @@ export default function QueueStatusBar() {
           const { error: cancelErr } = await supabase.rpc('rpc_cancel_queue', { p_queue_entry_id: qe.id })
           if (cancelErr) { console.error('auto cancel queue error:', cancelErr); return }
           setWaiting(false)
+          showToast('ページを移動したため、マッチング待機をキャンセルしました', 'info')
         }
       })()
     }
-  }, [pathname])
+  }, [pathname, showToast])
 
   const checkQueue = useCallback(async () => {
     let uid = cachedUidRef.current
@@ -121,6 +124,7 @@ export default function QueueStatusBar() {
           return
         }
         setWaiting(false)
+        showToast('ページを移動したため、マッチング待機をキャンセルしました', 'info')
         return
       }
       setWaiting(true)
@@ -132,7 +136,7 @@ export default function QueueStatusBar() {
 
     setWaiting(false)
     waitStartRef.current = null
-  }, [])
+  }, [showToast])
 
   // Realtime + 10秒フォールバック
   useEffect(() => {

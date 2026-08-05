@@ -51,6 +51,7 @@ export default function TournamentsPage() {
   const [loading, setLoading] = useState(true)
   const [tournaments, setTournaments] = useState<TournamentRow[]>([])
   const [myUserId, setMyUserId] = useState<string | null>(null)
+  const [showAllClosed, setShowAllClosed] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -116,6 +117,7 @@ export default function TournamentsPage() {
 
   const openTournaments = tournaments.filter(t => t.status === 'recruit' || t.status === 'live' || t.status === 'seeding')
   const closedTournaments = tournaments.filter(t => t.status === 'completed')
+  const visibleClosed = showAllClosed ? closedTournaments : closedTournaments.slice(0, 9)
 
   return (
     <main>
@@ -150,10 +152,17 @@ export default function TournamentsPage() {
         <div className="section">
           <p className="sec-title">過去の大会</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
-            {closedTournaments.map(t => (
+            {visibleClosed.map(t => (
               <TournamentCard key={t.id} t={t} onClick={() => router.push(`/tournaments/${t.id}`)} />
             ))}
           </div>
+          {!showAllClosed && closedTournaments.length > 9 && (
+            <div className="row" style={{ justifyContent: 'center', marginTop: 16 }}>
+              <button className="btn-ghost" onClick={() => setShowAllClosed(true)}>
+                もっと見る（あと{closedTournaments.length - 9}件）
+              </button>
+            </div>
+          )}
         </div>
       )}
     </main>
@@ -169,8 +178,8 @@ function TournamentCard({ t, onClick }: { t: TournamentRow; onClick: () => void 
         <span className="badge" style={{ fontSize: 9, background: t.format === 'tournament' ? 'var(--cyan-dim)' : 'var(--violet-dim, rgba(139,92,246,0.15))', color: t.format === 'tournament' ? 'var(--cyan)' : 'var(--violet, #8b5cf6)' }}>
           {t.format === 'tournament' ? 'TOURNAMENT' : 'LEAGUE'}
         </span>
-        <span className="badge" style={{ fontSize: 9 }}>
-          {t.entry_mode === 'team' ? 'TEAM 4v4' : 'SOLO → 4v4'}
+        <span className="badge" style={{ fontSize: 9 }} title={t.entry_mode === 'team' ? '参加には4人以上のチームが必要です' : 'ソロで参加できます'}>
+          {t.entry_mode === 'team' ? 'TEAM 4v4 · 要チーム' : 'SOLO → 4v4'}
         </span>
         <span style={{ fontSize: 11, fontWeight: 700, color: STATUS_COLOR[t.status] ?? 'var(--text-soft)' }}>
           {STATUS_LABEL[t.status] ?? t.status}

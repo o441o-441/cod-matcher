@@ -13,8 +13,11 @@ export default function TimerRing({
   const circ = 2 * Math.PI * r
   const pct = Math.max(0, seconds) / max
   const offset = circ * (1 - pct)
-  const color =
-    seconds <= 10 ? 'var(--danger)' : seconds <= 20 ? 'var(--amber)' : 'var(--cyan)'
+  // 警告色は残り割合ベース (長い制限時間でも段階的に警告が出るように)。
+  // 短い制限時間では従来の絶対秒しきい値も効かせる。
+  const danger = pct <= 0.1 || seconds <= 10
+  const warn = pct <= 0.33 || seconds <= 20
+  const color = danger ? 'var(--danger)' : warn ? 'var(--amber)' : 'var(--cyan)'
   const cx = size / 2
   const cy = size / 2
 

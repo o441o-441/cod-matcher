@@ -736,6 +736,10 @@ export default function MyPage() {
             <div className="empty">
               <p className="muted" style={{ marginBottom: 12 }}>まだチームに所属していません</p>
               <p className="dim" style={{ fontSize: 12 }}>ソロでも対戦に参加できます</p>
+              <div className="row" style={{ justifyContent: 'center', gap: 8, marginTop: 14 }}>
+                <button className="btn-primary btn-sm" onClick={() => router.push('/team/create')}>チームを作成</button>
+                <button className="btn-ghost btn-sm" onClick={() => router.push('/team/join')}>チームに参加</button>
+              </div>
             </div>
           )}
         </div>
