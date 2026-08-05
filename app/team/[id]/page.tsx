@@ -44,6 +44,7 @@ type MatchRow = {
 type TeamNameMap = Record<string, string>
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const MAX_MEMBERS = 5
 
 export default function TeamDetailPage() {
   const params = useParams()
@@ -69,10 +70,12 @@ export default function TeamDetailPage() {
   const [myRole, setMyRole] = useState<string | null>(null)
 
   const [searchName, setSearchName] = useState('')
-  const [searchedUser, setSearchedUser] = useState<UserRow | null>(null)
+  const [searchResults, setSearchResults] = useState<UserRow[]>([])
+  const [searchDone, setSearchDone] = useState(false)
   const [searchLoading, setSearchLoading] = useState(false)
-  const [addLoading, setAddLoading] = useState(false)
+  const [addLoadingId, setAddLoadingId] = useState<string | null>(null)
   const [removeLoadingId, setRemoveLoadingId] = useState<string | null>(null)
+  const [removeTarget, setRemoveTarget] = useState<TeamMemberRow | null>(null)
 
   const [transferLoadingId, setTransferLoadingId] = useState<string | null>(null)
   const [transferTarget, setTransferTarget] = useState<TeamMemberRow | null>(null)
@@ -209,25 +212,30 @@ export default function TeamDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId])
 
-  const handleSearchUser = async () => {
+  const handleSearchUser = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+
     if (!canManageTeam) {
       showToast('このチームを管理する権限がありません', 'error')
       return
     }
 
-    if (!searchName.trim()) {
+    const trimmed = searchName.trim()
+    if (!trimmed) {
       showToast('表示名を入力してください', 'error')
       return
     }
 
     setSearchLoading(true)
-    setSearchedUser(null)
+    setSearchResults([])
+    setSearchDone(false)
 
+    // 部分一致で検索し、既存メンバーは除外して候補を出す
     const { data, error } = await supabase
       .from('profiles')
       .select('id, display_name')
-      .eq('display_name', searchName.trim())
-      .maybeSingle()
+      .ilike('display_name', `%${trimmed}%`)
+      .limit(10)
 
     if (error) {
       console.error('search error:', error)
@@ -236,53 +244,47 @@ export default function TeamDetailPage() {
       return
     }
 
-    if (!data) {
-      showToast('該当ユーザーが見つかりません', 'error')
-      setSearchLoading(false)
-      return
-    }
+    const candidates = ((data ?? []) as UserRow[]).filter(
+      (u) => !members.some((m) => m.user_id === u.id)
+    )
 
-    setSearchedUser(data as UserRow)
+    setSearchResults(candidates)
+    setSearchDone(true)
     setSearchLoading(false)
-    showToast('ユーザーが見つかりました', 'success')
   }
 
-  const handleAddMember = async () => {
+  const handleAddMember = async (user: UserRow) => {
     if (!canManageTeam) {
       showToast('このチームを管理する権限がありません', 'error')
       return
     }
 
-    if (!searchedUser || !myUserId) {
+    if (!myUserId) {
       showToast('必要な情報が足りません', 'error')
       return
     }
 
-    setAddLoading(true)
+    setAddLoadingId(user.id)
 
-    const { data, error } = await supabase.rpc('add_team_member_atomic', {
+    const { error } = await supabase.rpc('add_team_member_atomic', {
       p_team_id: teamId,
-      p_target_user_id: searchedUser.id,
+      p_target_user_id: user.id,
       p_actor_user_id: myUserId,
     })
 
     if (error) {
       console.error('add_team_member_atomic error:', error)
-      console.error('message:', error.message)
-      console.error('details:', error.details)
-      console.error('hint:', error.hint)
-      console.error('code:', error.code)
-      showToast('メンバー追加に失敗しました', 'error')
-      setAddLoading(false)
+      showToast(error.message || 'メンバー追加に失敗しました', 'error')
+      setAddLoadingId(null)
       return
     }
 
-    console.log('add member result:', data)
-    showToast('メンバーを追加しました', 'success')
-    setSearchedUser(null)
+    showToast(`${user.display_name ?? 'メンバー'} を追加しました`, 'success')
+    setSearchResults([])
+    setSearchDone(false)
     setSearchName('')
     await fetchTeam()
-    setAddLoading(false)
+    setAddLoadingId(null)
   }
 
   const handleRemoveMember = async (member: TeamMemberRow) => {
@@ -296,31 +298,23 @@ export default function TeamDetailPage() {
       return
     }
 
-    const ok = window.confirm(
-      `${member.profiles?.display_name || 'このユーザー'} をチームから削除しますか？`
-    )
-    if (!ok) return
-
     setRemoveLoadingId(member.id)
 
-    const { data, error } = await supabase.rpc('remove_team_member_atomic', {
+    const { error } = await supabase.rpc('remove_team_member_atomic', {
       p_team_member_id: member.id,
       p_actor_user_id: myUserId,
     })
 
     if (error) {
       console.error('remove_team_member_atomic error:', error)
-      console.error('message:', error.message)
-      console.error('details:', error.details)
-      console.error('hint:', error.hint)
-      console.error('code:', error.code)
-      showToast('メンバー削除に失敗しました', 'error')
+      showToast(error.message || 'メンバー削除に失敗しました', 'error')
       setRemoveLoadingId(null)
+      setRemoveTarget(null)
       return
     }
 
-    console.log('remove member result:', data)
     showToast('メンバーを削除しました', 'success')
+    setRemoveTarget(null)
     await fetchTeam()
     setRemoveLoadingId(null)
   }
@@ -500,6 +494,19 @@ export default function TeamDetailPage() {
             </div>
 
             <div className="row" style={{ marginTop: 16 }}>
+              {myTeamId === teamId && (
+                <button
+                  className="btn-primary btn-sm"
+                  onClick={async () => {
+                    if (!team?.id) return
+                    await navigator.clipboard.writeText(`${window.location.origin}/team/join?id=${team.id}`)
+                    showToast('招待リンクをコピーしました。参加してほしい人に送ってください', 'success')
+                  }}
+                >
+                  招待リンクをコピー
+                </button>
+              )}
+
               <button
                 className="btn-sm"
                 onClick={async () => {
@@ -528,13 +535,19 @@ export default function TeamDetailPage() {
                 </button>
               )}
             </div>
+
+            {canManageTeam && (
+              <p className="muted" style={{ fontSize: 12, marginTop: 10, marginBottom: 0 }}>
+                オーナーは脱退できません。チームを離れるには、先に他のメンバーへ owner を譲渡してください。
+              </p>
+            )}
           </div>
         </div>
 
         {/* Members */}
         <div className="section">
           <div className="card-strong">
-            <div className="sec-title">メンバー</div>
+            <div className="sec-title">メンバー ({members.length}/{MAX_MEMBERS})</div>
 
             {members.length === 0 ? (
               <p className="muted">メンバーがいません</p>
@@ -580,7 +593,7 @@ export default function TeamDetailPage() {
                             {canRemove && (
                               <button
                                 className="btn-sm btn-danger"
-                                onClick={() => handleRemoveMember(member)}
+                                onClick={() => setRemoveTarget(member)}
                                 disabled={removeLoadingId === member.id}
                               >
                                 {removeLoadingId === member.id
@@ -605,32 +618,58 @@ export default function TeamDetailPage() {
             <div className="card-strong">
               <div className="sec-title">メンバー追加</div>
 
-              <div className="row">
-                <input
-                  value={searchName}
-                  onChange={(e) => setSearchName(e.target.value)}
-                  placeholder="追加したいユーザーの表示名"
-                  style={{ flex: 1 }}
-                />
-                <button onClick={handleSearchUser} disabled={searchLoading}>
-                  {searchLoading ? '検索中...' : '検索'}
-                </button>
-              </div>
+              {members.length >= MAX_MEMBERS ? (
+                <p className="muted" style={{ margin: 0 }}>
+                  チームは最大{MAX_MEMBERS}人までです。追加するには先にメンバーを削除してください。
+                </p>
+              ) : (
+                <>
+                  <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
+                    上の「招待リンクをコピー」を相手に送るのが確実です。表示名で検索して直接追加することもできます（部分一致）。
+                  </p>
 
-              {searchedUser && (
-                <div className="card" style={{ marginTop: 12 }}>
-                  <div className="row">
-                    <div className="avatar">
-                      {(searchedUser.display_name || '?')[0].toUpperCase()}
-                    </div>
-                    <div style={{ flex: 1, fontWeight: 700 }}>
-                      {searchedUser.display_name}
-                    </div>
-                    <button className="btn-primary btn-sm" onClick={handleAddMember} disabled={addLoading}>
-                      {addLoading ? '追加中...' : '追加'}
+                  <form className="row" onSubmit={handleSearchUser}>
+                    <input
+                      value={searchName}
+                      onChange={(e) => setSearchName(e.target.value)}
+                      placeholder="追加したいユーザーの表示名（一部でOK）"
+                      style={{ flex: 1 }}
+                    />
+                    <button type="submit" disabled={searchLoading}>
+                      {searchLoading ? '検索中...' : '検索'}
                     </button>
-                  </div>
-                </div>
+                  </form>
+
+                  {searchDone && searchResults.length === 0 && (
+                    <p className="muted" style={{ fontSize: 13, marginTop: 12, marginBottom: 0 }}>
+                      該当ユーザーが見つかりません（既にメンバーのユーザーは表示されません）
+                    </p>
+                  )}
+
+                  {searchResults.length > 0 && (
+                    <div className="stack" style={{ marginTop: 12 }}>
+                      {searchResults.map((user) => (
+                        <div key={user.id} className="card">
+                          <div className="row">
+                            <div className="avatar">
+                              {(user.display_name || '?')[0].toUpperCase()}
+                            </div>
+                            <div style={{ flex: 1, fontWeight: 700 }}>
+                              {user.display_name || '未設定'}
+                            </div>
+                            <button
+                              className="btn-primary btn-sm"
+                              onClick={() => handleAddMember(user)}
+                              disabled={addLoadingId !== null}
+                            >
+                              {addLoadingId === user.id ? '追加中...' : '追加'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -712,6 +751,27 @@ export default function TeamDetailPage() {
         }}
         onCancel={() => {
           if (!transferLoadingId) setTransferTarget(null)
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!removeTarget}
+        title="メンバーを削除しますか？"
+        message={
+          removeTarget
+            ? `${removeTarget.profiles?.display_name || 'このユーザー'} をチームから削除します。`
+            : ''
+        }
+        confirmText={
+          removeTarget && removeLoadingId === removeTarget.id ? '削除中...' : '削除する'
+        }
+        cancelText="キャンセル"
+        onConfirm={async () => {
+          if (!removeTarget) return
+          await handleRemoveMember(removeTarget)
+        }}
+        onCancel={() => {
+          if (!removeLoadingId) setRemoveTarget(null)
         }}
       />
 
