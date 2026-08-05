@@ -149,7 +149,7 @@ export default function RulesPage() {
             <div className="card">
               <h3>SMG</h3>
               <p className="mono">DRAVEC 45 / MPC-25</p>
-              <p className="muted">マズル使用不可 / バレルは 13.1&quot;レイザーバックバレル以外使用不可 / フローガードフォアグリップ使用不可 / クイックシフトグリップ使用不可 / 強装弾使用不可</p>
+              <p className="muted">マズルは KuHN ポートコンプ以外使用不可 / バレルは 13.1&quot;レイザーバックバレル以外使用不可 / フローガードフォアグリップ使用不可 / 強装弾使用不可</p>
             </div>
 
             <div className="card">
