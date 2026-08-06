@@ -71,9 +71,11 @@ function modeName(m: Mode, maps: number) {
   return 'すべて'
 }
 
-// マップ数 → 30分枠数への換算 (サーチ 20分/マップ、オバロ 15分/マップ)
+// マップ数 → 30分枠数への換算 (ハーポ 15分/マップ、サーチ 20分/マップ、オバロ 15分/マップ)
+const hpSlots = (maps: number) => Math.ceil((15 * maps) / 30)
 const sndSlots = (maps: number) => Math.ceil((20 * maps) / 30)
 const ovlSlots = (maps: number) => Math.ceil((15 * maps) / 30)
+const HP_MAP_OPTIONS = [1, 2, 3, 4, 5, 6]
 const SND_MAP_OPTIONS = [1, 2, 3, 4, 5, 6]
 const OVL_MAP_OPTIONS = [1, 2, 3, 4]
 
@@ -128,8 +130,8 @@ export default function ScrimBoardPage() {
   const [mode, setMode] = useState<Mode>('hp')
   const [sndMaps, setSndMaps] = useState(3)
   const [ovlMaps, setOvlMaps] = useState(3)
-  // 複合モードの構成: hp = ハーポ回し(3枠固定) の有無 / snd・ovl = マップ数 (0 = やらない)
-  const [combo, setCombo] = useState<{ hp: boolean; snd: number; ovl: number }>({ hp: false, snd: 2, ovl: 2 })
+  // 複合モードの構成: 各モードのマップ数 (0 = やらない)
+  const [combo, setCombo] = useState<{ hp: number; snd: number; ovl: number }>({ hp: 0, snd: 2, ovl: 2 })
   const [near, setNear] = useState(false)
   const [prefs, setPrefs] = useState<Record<Pref, boolean>>({ hp: true, snd: true, ovl: true })
   const [hoverRun, setHoverRun] = useState<string | null>(null)
@@ -180,14 +182,14 @@ export default function ScrimBoardPage() {
     if (mode === 'hp') return 3
     if (mode === 'snd') return sndSlots(sndMaps)
     if (mode === 'ovl') return ovlSlots(ovlMaps)
-    if (mode === 'custom') return (combo.hp ? 3 : 0) + sndSlots(combo.snd) + ovlSlots(combo.ovl)
+    if (mode === 'custom') return hpSlots(combo.hp) + sndSlots(combo.snd) + ovlSlots(combo.ovl)
     return 0 // all
   }
 
   // 複合構成の表示ラベル (例: サーチ2 + オバロ2)
   const comboLabel = () => {
     const parts: string[] = []
-    if (combo.hp) parts.push('ハーポ回し')
+    if (combo.hp > 0) parts.push(`ハーポ${combo.hp}`)
     if (combo.snd > 0) parts.push(`サーチ${combo.snd}`)
     if (combo.ovl > 0) parts.push(`オバロ${combo.ovl}`)
     return parts.join(' + ')
@@ -229,7 +231,7 @@ export default function ScrimBoardPage() {
   const acceptsMode = (t: DemoTeam) => {
     if (mode === 'all') return true
     if (mode === 'custom') {
-      if (combo.hp && !t.prefs.hp) return false
+      if (combo.hp > 0 && !t.prefs.hp) return false
       if (combo.snd > 0 && !t.prefs.snd) return false
       if (combo.ovl > 0 && !t.prefs.ovl) return false
       return true
@@ -571,17 +573,25 @@ export default function ScrimBoardPage() {
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', margin: '10px 0 6px', background: 'rgba(6,10,22,0.5)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 10, padding: '12px 16px' }}>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: '#c9b8ff' }}>構成:</span>
 
-            {/* ハーポ回し on/off */}
-            <button type="button" className="sb-hoverline" aria-pressed={combo.hp}
-              onClick={() => setCombo(prev => ({ ...prev, hp: !prev.hp }))}
-              style={{
-                fontSize: 12, fontWeight: 700, borderRadius: 8, padding: '7px 13px', cursor: 'pointer', transition: 'all .12s',
-                background: combo.hp ? 'rgba(0,229,255,0.14)' : 'rgba(6,10,22,0.75)',
-                color: combo.hp ? '#9df3ff' : 'var(--text-dim)',
-                border: `1px solid ${combo.hp ? 'rgba(0,229,255,0.5)' : LINE}`,
-              }}>
-              ハーポ回し (3枠)
-            </button>
+            {/* ハーポ マップ数 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11.5, color: 'var(--text-soft)' }}>ハーポ (15分/マップ)</span>
+              {[0, ...HP_MAP_OPTIONS].map(n => {
+                const on = combo.hp === n
+                return (
+                  <button key={`hp-${n}`} type="button" className="mono" aria-pressed={on}
+                    onClick={() => setCombo(prev => ({ ...prev, hp: n }))}
+                    style={{
+                      fontSize: 12, fontWeight: 600, borderRadius: 8, padding: '6px 11px', cursor: 'pointer', transition: 'all .12s',
+                      background: on ? 'rgba(0,229,255,0.14)' : 'rgba(6,10,22,0.75)',
+                      color: on ? '#9df3ff' : 'var(--text-dim)',
+                      border: `1px solid ${on ? 'rgba(0,229,255,0.5)' : LINE}`,
+                    }}>
+                    {n === 0 ? 'なし' : n}
+                  </button>
+                )
+              })}
+            </div>
 
             {/* サーチ マップ数 */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
