@@ -226,8 +226,8 @@ export default function CustomPage() {
           <div className="card-strong" style={{ marginTop: 16 }}>
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <div>
-                <p style={{ fontWeight: 700, margin: 0 }}>交流戦ボード <span className="badge violet" style={{ fontSize: 9, marginLeft: 6 }}>PREVIEW</span></p>
-                <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>チームの空き時間を出し合って、今晩の相手をその場で確定</p>
+                <p style={{ fontWeight: 700, margin: 0 }}>交流戦ボード <span className="badge" style={{ fontSize: 9, marginLeft: 6 }}>NEW</span></p>
+                <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>1週間分のチームの空き時間を出し合って、対戦相手をその場で確定</p>
               </div>
               <button className="btn-primary" onClick={() => router.push('/custom/board')}>
                 ボードへ
