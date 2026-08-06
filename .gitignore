@@ -43,3 +43,6 @@ next-env.d.ts
 deploy.log
 # claude code local settings
 .claude/settings.local.json
+
+# supabase cli temp
+supabase/.temp/
