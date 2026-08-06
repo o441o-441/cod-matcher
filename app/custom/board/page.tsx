@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation'
 // 現在はプレビュー版: 相手チーム・ロスターはデモデータ。
 // ============================================================
 
-type Mode = 'hp' | 'snd' | 'ovl' | 'all'
+type Mode = 'hp' | 'snd' | 'ovl' | 'custom' | 'all'
 type Pref = 'hp' | 'snd' | 'ovl'
 
 type DemoTeam = {
@@ -29,7 +29,7 @@ type DemoTeam = {
   av: number[] | null
 }
 
-type BoardMatch = { id: number; teamId: string; day: number; start: number; len: number; mode: Mode; maps: number }
+type BoardMatch = { id: number; teamId: string; day: number; start: number; len: number; label: string }
 
 const DAYS = 7
 const SLOTS = ['20:00', '20:30', '21:00', '21:30', '22:00', '22:30', '23:00', '23:30', '24:00', '24:30']
@@ -64,8 +64,18 @@ const TEAMS: DemoTeam[] = [
 const DOW = ['日', '月', '火', '水', '木', '金', '土']
 
 function modeName(m: Mode, maps: number) {
-  return m === 'hp' ? 'ハーポ回し' : m === 'snd' ? `サーチ ${maps}マップ` : m === 'ovl' ? `オバロ ${maps}マップ` : 'すべて'
+  if (m === 'hp') return 'ハーポ回し'
+  if (m === 'snd') return `サーチ ${maps}マップ`
+  if (m === 'ovl') return `オバロ ${maps}マップ`
+  if (m === 'custom') return '複合'
+  return 'すべて'
 }
+
+// マップ数 → 30分枠数への換算 (サーチ 20分/マップ、オバロ 15分/マップ)
+const sndSlots = (maps: number) => Math.ceil((20 * maps) / 30)
+const ovlSlots = (maps: number) => Math.ceil((15 * maps) / 30)
+const SND_MAP_OPTIONS = [1, 2, 3, 4, 5, 6]
+const OVL_MAP_OPTIONS = [1, 2, 3, 4]
 
 // デモデータ用の決定的な擬似シード (Math.random は使わない)
 function seed(s: string, d: number) {
@@ -116,7 +126,10 @@ export default function ScrimBoardPage() {
   const [editDay, setEditDay] = useState(0) // STEP1 で編集中の日
   const [viewDay, setViewDay] = useState(0) // STEP2 で表示中の日
   const [mode, setMode] = useState<Mode>('hp')
-  const [maps, setMaps] = useState(3)
+  const [sndMaps, setSndMaps] = useState(3)
+  const [ovlMaps, setOvlMaps] = useState(3)
+  // 複合モードの構成: hp = ハーポ回し(3枠固定) の有無 / snd・ovl = マップ数 (0 = やらない)
+  const [combo, setCombo] = useState<{ hp: boolean; snd: number; ovl: number }>({ hp: false, snd: 2, ovl: 2 })
   const [near, setNear] = useState(false)
   const [prefs, setPrefs] = useState<Record<Pref, boolean>>({ hp: true, snd: true, ovl: true })
   const [hoverRun, setHoverRun] = useState<string | null>(null)
@@ -165,10 +178,22 @@ export default function ScrimBoardPage() {
   // ---- 導出値 ----
   const slotsNeeded = () => {
     if (mode === 'hp') return 3
-    if (mode === 'snd') return maps
-    if (mode === 'ovl') return Math.ceil((25 * maps) / 30)
+    if (mode === 'snd') return sndSlots(sndMaps)
+    if (mode === 'ovl') return ovlSlots(ovlMaps)
+    if (mode === 'custom') return (combo.hp ? 3 : 0) + sndSlots(combo.snd) + ovlSlots(combo.ovl)
     return 0 // all
   }
+
+  // 複合構成の表示ラベル (例: サーチ2 + オバロ2)
+  const comboLabel = () => {
+    const parts: string[] = []
+    if (combo.hp) parts.push('ハーポ回し')
+    if (combo.snd > 0) parts.push(`サーチ${combo.snd}`)
+    if (combo.ovl > 0) parts.push(`オバロ${combo.ovl}`)
+    return parts.join(' + ')
+  }
+  // 現在の選択の詳細ラベル (成立・ダイアログ・トーストに使う)
+  const currentModeLabel = () => (mode === 'custom' ? `複合 (${comboLabel() || '未選択'})` : modeName(mode, mode === 'ovl' ? ovlMaps : sndMaps))
   const myAv = (day: number) => {
     const memberAvs = OTHERS.map(m => memberAvOn(m, day))
     return SLOTS.map((_, i) => mine[day][i] + memberAvs.reduce((a, s) => a + s[i], 0))
@@ -201,7 +226,16 @@ export default function ScrimBoardPage() {
     if (g === null) return t.unr
     return t.accept === 'any' || g <= 1
   }
-  const acceptsMode = (t: DemoTeam) => (mode === 'all' ? true : t.prefs[mode])
+  const acceptsMode = (t: DemoTeam) => {
+    if (mode === 'all') return true
+    if (mode === 'custom') {
+      if (combo.hp && !t.prefs.hp) return false
+      if (combo.snd > 0 && !t.prefs.snd) return false
+      if (combo.ovl > 0 && !t.prefs.ovl) return false
+      return true
+    }
+    return t.prefs[mode]
+  }
   const need = slotsNeeded()
 
   const openCount = myAv(editDay).filter(v => v >= 4).length
@@ -219,7 +253,9 @@ export default function ScrimBoardPage() {
 
   const modeDurLabel = mode === 'all'
     ? '空き状況の俯瞰 — モードを選ぶと開始マーカーが出ます'
-    : `${modeName(mode, maps)} · 所要 ${need}枠 (${need * 30}分) · 最終開始 ${slotLabel(10 - need)}`
+    : mode === 'custom' && need === 0
+      ? '複合 — 下の構成からモードを選んでください'
+      : `${currentModeLabel()} · 所要 ${need}枠 (${need * 30}分) · 最終開始 ${slotLabel(10 - need)}`
 
   // now ライン: 今日の表示のみ。20:00 前はデモ表示 (21:15)
   let nowLine: { left: string; label: string } | null = null
@@ -239,7 +275,7 @@ export default function ScrimBoardPage() {
     if (!modal) return
     const t = TEAMS.find(x => x.id === modal.teamId)!
     const id = matches.reduce((m, x) => Math.max(m, x.id), 0) + 1
-    setMatches(prev => [...prev, { id, teamId: modal.teamId, day: modal.day, start: modal.start, len: modal.len, mode, maps }])
+    setMatches(prev => [...prev, { id, teamId: modal.teamId, day: modal.day, start: modal.start, len: modal.len, label: currentModeLabel() }])
     setModal(null)
     showToast('対戦が成立しました', `${t.name} · ${dayLabel(modal.day)} ${slotLabel(modal.start)} – ${slotLabel(modal.start + modal.len)} · 両チームの Discord に通知しました`)
   }
@@ -273,7 +309,7 @@ export default function ScrimBoardPage() {
   const cancelTeam = cancelMatch ? TEAMS.find(x => x.id === cancelMatch.teamId)! : null
 
   const prefDefs: [Pref, string][] = [['hp', 'ハーポ回し'], ['snd', 'サーチ'], ['ovl', 'オバロ']]
-  const modeDefs: [Mode, string][] = [['hp', 'ハーポ回し · 90分'], ['snd', 'サーチ'], ['ovl', 'オバロ'], ['all', 'すべて (俯瞰)']]
+  const modeDefs: [Mode, string][] = [['hp', 'ハーポ回し · 90分'], ['snd', 'サーチ'], ['ovl', 'オバロ'], ['custom', '複合'], ['all', 'すべて (俯瞰)']]
   const showMaps = mode === 'snd' || mode === 'ovl'
 
   // 日付タブ (STEP1/STEP2 共用コンポーネント)
@@ -509,11 +545,12 @@ export default function ScrimBoardPage() {
           {showMaps && (
             <>
               <span style={{ width: 1, height: 22, background: LINE_STRONG, margin: '0 4px' }} />
-              <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>マップ数</span>
-              {[2, 3, 4].map(n => {
-                const on = maps === n
+              <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>マップ数 ({mode === 'ovl' ? '15' : '20'}分/マップ)</span>
+              {(mode === 'ovl' ? OVL_MAP_OPTIONS : SND_MAP_OPTIONS).map(n => {
+                const on = (mode === 'ovl' ? ovlMaps : sndMaps) === n
                 return (
-                  <button key={n} type="button" className="mono" aria-pressed={on} onClick={() => setMaps(n)}
+                  <button key={n} type="button" className="mono" aria-pressed={on}
+                    onClick={() => (mode === 'ovl' ? setOvlMaps(n) : setSndMaps(n))}
                     style={{
                       fontSize: 12, fontWeight: 600, borderRadius: 8, padding: '7px 13px', cursor: 'pointer', transition: 'all .12s',
                       background: on ? 'rgba(139,92,246,0.2)' : 'rgba(6,10,22,0.75)',
@@ -528,6 +565,69 @@ export default function ScrimBoardPage() {
           )}
           <span className="mono" style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--text-dim)' }}>{modeDurLabel}</span>
         </div>
+
+        {/* 複合モードの構成ビルダー */}
+        {mode === 'custom' && (
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', margin: '10px 0 6px', background: 'rgba(6,10,22,0.5)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 10, padding: '12px 16px' }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#c9b8ff' }}>構成:</span>
+
+            {/* ハーポ回し on/off */}
+            <button type="button" className="sb-hoverline" aria-pressed={combo.hp}
+              onClick={() => setCombo(prev => ({ ...prev, hp: !prev.hp }))}
+              style={{
+                fontSize: 12, fontWeight: 700, borderRadius: 8, padding: '7px 13px', cursor: 'pointer', transition: 'all .12s',
+                background: combo.hp ? 'rgba(0,229,255,0.14)' : 'rgba(6,10,22,0.75)',
+                color: combo.hp ? '#9df3ff' : 'var(--text-dim)',
+                border: `1px solid ${combo.hp ? 'rgba(0,229,255,0.5)' : LINE}`,
+              }}>
+              ハーポ回し (3枠)
+            </button>
+
+            {/* サーチ マップ数 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11.5, color: 'var(--text-soft)' }}>サーチ (20分/マップ)</span>
+              {[0, ...SND_MAP_OPTIONS].map(n => {
+                const on = combo.snd === n
+                return (
+                  <button key={`snd-${n}`} type="button" className="mono" aria-pressed={on}
+                    onClick={() => setCombo(prev => ({ ...prev, snd: n }))}
+                    style={{
+                      fontSize: 12, fontWeight: 600, borderRadius: 8, padding: '6px 11px', cursor: 'pointer', transition: 'all .12s',
+                      background: on ? 'rgba(0,229,255,0.14)' : 'rgba(6,10,22,0.75)',
+                      color: on ? '#9df3ff' : 'var(--text-dim)',
+                      border: `1px solid ${on ? 'rgba(0,229,255,0.5)' : LINE}`,
+                    }}>
+                    {n === 0 ? 'なし' : n}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* オバロ マップ数 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11.5, color: 'var(--text-soft)' }}>オバロ (15分/マップ)</span>
+              {[0, ...OVL_MAP_OPTIONS].map(n => {
+                const on = combo.ovl === n
+                return (
+                  <button key={`ovl-${n}`} type="button" className="mono" aria-pressed={on}
+                    onClick={() => setCombo(prev => ({ ...prev, ovl: n }))}
+                    style={{
+                      fontSize: 12, fontWeight: 600, borderRadius: 8, padding: '6px 11px', cursor: 'pointer', transition: 'all .12s',
+                      background: on ? 'rgba(0,229,255,0.14)' : 'rgba(6,10,22,0.75)',
+                      color: on ? '#9df3ff' : 'var(--text-dim)',
+                      border: `1px solid ${on ? 'rgba(0,229,255,0.5)' : LINE}`,
+                    }}>
+                    {n === 0 ? 'なし' : n}
+                  </button>
+                )
+              })}
+            </div>
+
+            <span className="mono" style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: need > 0 ? '#c9b8ff' : 'var(--danger)' }}>
+              {need > 0 ? `合計 ${need}枠 (${need * 30}分)` : 'モードを選んでください'}
+            </span>
+          </div>
+        )}
 
         {/* ボードグリッド */}
         <div style={{ overflowX: 'auto', padding: '28px 0 4px' }}>
@@ -551,7 +651,7 @@ export default function ScrimBoardPage() {
               const tierCl = TIER_COLORS[t.tier]
               let flag = '', flagCl = 'transparent', flagBd = 'transparent'
               if (t.tier === '未計測') { flag = '未計測'; flagCl = 'var(--text-dim)'; flagBd = LINE_STRONG }
-              else if (dimMode) { flag = `${modeName(mode, maps).split(' ')[0]} 不可`; flagCl = '#ff8fa5'; flagBd = 'rgba(255,77,109,0.4)' }
+              else if (dimMode) { flag = `${currentModeLabel().split(' ')[0]} 不可`; flagCl = '#ff8fa5'; flagBd = 'rgba(255,77,109,0.4)' }
               return (
                 <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '176px repeat(10, minmax(66px, 1fr))', gap: 5, alignItems: 'center', marginBottom: 5, opacity: dimNear || dimMode ? 0.3 : 1, transition: 'opacity .2s' }}>
                   <div style={{ position: 'sticky', left: 0, zIndex: 2, background: 'linear-gradient(90deg, #0a0e20 82%, transparent)', minWidth: 0, padding: '4px 10px 4px 12px', borderLeft: `2px solid ${isMe ? 'var(--amber)' : 'transparent'}`, borderRadius: 2 }}>
@@ -570,7 +670,7 @@ export default function ScrimBoardPage() {
                     const inRun = !!r
                     const hatch = inRun && mode !== 'all' && !canStart
                     const lit = !!hoverRun && !!r && hoverRun === `${t.id}-${r[0]}`
-                    const clickable = !isMe && !dimMode && inRun && mode !== 'all'
+                    const clickable = !isMe && !dimMode && inRun && mode !== 'all' && need > 0
                     let bg: string, border: string, numCl: string, text: string, numSize = 15
                     if (set) {
                       bg = 'rgba(255,176,32,0.15)'; border = '1px solid rgba(255,176,32,0.55)'
@@ -589,7 +689,7 @@ export default function ScrimBoardPage() {
                       if (canStart) { setModal({ teamId: t.id, day: viewDay, start: i, len: need }); return }
                       const snap = Math.min(r![1] - need + 1, 10 - need)
                       if (snap >= r![0]) setModal({ teamId: t.id, day: viewDay, start: snap, len: need })
-                      else showToast(`この空きには ${modeName(mode, maps)} が入りません`, `空きが ${r![1] - r![0] + 1}枠 (${(r![1] - r![0] + 1) * 30}分) しかありません`)
+                      else showToast(`この空きには ${currentModeLabel()} が入りません`, `空きが ${r![1] - r![0] + 1}枠 (${(r![1] - r![0] + 1) * 30}分) しかありません`)
                     } : undefined
                     return (
                       <div key={`${t.id}-${i}`}
@@ -647,7 +747,7 @@ export default function ScrimBoardPage() {
                   <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--amber-soft)', border: '1px solid rgba(255,176,32,0.4)', display: 'grid', placeItems: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, color: 'var(--amber)' }}>VS</div>
                   <div style={{ flex: 1, minWidth: 200 }}>
                     <div style={{ fontSize: 14.5, fontWeight: 700 }}>{t.name} <span className="mono" style={{ fontSize: 11, color: 'var(--text-dim)' }}>{t.tag}</span></div>
-                    <div className="mono" style={{ fontSize: 12, color: 'var(--amber)', letterSpacing: '0.04em' }}>{dayLabel(mt.day)} {slotLabel(mt.start)} – {slotLabel(mt.start + mt.len)} · {modeName(mt.mode, mt.maps)}</div>
+                    <div className="mono" style={{ fontSize: 12, color: 'var(--amber)', letterSpacing: '0.04em' }}>{dayLabel(mt.day)} {slotLabel(mt.start)} – {slotLabel(mt.start + mt.len)} · {mt.label}</div>
                   </div>
                   <span className="badge success"><span className="badge-dot" />Discord 通知済み</span>
                   <button type="button" className="btn-danger" onClick={() => setCancelId(mt.id)} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>キャンセル</button>
@@ -666,7 +766,7 @@ export default function ScrimBoardPage() {
           <div style={{ position: 'relative', width: '100%', maxWidth: 440, background: 'rgba(22,28,58,0.96)', border: `1px solid ${LINE_STRONG}`, borderRadius: 14, boxShadow: '0 24px 80px rgba(0,0,0,0.6)', animation: 'modal-card-in 180ms ease-out', overflow: 'hidden' }}>
             <div style={{ padding: '20px 22px 14px', borderBottom: `1px solid ${LINE}` }}>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>{modalTeam.name} <span className="mono" style={{ fontSize: 12, color: 'var(--text-dim)' }}>{modalTeam.tag}</span></div>
-              <div className="mono" style={{ fontSize: 13, color: 'var(--cyan)', letterSpacing: '0.04em', marginTop: 4 }}>{dayLabel(modal.day)} {slotLabel(modal.start)} – {slotLabel(modal.start + modal.len)} · {modeName(mode, maps)}</div>
+              <div className="mono" style={{ fontSize: 13, color: 'var(--cyan)', letterSpacing: '0.04em', marginTop: 4 }}>{dayLabel(modal.day)} {slotLabel(modal.start)} – {slotLabel(modal.start + modal.len)} · {currentModeLabel()}</div>
             </div>
             <div style={{ padding: '16px 22px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>出場可能帯</span><span style={{ fontWeight: 600, color: TIER_COLORS[modalTeam.tier] }}>{modalTeam.tier}</span></div>
