@@ -18,8 +18,8 @@ ASCENT に追加する、チームの空き時間入力と交流戦マッチン�
 > - **曜日テンプレのDB化+毎週自動反映**: `scrim_templates` + pg_cron 日次ジョブ (04:05 JST)。
 >   手動入力済みの日は上書きしない (`scrim_template_applied` マーカー)
 > - **リーダー代理入力**: `rpc_scrimboard_set_availability_for` (オーナーのみ)。STEP1 に入力対象セレクタ
-> - **Discord bot** (8章-2): Edge Function `discord-interactions` で `/空き 21-24` に対応。
->   セットアップは [discord-bot.md](discord-bot.md) 参照 (Discord アプリ作成はユーザー作業)
+> - **Discord bot (8章-2) は見送り**: サイトへの導線を優先する方針のため実装しない。
+>   入力コスト対策は曜日テンプレ自動反映+リーダー代理入力でカバーする
 > - **レート表示 (6章)**: `scrim_slot_counts` に avg/min/max を追加。チーム固定レートは使わず
 >   「その日空いているメンバー」基準のティア帯+幅を表示。受付範囲 (誰でも/同格±1) は表示のみで
 >   ハードフィルタにしない (spec どおり)
