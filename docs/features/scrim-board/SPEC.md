@@ -12,7 +12,18 @@ ASCENT に追加する、チームの空き時間入力と交流戦マッチン�
 >   `scrim_team_prefs`（日単位でなく**チーム単位**の受付宣言） / RPC 3本 + 通知関数
 > - 通知は Edge Function ではなく **pg_net** で DB から直接送信（Webhook URL は team_settings、メンバーのみ閲覧可）
 > - 未決事項の確定: 空き入力=メンバー全員 / 成立・キャンセル=メンバー全員可 / 別時間帯の複数成立=許可 /
->   斜線セルのスナップ=実装済み / 曜日テンプレ=端末ローカル(localStorage)で v1 実装
+>   斜線セルのスナップ=実装済み
+>
+> **✅ v1.1 実装済み (2026-08-06)**:
+> - **曜日テンプレのDB化+毎週自動反映**: `scrim_templates` + pg_cron 日次ジョブ (04:05 JST)。
+>   手動入力済みの日は上書きしない (`scrim_template_applied` マーカー)
+> - **リーダー代理入力**: `rpc_scrimboard_set_availability_for` (オーナーのみ)。STEP1 に入力対象セレクタ
+> - **Discord bot** (8章-2): Edge Function `discord-interactions` で `/空き 21-24` に対応。
+>   セットアップは [discord-bot.md](discord-bot.md) 参照 (Discord アプリ作成はユーザー作業)
+> - **レート表示 (6章)**: `scrim_slot_counts` に avg/min/max を追加。チーム固定レートは使わず
+>   「その日空いているメンバー」基準のティア帯+幅を表示。受付範囲 (誰でも/同格±1) は表示のみで
+>   ハードフィルタにしない (spec どおり)
+> - **所要時間のテーブル化 (5.2)**: `scrim_formats` (hp15/snd20/ovl15分)。SQL で変更すれば再デプロイ不要
 
 ---
 

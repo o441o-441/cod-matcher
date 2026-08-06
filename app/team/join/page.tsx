@@ -28,6 +28,8 @@ function TeamJoinInner() {
   const [myTeamId, setMyTeamId] = useState<string | null>(null)
 
   const [teamIdInput, setTeamIdInput] = useState('')
+  const [invites, setInvites] = useState<{ id: string; team_id: string; team_name: string; created_at: string }[]>([])
+  const [respondingId, setRespondingId] = useState<string | null>(null)
   const [previewTeam, setPreviewTeam] = useState<TeamRow | null>(null)
   const [previewMemberCount, setPreviewMemberCount] = useState<number | null>(null)
   const [searching, setSearching] = useState(false)
@@ -100,6 +102,23 @@ function TeamJoinInner() {
         .maybeSingle()
       const currentTeamId = membership?.team_id ?? null
       setMyTeamId(currentTeamId)
+
+      // 自分宛の保留中招待
+      if (!currentTeamId) {
+        const { data: invData } = await supabase
+          .from('team_invites')
+          .select('id, team_id, created_at')
+          .eq('invitee_user_id', session.user.id)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+        const rows = (invData ?? []) as { id: string; team_id: string; created_at: string }[]
+        if (rows.length > 0) {
+          const { data: teamRows } = await supabase.from('teams').select('id, name').in('id', rows.map(r => r.team_id))
+          const nameMap = new Map(((teamRows ?? []) as { id: string; name: string }[]).map(t => [t.id, t.name]))
+          setInvites(rows.map(r => ({ ...r, team_name: nameMap.get(r.team_id) ?? '(不明なチーム)' })))
+        }
+      }
+
       setLoading(false)
 
       // 招待リンク (?id=xxx) から来た場合は自動で検索
@@ -112,6 +131,21 @@ function TeamJoinInner() {
 
     init()
   }, [router, searchParams, searchTeam])
+
+  const handleRespondInvite = async (inviteId: string, accept: boolean) => {
+    setRespondingId(inviteId)
+    const { data, error } = await supabase.rpc('rpc_team_invite_respond', { p_invite_id: inviteId, p_accept: accept })
+    setRespondingId(null)
+    if (error) { showToast(error.message || '処理に失敗しました', 'error'); return }
+    if (accept) {
+      const teamId = (data as { team_id?: string } | null)?.team_id
+      showToast('チームに参加しました', 'success')
+      router.push(teamId ? `/team/${teamId}` : '/menu')
+    } else {
+      showToast('招待を辞退しました', 'success')
+      setInvites(prev => prev.filter(i => i.id !== inviteId))
+    }
+  }
 
   const handleJoinTeam = async () => {
     if (!myUserId || !previewTeam) {
@@ -186,6 +220,36 @@ function TeamJoinInner() {
         <em>Join</em> Team
       </h1>
       <p className="muted">招待リンクを開くか、チームIDを入力して参加します</p>
+
+      {invites.length > 0 && (
+        <div className="section" style={{ maxWidth: 760, margin: '0 auto' }}>
+          <div className="card-strong" style={{ borderLeft: '3px solid var(--cyan)' }}>
+            <div className="sec-title">届いている招待（{invites.length}）</div>
+            <div className="stack">
+              {invites.map(inv => (
+                <div key={inv.id} className="card">
+                  <div className="rowx">
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>{inv.team_name}</div>
+                      <div className="muted mono" style={{ fontSize: 11, marginTop: 2 }}>{new Date(inv.created_at).toLocaleString('ja-JP')}</div>
+                    </div>
+                    <div className="row" style={{ gap: 8 }}>
+                      <button className="btn-primary btn-sm" disabled={respondingId !== null}
+                        onClick={() => handleRespondInvite(inv.id, true)}>
+                        {respondingId === inv.id ? '処理中...' : '承認して参加'}
+                      </button>
+                      <button className="btn-ghost btn-sm" disabled={respondingId !== null}
+                        onClick={() => handleRespondInvite(inv.id, false)}>
+                        辞退
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="section" style={{ maxWidth: 760, margin: '0 auto' }}>
         <div className="card-strong">

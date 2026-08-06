@@ -17,7 +17,7 @@ import { supabase } from '@/lib/supabase'
 type Mode = 'hp' | 'snd' | 'ovl' | 'custom' | 'all'
 
 type TeamRow = { id: string; name: string; rating: number | null }
-type PrefsRow = { hp: boolean; snd: boolean; ovl: boolean }
+type PrefsRow = { hp: boolean; snd: boolean; ovl: boolean; range: 'any' | 'similar' }
 type MatchRow = {
   id: string
   date: string
@@ -50,11 +50,11 @@ function getTier(r: number | null): { label: string; idx: number; color: string 
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土']
 
-// マップ数 → 30分枠数への換算 (ハーポ 15分/マップ、サーチ 20分/マップ、オバロ 15分/マップ)
+// マップ数 → 30分枠数への換算。分/マップは scrim_formats テーブルから取得
 // ※ サーバー側 (rpc_scrimboard_confirm) にも同じ計算があり、そちらが正
-const hpSlots = (maps: number) => Math.ceil((15 * maps) / 30)
-const sndSlots = (maps: number) => Math.ceil((20 * maps) / 30)
-const ovlSlots = (maps: number) => Math.ceil((15 * maps) / 30)
+const mapsToSlots = (minutesPerMap: number, maps: number) => Math.ceil((minutesPerMap * maps) / 30)
+type FormatMinutes = { hp: number; snd: number; ovl: number }
+const DEFAULT_MINUTES: FormatMinutes = { hp: 15, snd: 20, ovl: 15 }
 const HP_MAP_OPTIONS = [1, 2, 3, 4, 5, 6]
 const SND_MAP_OPTIONS = [1, 2, 3, 4, 5, 6]
 const OVL_MAP_OPTIONS = [1, 2, 3, 4]
@@ -82,8 +82,6 @@ const LINE_STRONG = 'rgba(140,160,220,0.28)'
 const WEBHOOK_RE = /^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks\/\d+\/[\w-]+$/
 const isValidWebhook = (u: string) => WEBHOOK_RE.test(u.trim())
 const WH_LOCAL_KEY = 'scrim-board-webhook'
-const TPL_DAYS_KEY = 'sb-tpl-days'
-const TPL_SLOTS_KEY = 'sb-tpl-slots'
 
 // AppShell の .page-transition (animation fill: both) が transform を持ち続けるため、
 // ページ内の position:fixed はビューポート基準にならない。
@@ -98,11 +96,14 @@ export default function ScrimBoardPage() {
   const [loading, setLoading] = useState(true)
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [teamInfo, setTeamInfo] = useState<{ id: string; name: string; isOwner: boolean } | null>(null)
-  const [rosterNames, setRosterNames] = useState<string[]>([])
+  const [roster, setRoster] = useState<{ uid: string; name: string }[]>([]) // 自分以外のメンバー
+  const [targetUid, setTargetUid] = useState<string | null>(null) // 代理入力の対象 (null = 自分)
 
   // ボードデータ
   const [teams, setTeams] = useState<TeamRow[]>([])
   const [counts, setCounts] = useState<Record<string, number[]>>({}) // key: `${teamId}|${date}`
+  const [ratings, setRatings] = useState<Record<string, { avg: (number | null)[]; min: (number | null)[]; max: (number | null)[] }>>({})
+  const [formats, setFormats] = useState<FormatMinutes>(DEFAULT_MINUTES)
   const [prefsMap, setPrefsMap] = useState<Record<string, PrefsRow>>({})
   const [matches, setMatches] = useState<MatchRow[]>([])
   const [teamStats, setTeamStats] = useState<Record<string, { games: number; cancels: number }>>({})
@@ -163,24 +164,30 @@ export default function ScrimBoardPage() {
   const loadBoard = useCallback(async () => {
     const dates = weekDateStrs()
     const [{ data: countRows, error: cErr }, { data: prefRows }, { data: matchRows }, { data: allMatches }] = await Promise.all([
-      supabase.from('scrim_slot_counts').select('team_id, date, slot_index, available').in('date', dates),
-      supabase.from('scrim_team_prefs').select('team_id, accept_hp, accept_snd, accept_ovl'),
+      supabase.from('scrim_slot_counts').select('team_id, date, slot_index, available, avg_rating, min_rating, max_rating').in('date', dates),
+      supabase.from('scrim_team_prefs').select('team_id, accept_hp, accept_snd, accept_ovl, accept_range'),
       supabase.from('scrim_matches').select('*').in('date', dates).eq('status', 'confirmed'),
       supabase.from('scrim_matches').select('host_team_id, guest_team_id, status'),
     ])
     if (cErr) { console.error('scrim_slot_counts error:', cErr); return }
 
     const cm: Record<string, number[]> = {}
-    for (const r of (countRows ?? []) as { team_id: string; date: string; slot_index: number; available: number }[]) {
+    const rm: Record<string, { avg: (number | null)[]; min: (number | null)[]; max: (number | null)[] }> = {}
+    for (const r of (countRows ?? []) as { team_id: string; date: string; slot_index: number; available: number; avg_rating: number | null; min_rating: number | null; max_rating: number | null }[]) {
       const key = `${r.team_id}|${r.date}`
       if (!cm[key]) cm[key] = Array(10).fill(0)
       cm[key][r.slot_index] = r.available
+      if (!rm[key]) rm[key] = { avg: Array(10).fill(null), min: Array(10).fill(null), max: Array(10).fill(null) }
+      rm[key].avg[r.slot_index] = r.avg_rating
+      rm[key].min[r.slot_index] = r.min_rating
+      rm[key].max[r.slot_index] = r.max_rating
     }
     setCounts(cm)
+    setRatings(rm)
 
     const pm: Record<string, PrefsRow> = {}
-    for (const r of (prefRows ?? []) as { team_id: string; accept_hp: boolean; accept_snd: boolean; accept_ovl: boolean }[]) {
-      pm[r.team_id] = { hp: r.accept_hp, snd: r.accept_snd, ovl: r.accept_ovl }
+    for (const r of (prefRows ?? []) as { team_id: string; accept_hp: boolean; accept_snd: boolean; accept_ovl: boolean; accept_range: 'any' | 'similar' }[]) {
+      pm[r.team_id] = { hp: r.accept_hp, snd: r.accept_snd, ovl: r.accept_ovl, range: r.accept_range }
     }
     setPrefsMap(pm)
 
@@ -229,17 +236,31 @@ export default function ScrimBoardPage() {
     setMyMine(mm)
   }, [])
 
+  // 代理入力: 対象メンバー切替時にその人の空きを読み直す
+  useEffect(() => {
+    const uid = targetUid ?? myUserId
+    if (!uid) return
+    void loadMine(uid)
+  }, [targetUid, myUserId, loadMine])
+
+  // 自分のテンプレを読み込む
+  const loadTemplate = useCallback(async (uid: string) => {
+    const { data } = await supabase.from('scrim_templates').select('days, slots').eq('user_id', uid).maybeSingle()
+    const row = data as { days: boolean[]; slots: number[] } | null
+    if (row) { setTplDays(row.days); setTplSlots(row.slots) }
+  }, [])
+
   // 初期化
   useEffect(() => {
     const init = async () => {
       try {
-        // 曜日テンプレ (この端末に保存)
-        try {
-          const td = localStorage.getItem(TPL_DAYS_KEY)
-          const ts = localStorage.getItem(TPL_SLOTS_KEY)
-          if (td) setTplDays(JSON.parse(td))
-          if (ts) setTplSlots(JSON.parse(ts))
-        } catch { /* 破損時は無視 */ }
+        // モード所要時間 (scrim_formats)
+        const { data: fmtRows } = await supabase.from('scrim_formats').select('format, minutes_per_map')
+        if (fmtRows && fmtRows.length > 0) {
+          const f = { ...DEFAULT_MINUTES }
+          for (const r of fmtRows as { format: 'hp' | 'snd' | 'ovl'; minutes_per_map: number }[]) f[r.format] = r.minutes_per_map
+          setFormats(f)
+        }
 
         const { data: { session } } = await supabase.auth.getSession()
         const uid = session?.user?.id ?? null
@@ -260,14 +281,14 @@ export default function ScrimBoardPage() {
             }
             const names = ((members ?? []) as unknown as { user_id: string; profiles: { display_name: string | null } }[])
               .map(m => ({ uid: m.user_id, name: m.profiles?.display_name ?? '(名前未設定)' }))
-            setRosterNames(names.filter(n => n.uid !== uid).map(n => n.name))
+            setRoster(names.filter(n => n.uid !== uid))
             const savedWh = (st as { discord_webhook_url: string | null } | null)?.discord_webhook_url
             if (savedWh) { setWebhookUrl(savedWh); setWhTested(true) }
             else { try { const l = localStorage.getItem(WH_LOCAL_KEY); if (l) setWebhookUrl(l) } catch { /* noop */ } }
           } else {
             try { const l = localStorage.getItem(WH_LOCAL_KEY); if (l) setWebhookUrl(l) } catch { /* noop */ }
           }
-          await loadMine(uid)
+          await Promise.all([loadMine(uid), loadTemplate(uid)])
         }
 
         await loadBoard()
@@ -279,7 +300,7 @@ export default function ScrimBoardPage() {
       }
     }
     void init()
-  }, [loadBoard, loadMine])
+  }, [loadBoard, loadMine, loadTemplate])
 
   // Realtime: 成立の変化は全体購読、自チームの空きはチーム単位で購読
   useEffect(() => {
@@ -305,10 +326,10 @@ export default function ScrimBoardPage() {
 
   // ---- 導出値 ----
   const slotsNeeded = () => {
-    if (mode === 'hp') return 3 // ハーポ回し (6マップ×15分 = 90分)
-    if (mode === 'snd') return sndSlots(sndMaps)
-    if (mode === 'ovl') return ovlSlots(ovlMaps)
-    if (mode === 'custom') return hpSlots(combo.hp) + sndSlots(combo.snd) + ovlSlots(combo.ovl)
+    if (mode === 'hp') return mapsToSlots(formats.hp, 6) // ハーポ回し = 6マップ
+    if (mode === 'snd') return mapsToSlots(formats.snd, sndMaps)
+    if (mode === 'ovl') return mapsToSlots(formats.ovl, ovlMaps)
+    if (mode === 'custom') return mapsToSlots(formats.hp, combo.hp) + mapsToSlots(formats.snd, combo.snd) + mapsToSlots(formats.ovl, combo.ovl)
     return 0 // all
   }
   const comboLabel = () => {
@@ -352,7 +373,38 @@ export default function ScrimBoardPage() {
     }
     return out
   }
-  const prefsFor = (teamId: string): PrefsRow => prefsMap[teamId] ?? { hp: true, snd: true, ovl: true }
+  const prefsFor = (teamId: string): PrefsRow => prefsMap[teamId] ?? { hp: true, snd: true, ovl: true, range: 'any' }
+
+  // その日の「空いているメンバー」基準のレート集計 (spec 6章: チーム固定レートは持たない)
+  const dayRating = (teamId: string, day: number): { avg: number | null; min: number | null; max: number | null } => {
+    const key = `${teamId}|${weekDays[day]?.dateStr ?? ''}`
+    const r = ratings[key]
+    const c = counts[key]
+    if (!r || !c) return { avg: null, min: null, max: null }
+    const avgs: number[] = []
+    let mn: number | null = null
+    let mx: number | null = null
+    for (let i = 0; i < 10; i++) {
+      if (c[i] > 0 && r.avg[i] != null) avgs.push(r.avg[i]!)
+      if (c[i] > 0 && r.min[i] != null) mn = mn == null ? r.min[i]! : Math.min(mn, r.min[i]!)
+      if (c[i] > 0 && r.max[i] != null) mx = mx == null ? r.max[i]! : Math.max(mx, r.max[i]!)
+    }
+    return { avg: avgs.length ? Math.round(avgs.reduce((a, b) => a + b, 0) / avgs.length) : null, min: mn, max: mx }
+  }
+  const spanRating = (teamId: string, day: number, start: number, len: number): { avg: number | null; min: number | null; max: number | null } => {
+    const key = `${teamId}|${weekDays[day]?.dateStr ?? ''}`
+    const r = ratings[key]
+    if (!r) return { avg: null, min: null, max: null }
+    const avgs: number[] = []
+    let mn: number | null = null
+    let mx: number | null = null
+    for (let i = start; i < start + len; i++) {
+      if (r.avg[i] != null) avgs.push(r.avg[i]!)
+      if (r.min[i] != null) mn = mn == null ? r.min[i]! : Math.min(mn, r.min[i]!)
+      if (r.max[i] != null) mx = mx == null ? r.max[i]! : Math.max(mx, r.max[i]!)
+    }
+    return { avg: avgs.length ? Math.round(avgs.reduce((a, b) => a + b, 0) / avgs.length) : null, min: mn, max: mx }
+  }
   const acceptsMode = (teamId: string) => {
     if (mode === 'all') return true
     const p = prefsFor(teamId)
@@ -362,8 +414,24 @@ export default function ScrimBoardPage() {
     if (m.ovl > 0 && !p.ovl) return false
     return true
   }
-  const myTier = getTier(teams.find(t => t.id === teamInfo?.id)?.rating ?? null)
-  const inRange = (t: TeamRow) => Math.abs(getTier(t.rating).idx - myTier.idx) <= 1
+  // 自チーム・相手チームとも「その日の空きメンバー」基準のティアで比較
+  const myDayTier = teamInfo ? getTier(dayRating(teamInfo.id, viewDay).avg) : getTier(null)
+  const tierGapTo = (teamId: string) => {
+    const other = getTier(dayRating(teamId, viewDay).avg)
+    if (other.idx === 0 || myDayTier.idx === 0) return null // 未計測扱い
+    return Math.abs(other.idx - myDayTier.idx)
+  }
+  const inRange = (teamId: string) => {
+    const g = tierGapTo(teamId)
+    return g == null || g <= 1
+  }
+  // 相手が「同格±1」受付で、自チームが範囲外か (表示のみ。ハードフィルタにはしない)
+  const outOfHostRange = (teamId: string) => {
+    if (!teamInfo) return false
+    if (prefsFor(teamId).range !== 'similar') return false
+    const g = tierGapTo(teamId)
+    return g != null && g > 1
+  }
 
   // 表示行: 自チームを先頭に、その日に空きか成立のあるチーム
   const visibleTeams = (() => {
@@ -402,16 +470,19 @@ export default function ScrimBoardPage() {
   // ---- 空き入力 (楽観更新 + debounce 保存) ----
   const saveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const persistDay = useCallback((dateStr: string, slots: number[]) => {
+    const target = targetUid // 保存時点の対象 (null = 自分)
     if (saveTimersRef.current[dateStr]) clearTimeout(saveTimersRef.current[dateStr])
     saveTimersRef.current[dateStr] = setTimeout(async () => {
-      const { error } = await supabase.rpc('rpc_scrimboard_set_availability', { p_date: dateStr, p_slots: slots })
+      const { error } = target
+        ? await supabase.rpc('rpc_scrimboard_set_availability_for', { p_target_user_id: target, p_date: dateStr, p_slots: slots })
+        : await supabase.rpc('rpc_scrimboard_set_availability', { p_date: dateStr, p_slots: slots })
       if (error) {
         showToast('空き時間の保存に失敗しました', error.message)
-        if (myUserId) void loadMine(myUserId)
+        void loadMine(target ?? myUserId ?? '')
         void loadBoard()
       }
     }, 600)
-  }, [myUserId, loadMine, loadBoard])
+  }, [targetUid, myUserId, loadMine, loadBoard])
 
   const toggleSlot = (day: number, slot: number) => {
     if (!teamInfo) { showToast('チームに所属すると空き時間を登録できます', 'メニューの「チーム」から作成・参加できます'); return }
@@ -432,23 +503,25 @@ export default function ScrimBoardPage() {
   }
 
   // ---- 受付モード ----
-  const myPrefs = teamInfo ? prefsFor(teamInfo.id) : { hp: true, snd: true, ovl: true }
-  const togglePref = async (k: keyof PrefsRow) => {
+  const myPrefs: PrefsRow = teamInfo ? prefsFor(teamInfo.id) : { hp: true, snd: true, ovl: true, range: 'any' }
+  const savePrefs = async (next: PrefsRow) => {
     if (!teamInfo) return
-    const next = { ...myPrefs, [k]: !myPrefs[k] }
     setPrefsMap(prev => ({ ...prev, [teamInfo.id]: next }))
     const { error } = await supabase.from('scrim_team_prefs').upsert({
       team_id: teamInfo.id,
       accept_hp: next.hp,
       accept_snd: next.snd,
       accept_ovl: next.ovl,
+      accept_range: next.range,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'team_id' })
     if (error) {
-      showToast('受付モードの保存に失敗しました', error.message)
+      showToast('受付設定の保存に失敗しました', error.message)
       void loadBoard()
     }
   }
+  const togglePref = (k: 'hp' | 'snd' | 'ovl') => savePrefs({ ...myPrefs, [k]: !myPrefs[k] })
+  const setRange = (r: 'any' | 'similar') => savePrefs({ ...myPrefs, range: r })
 
   // ---- 成立 / キャンセル ----
   const confirmMatch = async () => {
@@ -489,40 +562,33 @@ export default function ScrimBoardPage() {
     void loadBoard()
   }
 
-  // ---- 曜日テンプレ (この端末に保存) ----
+  // ---- 曜日テンプレ (DB保存・毎晩自動反映) ----
   const tplHas = !!tplSlots
   const tplDayNames = DOW.filter((_, i) => tplDays[i]).join('・')
-  const tplStatus = !tplHas ? '未設定' : `保存済み (${tplSlots!.length}枠) — ${tplDayNames || '曜日未選択'}`
-  const saveTplState = (days: boolean[], slots: number[] | null) => {
-    try {
-      localStorage.setItem(TPL_DAYS_KEY, JSON.stringify(days))
-      if (slots) localStorage.setItem(TPL_SLOTS_KEY, JSON.stringify(slots))
-      else localStorage.removeItem(TPL_SLOTS_KEY)
-    } catch { /* noop */ }
-  }
-  const tplSave = () => {
+  const tplStatus = !tplHas ? '未設定' : `毎週 ${tplDayNames || '(曜日未選択)'} に自動反映 (${tplSlots!.length}枠)`
+  const tplSave = async () => {
+    if (targetUid) { showToast('テンプレは自分の空きのみ保存できます', '入力対象を「自分」に戻してください'); return }
     const dateStr = weekDays[editDay]?.dateStr
     const slots = dateStr ? (myMine[dateStr] ?? []) : []
     if (slots.length === 0) { showToast('空き時間が選ばれていません', '先に上のチップで時間を選んでから保存してください'); return }
+    if (!tplDays.some(Boolean)) { showToast('曜日が選ばれていません', '反映したい曜日チップを選んでから保存してください'); return }
+    const { data, error } = await supabase.rpc('rpc_scrimboard_save_template', { p_days: tplDays, p_slots: slots })
+    if (error) { showToast('テンプレの保存に失敗しました', error.message); return }
     setTplSlots(slots)
-    saveTplState(tplDays, slots)
-    showToast('曜日テンプレを保存しました', `${slots.length}枠 — 曜日を選んで「対象曜日に反映」を押してください`)
-  }
-  const tplApply = () => {
-    if (!tplSlots || !teamInfo) return
-    const targets = weekDays.map((wd, i) => (tplDays[wd.dow] ? i : -1)).filter(i => i >= 0)
-    if (targets.length === 0) { showToast('対象の曜日が選ばれていません', '先に曜日チップで反映したい曜日を選んでください'); return }
-    for (const d of targets) {
-      const dateStr = weekDays[d].dateStr
-      setMyMine(prev => ({ ...prev, [dateStr]: tplSlots.slice() }))
-      persistDay(dateStr, tplSlots.slice())
-    }
-    showToast('テンプレを反映しました', `${targets.map(d => dayLabel(d)).join('・')} に ${tplSlots.length}枠を入力しました`)
+    const applied = (data as { applied_days?: number } | null)?.applied_days ?? 0
+    showToast('曜日テンプレを保存しました', `毎週 ${tplDayNames} に自動反映します${applied ? `（未入力だった${applied}日分に今すぐ反映済み）` : ''}`)
+    if (myUserId) void loadMine(myUserId)
+    void loadBoard()
   }
   const tplToggleDay = (i: number) => {
-    setTplDays(prev => { const d = prev.slice(); d[i] = !d[i]; saveTplState(d, tplSlots); return d })
+    setTplDays(prev => { const d = prev.slice(); d[i] = !d[i]; return d })
   }
-  const tplClear = () => { setTplSlots(null); saveTplState(tplDays, null); showToast('曜日テンプレを削除しました', '') }
+  const tplClear = async () => {
+    const { error } = await supabase.rpc('rpc_scrimboard_save_template', { p_days: tplDays, p_slots: [] })
+    if (error) { showToast('テンプレの削除に失敗しました', error.message); return }
+    setTplSlots(null)
+    showToast('曜日テンプレを削除しました', '自動反映を停止しました')
+  }
 
   // ---- Webhook 設定 ----
   const testWebhook = async () => {
@@ -564,8 +630,9 @@ export default function ScrimBoardPage() {
   // ---- モーダル用導出値 ----
   const modalTeam = modal ? teams.find(x => x.id === modal.teamId) ?? null : null
   const modalPool = modal && modalTeam ? Math.min(...countsFor(modalTeam.id, modal.day).slice(modal.start, modal.start + modal.len)) : 0
+  const modalSpanRating = modal && modalTeam ? spanRating(modalTeam.id, modal.day, modal.start, modal.len) : { avg: null, min: null, max: null }
   const modalStats = modalTeam ? teamStats[modalTeam.id] ?? { games: 0, cancels: 0 } : { games: 0, cancels: 0 }
-  const modalPrefs = modalTeam ? prefsFor(modalTeam.id) : { hp: true, snd: true, ovl: true }
+  const modalPrefs: PrefsRow = modalTeam ? prefsFor(modalTeam.id) : { hp: true, snd: true, ovl: true, range: 'any' }
 
   const cancelMatch = cancelId !== null ? matches.find(x => x.id === cancelId) ?? null : null
   const cancelOppName = cancelMatch
@@ -659,6 +726,40 @@ export default function ScrimBoardPage() {
             </div>
           </div>
 
+          {/* 代理入力: オーナーはメンバーの空きを入力できる */}
+          {teamInfo.isOwner && roster.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+              <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>入力対象:</span>
+              <button type="button" className="sb-hoverline" aria-pressed={targetUid === null}
+                onClick={() => setTargetUid(null)}
+                style={{
+                  fontSize: 11.5, fontWeight: 700, borderRadius: 999, padding: '5px 12px', cursor: 'pointer', transition: 'all .12s',
+                  background: targetUid === null ? 'rgba(255,176,32,0.15)' : 'rgba(6,10,22,0.6)',
+                  color: targetUid === null ? 'var(--amber)' : 'var(--text-dim)',
+                  border: `1px solid ${targetUid === null ? 'rgba(255,176,32,0.4)' : LINE}`,
+                }}>
+                自分
+              </button>
+              {roster.map(m => (
+                <button key={m.uid} type="button" className="sb-hoverline" aria-pressed={targetUid === m.uid}
+                  onClick={() => setTargetUid(m.uid)}
+                  style={{
+                    fontSize: 11.5, fontWeight: 600, borderRadius: 999, padding: '5px 12px', cursor: 'pointer', transition: 'all .12s',
+                    background: targetUid === m.uid ? 'rgba(0,229,255,0.14)' : 'rgba(6,10,22,0.6)',
+                    color: targetUid === m.uid ? '#9df3ff' : 'var(--text-dim)',
+                    border: `1px solid ${targetUid === m.uid ? 'rgba(0,229,255,0.5)' : LINE}`,
+                  }}>
+                  {m.name}
+                </button>
+              ))}
+              {targetUid && (
+                <span style={{ fontSize: 11, color: 'var(--amber)' }}>
+                  {roster.find(m => m.uid === targetUid)?.name} さんの空きを代理入力中
+                </span>
+              )}
+            </div>
+          )}
+
           <div style={{ marginBottom: 12 }}>
             {renderDayTabs(editDay, setEditDay, editDots)}
           </div>
@@ -693,7 +794,7 @@ export default function ScrimBoardPage() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M17 2v4M7 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><path d="M12 13v4M10 15h4" stroke="var(--cyan)" strokeWidth="1.6" strokeLinecap="round" /></svg>
                 曜日テンプレ
               </div>
-              <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>表示中の日の空き時間を保存し、選んだ曜日へ一括反映できます</span>
+              <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>曜日を選んで保存すると、毎晩その曜日へ自動で反映されます（手動入力済みの日は上書きしません）</span>
               <span className="mono" style={{ marginLeft: 'auto', fontSize: 11, color: tplHas ? '#9df3ff' : 'var(--text-dim)' }}>{tplStatus}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
@@ -714,15 +815,12 @@ export default function ScrimBoardPage() {
                   )
                 })}
               </div>
-              <button type="button" onClick={tplSave} style={{ fontSize: 12, fontWeight: 700, padding: '8px 14px' }}>{dayLabel(editDay)}の選択をテンプレに保存</button>
+              <button type="button" onClick={() => void tplSave()} style={{ fontSize: 12, fontWeight: 700, padding: '8px 14px' }}>{dayLabel(editDay)}の選択で自動反映を設定</button>
               {tplHas && (
-                <>
-                  <button type="button" className="btn-ghost" onClick={tplApply} style={{ fontSize: 12, fontWeight: 600, padding: '8px 14px' }}>テンプレを対象曜日に反映</button>
-                  <button type="button" className="sb-link" onClick={tplClear}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', fontSize: 11.5, padding: '8px 6px', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}>
-                    削除
-                  </button>
-                </>
+                <button type="button" className="sb-link" onClick={() => void tplClear()}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', fontSize: 11.5, padding: '8px 6px', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}>
+                  自動反映を停止
+                </button>
               )}
             </div>
           </div>
@@ -732,13 +830,30 @@ export default function ScrimBoardPage() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <span className="stat-label">{teamInfo.name}</span>
               <span className="mono" style={{ fontSize: 11, color: 'var(--amber)', background: 'var(--amber-soft)', border: '1px solid rgba(255,176,32,0.3)', borderRadius: 6, padding: '3px 9px' }}>あなた</span>
-              {rosterNames.map(n => (
-                <span key={n} className="mono" style={{ fontSize: 11, color: 'var(--text-soft)', background: 'rgba(6,10,22,0.75)', border: `1px solid ${LINE}`, borderRadius: 6, padding: '3px 9px' }}>{n}</span>
+              {roster.map(m => (
+                <span key={m.uid} className="mono" style={{ fontSize: 11, color: 'var(--text-soft)', background: 'rgba(6,10,22,0.75)', border: `1px solid ${LINE}`, borderRadius: 6, padding: '3px 9px' }}>{m.name}</span>
               ))}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>受付範囲:</span>
+              {([['any', '誰でも歓迎'], ['similar', '同格 ±1帯']] as ['any' | 'similar', string][]).map(([k, label]) => {
+                const on = myPrefs.range === k
+                return (
+                  <button key={k} type="button" aria-pressed={on}
+                    onClick={() => void setRange(k)}
+                    style={{
+                      fontSize: 11.5, fontWeight: 600, borderRadius: 999, padding: '5px 12px', cursor: 'pointer', transition: 'all .12s',
+                      background: on ? 'rgba(139,92,246,0.18)' : 'rgba(6,10,22,0.6)',
+                      color: on ? '#c9b8ff' : 'var(--text-dim)',
+                      border: `1px solid ${on ? 'rgba(139,92,246,0.5)' : LINE}`,
+                    }}>
+                    {label}
+                  </button>
+                )
+              })}
+              <span style={{ width: 1, height: 18, background: LINE_STRONG }} />
               <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>受けられるモード:</span>
-              {([['hp', 'ハーポ'], ['snd', 'サーチ'], ['ovl', 'オバロ']] as [keyof PrefsRow, string][]).map(([k, label]) => {
+              {([['hp', 'ハーポ'], ['snd', 'サーチ'], ['ovl', 'オバロ']] as ['hp' | 'snd' | 'ovl', string][]).map(([k, label]) => {
                 const on = myPrefs[k]
                 return (
                   <button key={k} type="button" aria-pressed={on}
@@ -817,7 +932,7 @@ export default function ScrimBoardPage() {
           {showMaps && (
             <>
               <span style={{ width: 1, height: 22, background: LINE_STRONG, margin: '0 4px' }} />
-              <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>マップ数 ({mode === 'ovl' ? '15' : '20'}分/マップ)</span>
+              <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>マップ数 ({mode === 'ovl' ? formats.ovl : formats.snd}分/マップ)</span>
               {(mode === 'ovl' ? OVL_MAP_OPTIONS : SND_MAP_OPTIONS).map(n => {
                 const on = (mode === 'ovl' ? ovlMaps : sndMaps) === n
                 return (
@@ -843,9 +958,9 @@ export default function ScrimBoardPage() {
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', margin: '10px 0 6px', background: 'rgba(6,10,22,0.5)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 10, padding: '12px 16px' }}>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: '#c9b8ff' }}>構成:</span>
             {([
-              ['hp', 'ハーポ (15分/マップ)', HP_MAP_OPTIONS],
-              ['snd', 'サーチ (20分/マップ)', SND_MAP_OPTIONS],
-              ['ovl', 'オバロ (15分/マップ)', OVL_MAP_OPTIONS],
+              ['hp', `ハーポ (${formats.hp}分/マップ)`, HP_MAP_OPTIONS],
+              ['snd', `サーチ (${formats.snd}分/マップ)`, SND_MAP_OPTIONS],
+              ['ovl', `オバロ (${formats.ovl}分/マップ)`, OVL_MAP_OPTIONS],
             ] as ['hp' | 'snd' | 'ovl', string, number[]][]).map(([key, label, options]) => (
               <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 11.5, color: 'var(--text-soft)' }}>{label}</span>
@@ -895,11 +1010,13 @@ export default function ScrimBoardPage() {
                 const runList = runs(t.id, viewDay)
                 const runAt = (i: number) => runList.find(r => i >= r[0] && i <= r[1])
                 const isMe = t.id === teamInfo?.id
-                const tier = getTier(t.rating)
-                const dimNear = near && !isMe && !inRange(t)
+                const tier = getTier(dayRating(t.id, viewDay).avg)
+                const dimNear = near && !isMe && !inRange(t.id)
                 const dimMode = !isMe && !acceptsMode(t.id) && mode !== 'all'
+                const hostRangeOut = !isMe && outOfHostRange(t.id)
                 let flag = '', flagCl = 'transparent', flagBd = 'transparent'
                 if (dimMode) { flag = `${currentModeLabel().split(' ')[0]} 不可`; flagCl = '#ff8fa5'; flagBd = 'rgba(255,77,109,0.4)' }
+                else if (hostRangeOut) { flag = '帯範囲外'; flagCl = '#ffb020'; flagBd = 'rgba(255,176,32,0.4)' }
                 return (
                   <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '176px repeat(10, minmax(66px, 1fr))', gap: 5, alignItems: 'center', marginBottom: 5, opacity: dimNear || dimMode ? 0.3 : 1, transition: 'opacity .2s' }}>
                     <div style={{ position: 'sticky', left: 0, zIndex: 2, background: 'linear-gradient(90deg, #0a0e20 82%, transparent)', minWidth: 0, padding: '4px 10px 4px 12px', borderLeft: `2px solid ${isMe ? 'var(--amber)' : 'transparent'}`, borderRadius: 2 }}>
@@ -1030,13 +1147,24 @@ export default function ScrimBoardPage() {
               <div className="mono" style={{ fontSize: 13, color: 'var(--cyan)', letterSpacing: '0.04em', marginTop: 4 }}>{dayLabel(modal.day)} {slotLabel(modal.start)} – {slotLabel(modal.start + modal.len)} · {currentModeLabel()}</div>
             </div>
             <div style={{ padding: '16px 22px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>ティア</span><span style={{ fontWeight: 600, color: getTier(modalTeam.rating).color }}>{getTier(modalTeam.rating).label}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>出場帯 (この時間の平均)</span><span style={{ fontWeight: 600, color: getTier(modalSpanRating.avg).color }}>{getTier(modalSpanRating.avg).label}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>帯の幅</span><span>{modalSpanRating.min != null && modalSpanRating.max != null ? `${getTier(modalSpanRating.min).label} 〜 ${getTier(modalSpanRating.max).label}` : '—'}</span></div>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>この時間の人数</span><span className="mono">{modalPool} 人</span></div>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>交流戦実績</span><span>{modalStats.games ? `${modalStats.games} 戦 / キャンセル ${modalStats.cancels}` : 'なし (新規チーム)'}</span></div>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}>
                 <span style={{ color: 'var(--text-soft)' }}>受付モード</span>
-                <span>{([['hp', 'ハーポ'], ['snd', 'サーチ'], ['ovl', 'オバロ']] as [keyof PrefsRow, string][]).filter(([k]) => modalPrefs[k]).map(([, l]) => l).join('・') || 'なし'}</span>
+                <span>{([['hp', 'ハーポ'], ['snd', 'サーチ'], ['ovl', 'オバロ']] as ['hp' | 'snd' | 'ovl', string][]).filter(([k]) => modalPrefs[k]).map(([, l]) => l).join('・') || 'なし'}</span>
               </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}>
+                <span style={{ color: 'var(--text-soft)' }}>受付範囲</span>
+                <span>{modalPrefs.range === 'similar' ? '同格 ±1帯' : '誰でも歓迎'}</span>
+              </div>
+              {modal && outOfHostRange(modal.teamId) && (
+                <div style={{ display: 'flex', gap: 9, background: 'rgba(255,176,32,0.12)', border: '1px solid rgba(255,176,32,0.4)', borderRadius: 8, padding: '10px 12px', marginTop: 12, fontSize: 12, color: '#ffe2ae', lineHeight: 1.6 }}>
+                  <span>▲</span>
+                  <span>相手の受付範囲 (同格±1帯) の外です。成立は可能ですが、相手の想定と異なる可能性があります。</span>
+                </div>
+              )}
               <p style={{ margin: '14px 0 0', fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.6 }}>成立と同時に両チームの Discord へ通知が送られます。この対戦は unrated — レートは変動しません。</p>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 22px', borderTop: `1px solid ${LINE}`, background: 'rgba(0,0,0,0.18)' }}>

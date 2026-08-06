@@ -71,6 +71,7 @@ export default function TeamDetailPage() {
 
   const [searchName, setSearchName] = useState('')
   const [searchResults, setSearchResults] = useState<UserRow[]>([])
+  const [pendingInvites, setPendingInvites] = useState<{ id: string; invitee_user_id: string; invitee_name: string | null; created_at: string }[]>([])
   const [searchDone, setSearchDone] = useState(false)
   const [searchLoading, setSearchLoading] = useState(false)
   const [addLoadingId, setAddLoadingId] = useState<string | null>(null)
@@ -163,6 +164,25 @@ export default function TeamDetailPage() {
 
     setMembers(normalizedMembers)
 
+    // 保留中の招待 (チームメンバーが閲覧可)
+    const { data: invData } = await supabase
+      .from('team_invites')
+      .select('id, invitee_user_id, created_at')
+      .eq('team_id', teamId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+    const invRows = (invData ?? []) as { id: string; invitee_user_id: string; created_at: string }[]
+    if (invRows.length > 0) {
+      const { data: invProfiles } = await supabase
+        .from('profiles')
+        .select('id, display_name')
+        .in('id', invRows.map(r => r.invitee_user_id))
+      const nameMap = new Map(((invProfiles ?? []) as { id: string; display_name: string | null }[]).map(p => [p.id, p.display_name]))
+      setPendingInvites(invRows.map(r => ({ ...r, invitee_name: nameMap.get(r.invitee_user_id) ?? null })))
+    } else {
+      setPendingInvites([])
+    }
+
     // Get matches via match_teams
     const { data: myMatchTeams } = await supabase
       .from('match_teams')
@@ -253,38 +273,39 @@ export default function TeamDetailPage() {
     setSearchLoading(false)
   }
 
-  const handleAddMember = async (user: UserRow) => {
+  // 直接追加ではなく招待を送り、相手の承認を待つ
+  const handleInviteMember = async (user: UserRow) => {
     if (!canManageTeam) {
       showToast('このチームを管理する権限がありません', 'error')
       return
     }
 
-    if (!myUserId) {
-      showToast('必要な情報が足りません', 'error')
-      return
-    }
-
     setAddLoadingId(user.id)
 
-    const { error } = await supabase.rpc('add_team_member_atomic', {
-      p_team_id: teamId,
+    const { error } = await supabase.rpc('rpc_team_invite', {
       p_target_user_id: user.id,
-      p_actor_user_id: myUserId,
     })
 
     if (error) {
-      console.error('add_team_member_atomic error:', error)
-      showToast(error.message || 'メンバー追加に失敗しました', 'error')
+      console.error('rpc_team_invite error:', error)
+      showToast(error.message || '招待の送信に失敗しました', 'error')
       setAddLoadingId(null)
       return
     }
 
-    showToast(`${user.display_name ?? 'メンバー'} を追加しました`, 'success')
+    showToast(`${user.display_name ?? 'ユーザー'} に招待を送信しました`, 'success')
     setSearchResults([])
     setSearchDone(false)
     setSearchName('')
     await fetchTeam()
     setAddLoadingId(null)
+  }
+
+  const handleCancelInvite = async (inviteId: string) => {
+    const { error } = await supabase.rpc('rpc_team_invite_cancel', { p_invite_id: inviteId })
+    if (error) { showToast(error.message || '取り消しに失敗しました', 'error'); return }
+    showToast('招待を取り消しました', 'success')
+    await fetchTeam()
   }
 
   const handleRemoveMember = async (member: TeamMemberRow) => {
@@ -624,16 +645,16 @@ export default function TeamDetailPage() {
         {canManageTeam && (
           <div className="section">
             <div className="card-strong">
-              <div className="sec-title">メンバー追加</div>
+              <div className="sec-title">メンバー招待</div>
 
               {members.length >= MAX_MEMBERS ? (
                 <p className="muted" style={{ margin: 0 }}>
-                  チームは最大{MAX_MEMBERS}人までです。追加するには先にメンバーを削除してください。
+                  チームは最大{MAX_MEMBERS}人までです。招待するには先にメンバーを削除してください。
                 </p>
               ) : (
                 <>
                   <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
-                    上の「招待リンクをコピー」を相手に送るのが確実です。表示名で検索して直接追加することもできます（部分一致）。
+                    表示名で検索して招待を送ると、相手が承認した時点でメンバーに加わります。「招待リンクをコピー」を直接送る方法も使えます。
                   </p>
 
                   <form className="row" onSubmit={handleSearchUser}>
@@ -667,10 +688,10 @@ export default function TeamDetailPage() {
                             </div>
                             <button
                               className="btn-primary btn-sm"
-                              onClick={() => handleAddMember(user)}
+                              onClick={() => handleInviteMember(user)}
                               disabled={addLoadingId !== null}
                             >
-                              {addLoadingId === user.id ? '追加中...' : '追加'}
+                              {addLoadingId === user.id ? '送信中...' : '招待を送る'}
                             </button>
                           </div>
                         </div>
@@ -678,6 +699,23 @@ export default function TeamDetailPage() {
                     </div>
                   )}
                 </>
+              )}
+
+              {pendingInvites.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <div className="stat-label" style={{ marginBottom: 8 }}>承認待ちの招待（{pendingInvites.length}）</div>
+                  <div className="stack-sm">
+                    {pendingInvites.map((inv) => (
+                      <div key={inv.id} className="rowx" style={{ fontSize: 13 }}>
+                        <span style={{ fontWeight: 600 }}>{inv.invitee_name ?? '(名前未設定)'}</span>
+                        <div className="row" style={{ gap: 8 }}>
+                          <span className="badge amber" style={{ fontSize: 9 }}>承認待ち</span>
+                          <button className="btn-ghost btn-sm" onClick={() => handleCancelInvite(inv.id)}>取り消す</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           </div>
