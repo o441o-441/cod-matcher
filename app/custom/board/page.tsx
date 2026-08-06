@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation'
 // ============================================================
 // 交流戦ボード (Scrim Board) — チームの空き時間を出し合い、
 // 相手チームの空き枠を選んでその場で対戦を確定するボード。
+// STEP1 で1週間分の自分の空きを入力し、STEP2 で日付を
+// 切り替えて相手チームの空き枠を見る。
 // 現在はプレビュー版: 相手チーム・ロスターはデモデータ。
 // ============================================================
 
@@ -27,8 +29,9 @@ type DemoTeam = {
   av: number[] | null
 }
 
-type BoardMatch = { id: number; teamId: string; start: number; len: number; mode: Mode; maps: number }
+type BoardMatch = { id: number; teamId: string; day: number; start: number; len: number; mode: Mode; maps: number }
 
+const DAYS = 7
 const SLOTS = ['20:00', '20:30', '21:00', '21:30', '22:00', '22:30', '23:00', '23:30', '24:00', '24:30']
 const slotLabel = (i: number) => `${20 + Math.floor(i / 2)}:${i % 2 ? '30' : '00'}`
 
@@ -64,6 +67,34 @@ function modeName(m: Mode, maps: number) {
   return m === 'hp' ? 'ハーポ回し' : m === 'snd' ? `サーチ ${maps}マップ` : m === 'ovl' ? `オバロ ${maps}マップ` : 'すべて'
 }
 
+// デモデータ用の決定的な擬似シード (Math.random は使わない)
+function seed(s: string, d: number) {
+  let h = 0
+  for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 997
+  return (h + d * 131) % 997
+}
+
+// 相手チームの「その日の空き」: 今日は基準パターン、他の日は決定的に変化させる
+function teamAvOn(t: DemoTeam, day: number): number[] {
+  const base = t.av!
+  if (day === 0) return base
+  const v = seed(t.id, day) % 5
+  if (v <= 1) return base
+  if (v === 2) return [0, ...base.slice(0, 9)] // 1枠後ろへ
+  if (v === 3) return [...base.slice(1), 0]   // 1枠前へ
+  return base.map(() => 0)                     // その日は活動なし
+}
+
+// 自チームメンバーの「その日の空き」
+function memberAvOn(m: { n: string; s: number[] }, day: number): number[] {
+  if (day === 0) return m.s
+  const v = seed(m.n, day) % 5
+  if (v <= 1) return m.s
+  if (v === 2) { const idx = m.s.findIndex(Boolean); const c = m.s.slice(); if (idx >= 0) c[idx] = 0; return c }
+  if (v === 3) { const idx = m.s.lastIndexOf(1); const c = m.s.slice(); if (idx >= 0) c[idx] = 0; return c }
+  return m.s.map(() => 0) // その日は不在
+}
+
 const LINE = 'rgba(140,160,220,0.12)'
 const LINE_STRONG = 'rgba(140,160,220,0.28)'
 
@@ -77,14 +108,20 @@ function BodyPortal({ children }: { children: React.ReactNode }) {
 export default function ScrimBoardPage() {
   const router = useRouter()
 
-  const [mine, setMine] = useState<number[]>([0, 0, 1, 1, 1, 1, 1, 0, 1, 1])
+  // 7日分 × 10枠。day 0 = 今日
+  const [mine, setMine] = useState<number[][]>(() => [
+    [0, 0, 1, 1, 1, 1, 1, 0, 1, 1],
+    ...Array.from({ length: DAYS - 1 }, () => Array(10).fill(0) as number[]),
+  ])
+  const [editDay, setEditDay] = useState(0) // STEP1 で編集中の日
+  const [viewDay, setViewDay] = useState(0) // STEP2 で表示中の日
   const [mode, setMode] = useState<Mode>('hp')
   const [maps, setMaps] = useState(3)
   const [near, setNear] = useState(false)
   const [prefs, setPrefs] = useState<Record<Pref, boolean>>({ hp: true, snd: true, ovl: true })
   const [hoverRun, setHoverRun] = useState<string | null>(null)
   const [matches, setMatches] = useState<BoardMatch[]>([])
-  const [modal, setModal] = useState<{ teamId: string; start: number; len: number } | null>(null)
+  const [modal, setModal] = useState<{ teamId: string; day: number; start: number; len: number } | null>(null)
   const [cancelId, setCancelId] = useState<number | null>(null)
   const [tplDays, setTplDays] = useState<boolean[]>([false, false, true, false, true, false, false])
   const [tplSlots, setTplSlots] = useState<number[] | null>(null)
@@ -93,16 +130,21 @@ export default function ScrimBoardPage() {
   const [whTested, setWhTested] = useState(false)
   const [toast, setToast] = useState<{ title: string; sub: string } | null>(null)
 
-  // 現在時刻 (SSR とのハイドレーション不一致を避けるためマウント後に設定)
+  // 現在時刻・週の日付 (SSR とのハイドレーション不一致を避けるためマウント後に設定)
   const [nowMins, setNowMins] = useState<number | null>(null)
   const [todayDow, setTodayDow] = useState(3)
   const [dateLabel, setDateLabel] = useState('')
+  const [weekDays, setWeekDays] = useState<{ label: string; dow: number }[]>([])
   useEffect(() => {
     const tick = () => {
       const d = new Date()
       setNowMins(d.getHours() * 60 + d.getMinutes())
       setTodayDow(d.getDay())
       setDateLabel(`${d.getMonth() + 1}月${d.getDate()}日 (${DOW[d.getDay()]})`)
+      setWeekDays(Array.from({ length: DAYS }, (_, i) => {
+        const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate() + i)
+        return { label: `${dd.getMonth() + 1}/${dd.getDate()} (${DOW[dd.getDay()]})`, dow: dd.getDay() }
+      }))
     }
     tick()
     const iv = setInterval(tick, 30000)
@@ -118,26 +160,32 @@ export default function ScrimBoardPage() {
 
   const showToast = (title: string, sub: string) => setToast({ title, sub })
 
-  // ---- 導出値 (デザインのロジックをそのまま移植) ----
+  const dayLabel = (d: number) => (weekDays[d] ? (d === 0 ? `今日 ${weekDays[d].label}` : weekDays[d].label) : d === 0 ? '今日' : `${d}日後`)
+
+  // ---- 導出値 ----
   const slotsNeeded = () => {
     if (mode === 'hp') return 3
     if (mode === 'snd') return maps
     if (mode === 'ovl') return Math.ceil((25 * maps) / 30)
     return 0 // all
   }
-  const myAv = () => SLOTS.map((_, i) => mine[i] + OTHERS.reduce((a, m) => a + m.s[i], 0))
-  const av = (t: DemoTeam) => (t.id === 'me' ? myAv() : t.av!)
-  const matchedSet = (teamId: string) => {
+  const myAv = (day: number) => {
+    const memberAvs = OTHERS.map(m => memberAvOn(m, day))
+    return SLOTS.map((_, i) => mine[day][i] + memberAvs.reduce((a, s) => a + s[i], 0))
+  }
+  const av = (t: DemoTeam, day: number) => (t.id === 'me' ? myAv(day) : teamAvOn(t, day))
+  const matchedSet = (teamId: string, day: number) => {
     const set = new Set<number>()
     matches.forEach(m => {
+      if (m.day !== day) return
       const hit = teamId === 'me' || m.teamId === teamId
       if (hit) for (let i = m.start; i < m.start + m.len; i++) set.add(i)
     })
     return set
   }
-  const runs = (t: DemoTeam) => {
-    const a = av(t)
-    const taken = matchedSet(t.id)
+  const runs = (t: DemoTeam, day: number) => {
+    const a = av(t, day)
+    const taken = matchedSet(t.id, day)
     const out: [number, number][] = []
     let s = -1
     for (let i = 0; i <= 10; i++) {
@@ -156,7 +204,7 @@ export default function ScrimBoardPage() {
   const acceptsMode = (t: DemoTeam) => (mode === 'all' ? true : t.prefs[mode])
   const need = slotsNeeded()
 
-  const openCount = myAv().filter(v => v >= 4).length
+  const openCount = myAv(editDay).filter(v => v >= 4).length
   const myStat = openCount ? `${openCount} 枠が募集中` : '募集に出ている枠はありません'
 
   const tplHas = !!tplSlots
@@ -173,9 +221,9 @@ export default function ScrimBoardPage() {
     ? '空き状況の俯瞰 — モードを選ぶと開始マーカーが出ます'
     : `${modeName(mode, maps)} · 所要 ${need}枠 (${need * 30}分) · 最終開始 ${slotLabel(10 - need)}`
 
-  // now ライン: 20:00 前はデモ表示 (21:15)
+  // now ライン: 今日の表示のみ。20:00 前はデモ表示 (21:15)
   let nowLine: { left: string; label: string } | null = null
-  if (nowMins !== null) {
+  if (nowMins !== null && viewDay === 0) {
     let mins = nowMins
     let demo = false
     if (mins < 1200) { mins = 1275; demo = true }
@@ -191,9 +239,9 @@ export default function ScrimBoardPage() {
     if (!modal) return
     const t = TEAMS.find(x => x.id === modal.teamId)!
     const id = matches.reduce((m, x) => Math.max(m, x.id), 0) + 1
-    setMatches(prev => [...prev, { id, teamId: modal.teamId, start: modal.start, len: modal.len, mode, maps }])
+    setMatches(prev => [...prev, { id, teamId: modal.teamId, day: modal.day, start: modal.start, len: modal.len, mode, maps }])
     setModal(null)
-    showToast('対戦が成立しました', `${t.name} · ${slotLabel(modal.start)} – ${slotLabel(modal.start + modal.len)} · 両チームの Discord に通知しました`)
+    showToast('対戦が成立しました', `${t.name} · ${dayLabel(modal.day)} ${slotLabel(modal.start)} – ${slotLabel(modal.start + modal.len)} · 両チームの Discord に通知しました`)
   }
   const doCancel = () => {
     setMatches(prev => prev.filter(x => x.id !== cancelId))
@@ -201,19 +249,23 @@ export default function ScrimBoardPage() {
     showToast('対戦をキャンセルしました', '枠はボードに戻り、相手チームに通知されました')
   }
   const tplSave = () => {
-    if (!mine.some(Boolean)) { showToast('空き時間が選ばれていません', '先に上のチップで時間を選んでから保存してください'); return }
-    setTplSlots(mine.slice())
-    showToast('曜日テンプレを保存しました', `毎週 ${tplDayNames || '(曜日未選択)'} · ${mine.filter(Boolean).length}枠を自動反映します`)
+    if (!mine[editDay].some(Boolean)) { showToast('空き時間が選ばれていません', '先に上のチップで時間を選んでから保存してください'); return }
+    setTplSlots(mine[editDay].slice())
+    showToast('曜日テンプレを保存しました', `毎週 ${tplDayNames || '(曜日未選択)'} · ${mine[editDay].filter(Boolean).length}枠を自動反映します`)
   }
+  // テンプレを、表示中の1週間のうち対象曜日すべてに反映する
   const tplApply = () => {
     if (!tplSlots) return
-    setMine(tplSlots.slice())
-    showToast('テンプレを反映しました', `${tplSlots.filter(Boolean).length}枠を今日の空きに入力しました`)
+    if (weekDays.length === 0) return
+    const targets = weekDays.map((wd, i) => (tplDays[wd.dow] ? i : -1)).filter(i => i >= 0)
+    if (targets.length === 0) { showToast('対象の曜日が選ばれていません', '先に曜日チップで反映したい曜日を選んでください'); return }
+    setMine(prev => prev.map((slots, d) => (targets.includes(d) ? tplSlots.slice() : slots)))
+    showToast('テンプレを反映しました', `${targets.map(d => dayLabel(d)).join('・')} に ${tplSlots.filter(Boolean).length}枠を入力しました`)
   }
 
   // ---- モーダル用導出値 ----
   const modalTeam = modal ? TEAMS.find(x => x.id === modal.teamId)! : null
-  const modalPool = modal && modalTeam ? Math.min(...av(modalTeam).slice(modal.start, modal.start + modal.len)) : 0
+  const modalPool = modal && modalTeam ? Math.min(...av(modalTeam, modal.day).slice(modal.start, modal.start + modal.len)) : 0
   const modalBad = modalTeam ? !inRange(modalTeam) : false
   const modalGap = modalTeam ? gap(modalTeam) : null
 
@@ -223,6 +275,50 @@ export default function ScrimBoardPage() {
   const prefDefs: [Pref, string][] = [['hp', 'ハーポ回し'], ['snd', 'サーチ'], ['ovl', 'オバロ']]
   const modeDefs: [Mode, string][] = [['hp', 'ハーポ回し · 90分'], ['snd', 'サーチ'], ['ovl', 'オバロ'], ['all', 'すべて (俯瞰)']]
   const showMaps = mode === 'snd' || mode === 'ovl'
+
+  // 日付タブ (STEP1/STEP2 共用コンポーネント)
+  const renderDayTabs = (value: number, onChange: (d: number) => void, dots: boolean[]) => (
+    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+      {weekDays.length === 0 ? (
+        <div style={{ height: 34 }} />
+      ) : (
+        weekDays.map((wd, i) => {
+          const on = value === i
+          const weekend = wd.dow === 0 || wd.dow === 6
+          return (
+            <button
+              key={i}
+              type="button"
+              className="mono sb-hoverline"
+              aria-pressed={on}
+              onClick={() => onChange(i)}
+              style={{
+                position: 'relative',
+                fontSize: 11.5,
+                fontWeight: on ? 700 : 600,
+                padding: '7px 10px',
+                borderRadius: 8,
+                cursor: 'pointer',
+                transition: 'all .12s',
+                background: on ? 'rgba(0,229,255,0.14)' : 'rgba(6,10,22,0.75)',
+                color: on ? '#9df3ff' : weekend ? '#c9b8ff' : 'var(--text-dim)',
+                border: `1px solid ${on ? 'rgba(0,229,255,0.5)' : LINE}`,
+              }}
+            >
+              {i === 0 ? `今日 ${wd.label}` : wd.label}
+              {dots[i] && (
+                <span style={{ position: 'absolute', top: 3, right: 4, width: 5, height: 5, borderRadius: '50%', background: 'var(--cyan)', boxShadow: '0 0 6px var(--cyan)' }} />
+              )}
+            </button>
+          )
+        })
+      )}
+    </div>
+  )
+
+  // タブ上のドット: STEP1 = 自分の空きを入力済みの日 / STEP2 = 成立がある日
+  const editDots = Array.from({ length: DAYS }, (_, d) => mine[d].some(Boolean))
+  const viewDots = Array.from({ length: DAYS }, (_, d) => matches.some(m => m.day === d))
 
   return (
     <main>
@@ -239,11 +335,11 @@ export default function ScrimBoardPage() {
             交流戦<em>ボード。</em>
           </h1>
           <p className="muted" style={{ margin: '12px 0 0', fontSize: 14, maxWidth: 560 }}>
-            チームの空き時間を出し合って、今晩の相手をその場で確定。成立すると両チームの Discord に通知が届きます。
+            1週間分のチームの空き時間を出し合って、対戦相手をその場で確定。成立すると両チームの Discord に通知が届きます。
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
-          <div className="mono" style={{ fontSize: 19, fontWeight: 600, letterSpacing: '0.04em' }}>{dateLabel || ' '}</div>
+          <div className="mono" style={{ fontSize: 19, fontWeight: 600, letterSpacing: '0.04em' }}>{dateLabel || ' '}</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <span className="badge"><span className="badge-dot" />BLACK OPS 7 · 4v4</span>
             <span className="badge violet">UNRATED — レート変動なし</span>
@@ -258,19 +354,32 @@ export default function ScrimBoardPage() {
 
       {/* ===== STEP 1 : 空き入力 ===== */}
       <section className="card-strong" style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
           <div>
             <div className="sec-title" style={{ marginBottom: 4 }}>STEP 1</div>
-            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.02em' }}>自分の空き時間を入れる</div>
+            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.02em' }}>自分の空き時間を入れる（1週間分）</div>
           </div>
-          <div className="mono" style={{ fontSize: 12, color: openCount ? 'var(--success)' : 'var(--text-dim)', paddingTop: 6 }}>{myStat}</div>
+          <div className="mono" style={{ fontSize: 12, color: openCount ? 'var(--success)' : 'var(--text-dim)', paddingTop: 6 }}>
+            {dayLabel(editDay)}: {myStat}
+          </div>
         </div>
+
+        {/* 日付タブ (入力する日を選ぶ) */}
+        <div style={{ marginBottom: 12 }}>
+          {renderDayTabs(editDay, setEditDay, editDots)}
+        </div>
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(72px, 1fr))', gap: 6 }}>
           {SLOTS.map((s, i) => {
-            const on = !!mine[i]
+            const on = !!mine[editDay][i]
             return (
               <button key={s} type="button" className="mono sb-hoverline" aria-pressed={on}
-                onClick={() => setMine(prev => { const next = prev.slice(); next[i] = next[i] ? 0 : 1; return next })}
+                onClick={() => setMine(prev => prev.map((slots, d) => {
+                  if (d !== editDay) return slots
+                  const next = slots.slice()
+                  next[i] = next[i] ? 0 : 1
+                  return next
+                }))}
                 style={{
                   fontSize: 12.5, fontWeight: 600, padding: '12px 0', borderRadius: 8, cursor: 'pointer', transition: 'all .12s',
                   background: on ? 'rgba(0,229,255,0.14)' : 'rgba(6,10,22,0.75)',
@@ -284,7 +393,7 @@ export default function ScrimBoardPage() {
           })}
         </div>
         <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--text-dim)' }}>
-          押した時間があなたの空きになります。チームで <span style={{ color: 'var(--cyan)', fontWeight: 700 }}>4人</span> 揃った枠だけが下のボードに募集として公開されます。枠ごとに同じ4人である必要はありません（途中交代OK）。
+          日付タブで日を切り替えて、押した時間があなたの空きになります。チームで <span style={{ color: 'var(--cyan)', fontWeight: 700 }}>4人</span> 揃った枠だけが下のボードに募集として公開されます。枠ごとに同じ4人である必要はありません（途中交代OK）。
         </p>
 
         {/* 曜日テンプレ */}
@@ -294,7 +403,7 @@ export default function ScrimBoardPage() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M17 2v4M7 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><path d="M12 13v4M10 15h4" stroke="var(--cyan)" strokeWidth="1.6" strokeLinecap="round" /></svg>
               曜日テンプレ
             </div>
-            <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>選んだ曜日に、今の空き時間を毎週自動で反映します — 毎日入力し直す必要はありません</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>表示中の日の空き時間を保存し、選んだ曜日へ一括反映できます — 毎日入力し直す必要はありません</span>
             <span className="mono" style={{ marginLeft: 'auto', fontSize: 11, color: tplStatCl }}>{tplStatus}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
@@ -315,10 +424,10 @@ export default function ScrimBoardPage() {
                 )
               })}
             </div>
-            <button type="button" onClick={tplSave} style={{ fontSize: 12, fontWeight: 700, padding: '8px 14px' }}>今の選択をテンプレに保存</button>
+            <button type="button" onClick={tplSave} style={{ fontSize: 12, fontWeight: 700, padding: '8px 14px' }}>{dayLabel(editDay)}の選択をテンプレに保存</button>
             {tplHas && (
               <>
-                <button type="button" className="btn-ghost" onClick={tplApply} style={{ fontSize: 12, fontWeight: 600, padding: '8px 14px' }}>テンプレを今日に反映</button>
+                <button type="button" className="btn-ghost" onClick={tplApply} style={{ fontSize: 12, fontWeight: 600, padding: '8px 14px' }}>テンプレを対象曜日に反映</button>
                 <button type="button" className="sb-link" onClick={() => { setTplSlots(null); showToast('曜日テンプレを削除しました', '') }}
                   style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', fontSize: 11.5, padding: '8px 6px', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}>
                   削除
@@ -338,7 +447,7 @@ export default function ScrimBoardPage() {
             ))}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>今日受けられるモード:</span>
+            <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>受けられるモード:</span>
             {prefDefs.map(([k, label]) => {
               const on = prefs[k]
               return (
@@ -360,10 +469,10 @@ export default function ScrimBoardPage() {
 
       {/* ===== STEP 2 : ボード ===== */}
       <section className="card-strong" style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
           <div>
             <div className="sec-title" style={{ marginBottom: 4 }}>STEP 2</div>
-            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.02em' }}>モードを選んで、相手の ▶ を押す</div>
+            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.02em' }}>日付とモードを選んで、相手の ▶ を押す</div>
           </div>
           <button type="button" onClick={() => setNear(v => !v)} aria-pressed={near}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-soft)', background: 'transparent', border: 'none', cursor: 'pointer', userSelect: 'none', paddingTop: 8 }}>
@@ -372,6 +481,11 @@ export default function ScrimBoardPage() {
             </span>
             近い帯のみ表示
           </button>
+        </div>
+
+        {/* 日付タブ (見る日を選ぶ) */}
+        <div style={{ marginBottom: 12 }}>
+          {renderDayTabs(viewDay, d => { setViewDay(d); setHoverRun(null) }, viewDots)}
         </div>
 
         {/* モードフィルタ */}
@@ -427,9 +541,9 @@ export default function ScrimBoardPage() {
             </div>
             {/* チーム行 */}
             {TEAMS.map(t => {
-              const a = av(t)
-              const taken = matchedSet(t.id)
-              const runList = runs(t)
+              const a = av(t, viewDay)
+              const taken = matchedSet(t.id, viewDay)
+              const runList = runs(t, viewDay)
               const runAt = (i: number) => runList.find(r => i >= r[0] && i <= r[1])
               const isMe = t.id === 'me'
               const dimNear = near && !isMe && !inRange(t)
@@ -472,9 +586,9 @@ export default function ScrimBoardPage() {
                       numCl = '#333c52'; text = '·'; numSize = 12
                     }
                     const click = clickable ? () => {
-                      if (canStart) { setModal({ teamId: t.id, start: i, len: need }); return }
+                      if (canStart) { setModal({ teamId: t.id, day: viewDay, start: i, len: need }); return }
                       const snap = Math.min(r![1] - need + 1, 10 - need)
-                      if (snap >= r![0]) setModal({ teamId: t.id, start: snap, len: need })
+                      if (snap >= r![0]) setModal({ teamId: t.id, day: viewDay, start: snap, len: need })
                       else showToast(`この空きには ${modeName(mode, maps)} が入りません`, `空きが ${r![1] - r![0] + 1}枠 (${(r![1] - r![0] + 1) * 30}分) しかありません`)
                     } : undefined
                     return (
@@ -485,7 +599,7 @@ export default function ScrimBoardPage() {
                         onKeyDown={click ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); click() } } : undefined}
                         role={clickable ? 'button' : undefined}
                         tabIndex={clickable ? 0 : undefined}
-                        aria-label={clickable ? `${t.name} ${slotLabel(i)} の枠を選択` : undefined}
+                        aria-label={clickable ? `${t.name} ${dayLabel(viewDay)} ${slotLabel(i)} の枠を選択` : undefined}
                         style={{
                           position: 'relative', height: 52, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                           transition: 'all .12s', background: bg, border, cursor: clickable ? 'pointer' : 'default',
@@ -501,7 +615,7 @@ export default function ScrimBoardPage() {
                 </div>
               )
             })}
-            {/* now ライン */}
+            {/* now ライン (今日のみ) */}
             {nowLine && (
               <div style={{ position: 'absolute', top: -6, bottom: 0, left: nowLine.left, width: 1, background: 'var(--amber)', opacity: 0.85, pointerEvents: 'none', zIndex: 3 }}>
                 <span style={{ position: 'absolute', top: 0, left: -3, width: 7, height: 7, borderRadius: '50%', background: 'var(--amber)', animation: 'pulse-glow 2.4s ease-in-out infinite' }} />
@@ -521,19 +635,19 @@ export default function ScrimBoardPage() {
         </div>
       </section>
 
-      {/* ===== 今日の成立 ===== */}
+      {/* ===== 今週の成立 ===== */}
       {matches.length > 0 && (
         <section style={{ position: 'relative', background: 'rgba(18,24,52,0.86)', border: '1px solid rgba(255,176,32,0.3)', borderRadius: 14, padding: '22px 24px', backdropFilter: 'blur(14px)', marginBottom: 20, animation: 'slide-up-fade .3s ease both' }}>
-          <div className="sec-title" style={{ color: 'var(--amber)' }}>今日の成立</div>
+          <div className="sec-title" style={{ color: 'var(--amber)' }}>今週の成立</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {matches.map(mt => {
+            {[...matches].sort((x, y) => x.day - y.day || x.start - y.start).map(mt => {
               const t = TEAMS.find(x => x.id === mt.teamId)!
               return (
                 <div key={mt.id} style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', background: 'rgba(6,10,22,0.6)', border: `1px solid ${LINE}`, borderRadius: 10, padding: '14px 16px' }}>
                   <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--amber-soft)', border: '1px solid rgba(255,176,32,0.4)', display: 'grid', placeItems: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, color: 'var(--amber)' }}>VS</div>
                   <div style={{ flex: 1, minWidth: 200 }}>
                     <div style={{ fontSize: 14.5, fontWeight: 700 }}>{t.name} <span className="mono" style={{ fontSize: 11, color: 'var(--text-dim)' }}>{t.tag}</span></div>
-                    <div className="mono" style={{ fontSize: 12, color: 'var(--amber)', letterSpacing: '0.04em' }}>{slotLabel(mt.start)} – {slotLabel(mt.start + mt.len)} · {modeName(mt.mode, mt.maps)}</div>
+                    <div className="mono" style={{ fontSize: 12, color: 'var(--amber)', letterSpacing: '0.04em' }}>{dayLabel(mt.day)} {slotLabel(mt.start)} – {slotLabel(mt.start + mt.len)} · {modeName(mt.mode, mt.maps)}</div>
                   </div>
                   <span className="badge success"><span className="badge-dot" />Discord 通知済み</span>
                   <button type="button" className="btn-danger" onClick={() => setCancelId(mt.id)} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>キャンセル</button>
@@ -552,7 +666,7 @@ export default function ScrimBoardPage() {
           <div style={{ position: 'relative', width: '100%', maxWidth: 440, background: 'rgba(22,28,58,0.96)', border: `1px solid ${LINE_STRONG}`, borderRadius: 14, boxShadow: '0 24px 80px rgba(0,0,0,0.6)', animation: 'modal-card-in 180ms ease-out', overflow: 'hidden' }}>
             <div style={{ padding: '20px 22px 14px', borderBottom: `1px solid ${LINE}` }}>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>{modalTeam.name} <span className="mono" style={{ fontSize: 12, color: 'var(--text-dim)' }}>{modalTeam.tag}</span></div>
-              <div className="mono" style={{ fontSize: 13, color: 'var(--cyan)', letterSpacing: '0.04em', marginTop: 4 }}>{slotLabel(modal.start)} – {slotLabel(modal.start + modal.len)} · {modeName(mode, maps)}</div>
+              <div className="mono" style={{ fontSize: 13, color: 'var(--cyan)', letterSpacing: '0.04em', marginTop: 4 }}>{dayLabel(modal.day)} {slotLabel(modal.start)} – {slotLabel(modal.start + modal.len)} · {modeName(mode, maps)}</div>
             </div>
             <div style={{ padding: '16px 22px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>出場可能帯</span><span style={{ fontWeight: 600, color: TIER_COLORS[modalTeam.tier] }}>{modalTeam.tier}</span></div>
@@ -587,7 +701,7 @@ export default function ScrimBoardPage() {
           <div style={{ position: 'relative', width: '100%', maxWidth: 400, background: 'rgba(22,28,58,0.96)', border: '1px solid rgba(255,77,109,0.4)', borderRadius: 14, boxShadow: '0 24px 80px rgba(0,0,0,0.6)', animation: 'modal-card-in 180ms ease-out', padding: 22 }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>対戦をキャンセルしますか?</div>
             <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--text-soft)', lineHeight: 1.7 }}>
-              {cancelTeam.name} との {slotLabel(cancelMatch.start)} – {slotLabel(cancelMatch.start + cancelMatch.len)} の対戦を取り消します。相手チームの Discord にキャンセル通知が送られ、枠はボードに戻ります。
+              {cancelTeam.name} との {dayLabel(cancelMatch.day)} {slotLabel(cancelMatch.start)} – {slotLabel(cancelMatch.start + cancelMatch.len)} の対戦を取り消します。相手チームの Discord にキャンセル通知が送られ、枠はボードに戻ります。
             </p>
             <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--danger)' }}>キャンセル回数は相手チームから見えるようになります。</p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
@@ -638,7 +752,7 @@ export default function ScrimBoardPage() {
       {/* ===== トースト ===== */}
       {toast && (
         <BodyPortal>
-        <div role="status" style={{ position: 'fixed', left: '50%', bottom: 32, transform: 'translateX(-50%)', zIndex: 3000, display: 'inline-flex', alignItems: 'center', gap: 10, padding: '12px 18px', background: 'rgba(22,28,58,0.96)', border: '1px solid rgba(0,229,255,0.35)', borderRadius: 10, boxShadow: '0 12px 32px rgba(0,0,0,0.5), 0 0 24px rgba(0,229,255,0.12)', animation: 'slide-up-fade .2s ease both', minWidth: 260 }}>
+        <div role="status" style={{ position: 'fixed', left: '50%', bottom: 32, transform: 'translateX(-50%)', zIndex: 3000, display: 'inline-flex', alignItems: 'center', gap: 10, padding: '12px 18px', background: 'rgba(22,28,58,0.96)', border: '1px solid rgba(0,229,255,0.35)', borderRadius: 10, color: 'var(--text)', boxShadow: '0 12px 32px rgba(0,0,0,0.5), 0 0 24px rgba(0,229,255,0.12)', animation: 'slide-up-fade .2s ease both', minWidth: 260 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--cyan)', boxShadow: '0 0 10px var(--cyan)', flex: 'none' }} />
           <div>
             <div style={{ fontSize: 13.5, fontWeight: 600 }}>{toast.title}</div>
