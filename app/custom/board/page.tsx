@@ -17,7 +17,7 @@ import { supabase } from '@/lib/supabase'
 type Mode = 'hp' | 'snd' | 'ovl' | 'custom' | 'all'
 
 type TeamRow = { id: string; name: string; rating: number | null }
-type PrefsRow = { hp: boolean; snd: boolean; ovl: boolean; range: 'any' | 'similar' }
+type PrefsRow = { hp: boolean; snd: boolean; ovl: boolean; range: 'any' | 'similar'; contact: string | null }
 type MatchRow = {
   id: string
   date: string
@@ -129,6 +129,7 @@ export default function ScrimBoardPage() {
   const [whTested, setWhTested] = useState(false)
   const [whBusy, setWhBusy] = useState(false)
   const [whError, setWhError] = useState<string | null>(null)
+  const [contactInput, setContactInput] = useState('')
   const [toast, setToast] = useState<{ title: string; sub: string } | null>(null)
 
   // 現在時刻・週の日付 (SSR とのハイドレーション不一致を避けるためマウント後に設定)
@@ -165,7 +166,7 @@ export default function ScrimBoardPage() {
     const dates = weekDateStrs()
     const [{ data: countRows, error: cErr }, { data: prefRows }, { data: matchRows }, { data: allMatches }] = await Promise.all([
       supabase.from('scrim_slot_counts').select('team_id, date, slot_index, available, avg_rating, min_rating, max_rating').in('date', dates),
-      supabase.from('scrim_team_prefs').select('team_id, accept_hp, accept_snd, accept_ovl, accept_range'),
+      supabase.from('scrim_team_prefs').select('team_id, accept_hp, accept_snd, accept_ovl, accept_range, public_contact'),
       supabase.from('scrim_matches').select('*').in('date', dates).eq('status', 'confirmed'),
       supabase.from('scrim_matches').select('host_team_id, guest_team_id, status'),
     ])
@@ -186,8 +187,8 @@ export default function ScrimBoardPage() {
     setRatings(rm)
 
     const pm: Record<string, PrefsRow> = {}
-    for (const r of (prefRows ?? []) as { team_id: string; accept_hp: boolean; accept_snd: boolean; accept_ovl: boolean; accept_range: 'any' | 'similar' }[]) {
-      pm[r.team_id] = { hp: r.accept_hp, snd: r.accept_snd, ovl: r.accept_ovl, range: r.accept_range }
+    for (const r of (prefRows ?? []) as { team_id: string; accept_hp: boolean; accept_snd: boolean; accept_ovl: boolean; accept_range: 'any' | 'similar'; public_contact: string | null }[]) {
+      pm[r.team_id] = { hp: r.accept_hp, snd: r.accept_snd, ovl: r.accept_ovl, range: r.accept_range, contact: r.public_contact }
     }
     setPrefsMap(pm)
 
@@ -373,7 +374,7 @@ export default function ScrimBoardPage() {
     }
     return out
   }
-  const prefsFor = (teamId: string): PrefsRow => prefsMap[teamId] ?? { hp: true, snd: true, ovl: true, range: 'any' }
+  const prefsFor = (teamId: string): PrefsRow => prefsMap[teamId] ?? { hp: true, snd: true, ovl: true, range: 'any', contact: null }
 
   // その日の「空いているメンバー」基準のレート集計 (spec 6章: チーム固定レートは持たない)
   const dayRating = (teamId: string, day: number): { avg: number | null; min: number | null; max: number | null } => {
@@ -503,7 +504,7 @@ export default function ScrimBoardPage() {
   }
 
   // ---- 受付モード ----
-  const myPrefs: PrefsRow = teamInfo ? prefsFor(teamInfo.id) : { hp: true, snd: true, ovl: true, range: 'any' }
+  const myPrefs: PrefsRow = teamInfo ? prefsFor(teamInfo.id) : { hp: true, snd: true, ovl: true, range: 'any', contact: null }
   const savePrefs = async (next: PrefsRow) => {
     if (!teamInfo) return
     setPrefsMap(prev => ({ ...prev, [teamInfo.id]: next }))
@@ -513,6 +514,7 @@ export default function ScrimBoardPage() {
       accept_snd: next.snd,
       accept_ovl: next.ovl,
       accept_range: next.range,
+      public_contact: next.contact,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'team_id' })
     if (error) {
@@ -530,7 +532,7 @@ export default function ScrimBoardPage() {
     if (!dateStr) return
     const m = currentMaps()
     setConfirming(true)
-    const { error } = await supabase.rpc('rpc_scrimboard_confirm', {
+    const { data, error } = await supabase.rpc('rpc_scrimboard_confirm', {
       p_host_team_id: modal.teamId,
       p_date: dateStr,
       p_slot_start: modal.start,
@@ -545,9 +547,14 @@ export default function ScrimBoardPage() {
       void loadBoard()
       return
     }
-    const t = teams.find(x => x.id === modal.teamId)
     setModal(null)
-    showToast('対戦が成立しました', `${t?.name ?? '相手チーム'} · ${dayLabel(modal.day)} ${slotLabel(modal.start)} – ${slotLabel(modal.start + modal.len)} · 両チームの Discord に通知しました`)
+    // 成立後は試合ページへ (連絡・ロビーコード共有はそこで行う)
+    const matchIdNew = (data as { match_id?: string } | null)?.match_id
+    if (matchIdNew) {
+      router.push(`/custom/board/${matchIdNew}`)
+      return
+    }
+    showToast('対戦が成立しました', '両チームの Discord に通知しました')
     void loadBoard()
   }
 
@@ -621,7 +628,14 @@ export default function ScrimBoardPage() {
         showToast('通知設定を保存しました', `${teamInfo.name} のチーム設定に保存されました`)
       } else {
         try { if (url) localStorage.setItem(WH_LOCAL_KEY, url); else localStorage.removeItem(WH_LOCAL_KEY) } catch { /* noop */ }
-        showToast('通知設定を保存しました', teamInfo ? 'チーム設定の保存はオーナーのみのため、この端末にのみ保存されました' : 'この端末に保存されました（チーム所属時はチーム全体に共有されます）')
+        showToast('通知設定を保存しました', teamInfo ? 'Webhookのチーム保存はオーナーのみのため、この端末にのみ保存されました' : 'この端末に保存されました（チーム所属時はチーム全体に共有されます）')
+      }
+      // 公開連絡先はメンバー全員が保存できる (scrim_team_prefs)
+      if (teamInfo) {
+        const trimmedContact = contactInput.trim().slice(0, 200)
+        if (trimmedContact !== (myPrefs.contact ?? '')) {
+          await savePrefs({ ...myPrefs, contact: trimmedContact || null })
+        }
       }
       setWebhookOpen(false)
     } finally { setWhBusy(false) }
@@ -632,7 +646,7 @@ export default function ScrimBoardPage() {
   const modalPool = modal && modalTeam ? Math.min(...countsFor(modalTeam.id, modal.day).slice(modal.start, modal.start + modal.len)) : 0
   const modalSpanRating = modal && modalTeam ? spanRating(modalTeam.id, modal.day, modal.start, modal.len) : { avg: null, min: null, max: null }
   const modalStats = modalTeam ? teamStats[modalTeam.id] ?? { games: 0, cancels: 0 } : { games: 0, cancels: 0 }
-  const modalPrefs: PrefsRow = modalTeam ? prefsFor(modalTeam.id) : { hp: true, snd: true, ovl: true, range: 'any' }
+  const modalPrefs: PrefsRow = modalTeam ? prefsFor(modalTeam.id) : { hp: true, snd: true, ovl: true, range: 'any', contact: null }
 
   const cancelMatch = cancelId !== null ? matches.find(x => x.id === cancelId) ?? null : null
   const cancelOppName = cancelMatch
@@ -705,7 +719,7 @@ export default function ScrimBoardPage() {
             <span className="badge"><span className="badge-dot" />BLACK OPS 7 · 4v4</span>
             <span className="badge violet">UNRATED — レート変動なし</span>
           </div>
-          <button type="button" className="btn-ghost" onClick={() => setWebhookOpen(true)}
+          <button type="button" className="btn-ghost" onClick={() => { setContactInput(myPrefs.contact ?? ''); setWebhookOpen(true) }}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" strokeWidth="1.6" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" strokeWidth="1.6" /></svg>
             通知設定
@@ -1127,7 +1141,10 @@ export default function ScrimBoardPage() {
                   </div>
                   <span className="badge success"><span className="badge-dot" />Discord 通知済み</span>
                   {mine && (
-                    <button type="button" className="btn-danger" onClick={() => setCancelId(mt.id)} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>キャンセル</button>
+                    <>
+                      <button type="button" className="btn-primary" onClick={() => router.push(`/custom/board/${mt.id}`)} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>試合ページ・チャット</button>
+                      <button type="button" className="btn-danger" onClick={() => setCancelId(mt.id)} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>キャンセル</button>
+                    </>
                   )}
                 </div>
               )
@@ -1159,13 +1176,19 @@ export default function ScrimBoardPage() {
                 <span style={{ color: 'var(--text-soft)' }}>受付範囲</span>
                 <span>{modalPrefs.range === 'similar' ? '同格 ±1帯' : '誰でも歓迎'}</span>
               </div>
+              {modalPrefs.contact && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}>
+                  <span style={{ color: 'var(--text-soft)' }}>公開連絡先</span>
+                  <span style={{ wordBreak: 'break-all', textAlign: 'right' }}>{modalPrefs.contact}</span>
+                </div>
+              )}
               {modal && outOfHostRange(modal.teamId) && (
                 <div style={{ display: 'flex', gap: 9, background: 'rgba(255,176,32,0.12)', border: '1px solid rgba(255,176,32,0.4)', borderRadius: 8, padding: '10px 12px', marginTop: 12, fontSize: 12, color: '#ffe2ae', lineHeight: 1.6 }}>
                   <span>▲</span>
                   <span>相手の受付範囲 (同格±1帯) の外です。成立は可能ですが、相手の想定と異なる可能性があります。</span>
                 </div>
               )}
-              <p style={{ margin: '14px 0 0', fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.6 }}>成立と同時に両チームの Discord へ通知が送られます。この対戦は unrated — レートは変動しません。</p>
+              <p style={{ margin: '14px 0 0', fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.6 }}>成立と同時に両チームの Discord へ通知が送られ、試合ページ(チャット)が開きます。ホスト決め・ロビーコード共有はそこで行います。この対戦は unrated — レートは変動しません。</p>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 22px', borderTop: `1px solid ${LINE}`, background: 'rgba(0,0,0,0.18)' }}>
               <button type="button" className="btn-ghost" onClick={() => setModal(null)} disabled={confirming}>閉じる</button>
@@ -1203,8 +1226,8 @@ export default function ScrimBoardPage() {
           <div onClick={() => setWebhookOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(5,8,14,0.72)', backdropFilter: 'blur(8px)' }} />
           <div style={{ position: 'relative', width: '100%', maxWidth: 460, background: 'rgba(22,28,58,0.96)', border: `1px solid ${LINE_STRONG}`, borderRadius: 14, boxShadow: '0 24px 80px rgba(0,0,0,0.6)', animation: 'modal-card-in 180ms ease-out', overflow: 'hidden' }}>
             <div style={{ padding: '20px 22px 14px', borderBottom: `1px solid ${LINE}` }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>Discord 通知設定</div>
-              <div style={{ fontSize: 12, color: 'var(--text-soft)', marginTop: 4 }}>{teamInfo?.name ?? 'あなたのチーム'} · チームの通知先チャンネル</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>チーム設定（通知・連絡先）</div>
+              <div style={{ fontSize: 12, color: 'var(--text-soft)', marginTop: 4 }}>{teamInfo?.name ?? 'あなたのチーム'}</div>
             </div>
             <div style={{ padding: '18px 22px' }}>
               <label htmlFor="sb-webhook" className="stat-label" style={{ display: 'block', marginBottom: 8 }}>Webhook URL</label>
@@ -1228,6 +1251,20 @@ export default function ScrimBoardPage() {
                   {whBusy ? '送信中...' : 'テスト送信'}
                 </button>
               </div>
+
+              {teamInfo && (
+                <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${LINE}` }}>
+                  <label htmlFor="sb-contact" className="stat-label" style={{ display: 'block', marginBottom: 8 }}>公開連絡先（任意）</label>
+                  <input id="sb-contact" value={contactInput} onChange={e => setContactInput(e.target.value)}
+                    placeholder="例: Discordサーバー https://discord.gg/xxxx"
+                    maxLength={200}
+                    style={{ width: '100%', boxSizing: 'border-box', fontSize: 12.5, padding: '11px 14px' }} />
+                  <p style={{ margin: '8px 0 0', fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.7 }}>
+                    <span style={{ color: 'var(--amber)' }}>全チームに公開されます。</span>個人の Discord ID ではなく、チームのサーバー招待リンクや連絡用アカウントを推奨します。
+                    未設定でも、成立後は試合ページのチャットで連絡できます。
+                  </p>
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 22px', borderTop: `1px solid ${LINE}`, background: 'rgba(0,0,0,0.18)' }}>
               <button type="button" className="btn-ghost" onClick={() => setWebhookOpen(false)} disabled={whBusy}>閉じる</button>
