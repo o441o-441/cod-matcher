@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 // ============================================================
 // 交流戦ボード (Scrim Board) — チームの空き時間を出し合い、
@@ -110,6 +111,11 @@ function memberAvOn(m: { n: string; s: number[] }, day: number): number[] {
 const LINE = 'rgba(140,160,220,0.12)'
 const LINE_STRONG = 'rgba(140,160,220,0.28)'
 
+// Discord Webhook URL の形式チェック (SSRF対策: discord.com のみ許可)
+const WEBHOOK_RE = /^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks\/\d+\/[\w-]+$/
+const isValidWebhook = (u: string) => WEBHOOK_RE.test(u.trim())
+const WH_LOCAL_KEY = 'scrim-board-webhook'
+
 // AppShell の .page-transition (animation fill: both) が transform を持ち続けるため、
 // ページ内の position:fixed はビューポート基準にならない。
 // ダイアログ・トーストは body 直下へポータルで逃がす。
@@ -143,6 +149,9 @@ export default function ScrimBoardPage() {
   const [webhookOpen, setWebhookOpen] = useState(false)
   const [webhookUrl, setWebhookUrl] = useState('')
   const [whTested, setWhTested] = useState(false)
+  const [whBusy, setWhBusy] = useState(false)
+  const [whError, setWhError] = useState<string | null>(null)
+  const [teamInfo, setTeamInfo] = useState<{ id: string; name: string; isOwner: boolean } | null>(null)
   const [toast, setToast] = useState<{ title: string; sub: string } | null>(null)
 
   // 現在時刻・週の日付 (SSR とのハイドレーション不一致を避けるためマウント後に設定)
@@ -174,6 +183,106 @@ export default function ScrimBoardPage() {
   }, [toast])
 
   const showToast = (title: string, sub: string) => setToast({ title, sub })
+
+  // 保存済みの Webhook 設定を読み込む
+  // (ログイン+チーム所属時は team_settings、それ以外はこの端末の localStorage)
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const uid = session?.user?.id ?? null
+        const local = typeof window !== 'undefined' ? localStorage.getItem(WH_LOCAL_KEY) : null
+        if (!uid) { if (local) setWebhookUrl(local); return }
+        const { data: tm } = await supabase.from('team_members').select('team_id').eq('user_id', uid).maybeSingle()
+        const teamId = (tm as { team_id: string } | null)?.team_id
+        if (!teamId) { if (local) setWebhookUrl(local); return }
+        const [{ data: teamRow }, { data: st }] = await Promise.all([
+          supabase.from('teams').select('id, name, owner_user_id').eq('id', teamId).maybeSingle(),
+          supabase.from('team_settings').select('discord_webhook_url').eq('team_id', teamId).maybeSingle(),
+        ])
+        if (teamRow) {
+          const tr = teamRow as { id: string; name: string; owner_user_id: string }
+          setTeamInfo({ id: tr.id, name: tr.name, isOwner: tr.owner_user_id === uid })
+        }
+        const saved = (st as { discord_webhook_url: string | null } | null)?.discord_webhook_url
+        if (saved) { setWebhookUrl(saved); setWhTested(true) }
+        else if (local) setWebhookUrl(local)
+      } catch (e) {
+        console.error('webhook settings load error:', e)
+      }
+    }
+    void load()
+  }, [])
+
+  // テスト送信: Webhook へ実際に POST する (Discord Webhook は CORS 許可済み)
+  const testWebhook = async () => {
+    const url = webhookUrl.trim()
+    if (!isValidWebhook(url)) {
+      setWhError('URLの形式が正しくありません。https://discord.com/api/webhooks/... の形式で入力してください')
+      return
+    }
+    setWhBusy(true)
+    setWhError(null)
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'ASCENT 交流戦ボード',
+          content: '✅ テスト通知です。この通知が見えていれば設定は正常です。',
+        }),
+      })
+      if (res.ok) {
+        setWhTested(true)
+        showToast('テスト通知を送信しました', 'Discord のチャンネルを確認してください')
+      } else if (res.status === 401 || res.status === 403 || res.status === 404) {
+        setWhTested(false)
+        setWhError(`Webhook が見つかりません (HTTP ${res.status})。URLの打ち間違い、または Discord 側で削除されていないか確認してください`)
+      } else {
+        setWhTested(false)
+        setWhError(`送信に失敗しました (HTTP ${res.status})。しばらくして再試行してください`)
+      }
+    } catch {
+      setWhTested(false)
+      setWhError('送信できませんでした。ネットワーク接続を確認してください')
+    } finally {
+      setWhBusy(false)
+    }
+  }
+
+  // 保存: オーナーはチーム設定(DB)へ、それ以外はこの端末(localStorage)へ
+  const saveWebhook = async () => {
+    const url = webhookUrl.trim()
+    if (url && !isValidWebhook(url)) {
+      setWhError('URLの形式が正しくありません。https://discord.com/api/webhooks/... の形式で入力してください')
+      return
+    }
+    setWhBusy(true)
+    setWhError(null)
+    try {
+      if (teamInfo?.isOwner) {
+        const { error } = url
+          ? await supabase.from('team_settings').upsert(
+              { team_id: teamInfo.id, discord_webhook_url: url, updated_at: new Date().toISOString() },
+              { onConflict: 'team_id' }
+            )
+          : await supabase.from('team_settings').delete().eq('team_id', teamInfo.id)
+        if (error) { setWhError(error.message); return }
+        showToast('通知設定を保存しました', `${teamInfo.name} のチーム設定に保存されました`)
+      } else {
+        try {
+          if (url) localStorage.setItem(WH_LOCAL_KEY, url)
+          else localStorage.removeItem(WH_LOCAL_KEY)
+        } catch { /* ストレージ不可の環境 */ }
+        showToast('通知設定を保存しました', teamInfo
+          ? 'チーム設定の保存はオーナーのみのため、この端末にのみ保存されました'
+          : 'この端末に保存されました（チーム所属時はチーム全体に共有されます）')
+      }
+      setWebhookOpen(false)
+    } finally {
+      setWhBusy(false)
+    }
+  }
 
   const dayLabel = (d: number) => (weekDays[d] ? (d === 0 ? `今日 ${weekDays[d].label}` : weekDays[d].label) : d === 0 ? '今日' : `${d}日後`)
 
@@ -831,28 +940,34 @@ export default function ScrimBoardPage() {
           <div style={{ position: 'relative', width: '100%', maxWidth: 460, background: 'rgba(22,28,58,0.96)', border: `1px solid ${LINE_STRONG}`, borderRadius: 14, boxShadow: '0 24px 80px rgba(0,0,0,0.6)', animation: 'modal-card-in 180ms ease-out', overflow: 'hidden' }}>
             <div style={{ padding: '20px 22px 14px', borderBottom: `1px solid ${LINE}` }}>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>Discord 通知設定</div>
-              <div style={{ fontSize: 12, color: 'var(--text-soft)', marginTop: 4 }}>Kunitachi FC · チームの通知先チャンネル</div>
+              <div style={{ fontSize: 12, color: 'var(--text-soft)', marginTop: 4 }}>{teamInfo?.name ?? 'あなたのチーム'} · チームの通知先チャンネル</div>
             </div>
             <div style={{ padding: '18px 22px' }}>
               <label htmlFor="sb-webhook" className="stat-label" style={{ display: 'block', marginBottom: 8 }}>Webhook URL</label>
-              <input id="sb-webhook" value={webhookUrl} onChange={e => { setWebhookUrl(e.target.value); setWhTested(false) }}
+              <input id="sb-webhook" value={webhookUrl} onChange={e => { setWebhookUrl(e.target.value); setWhTested(false); setWhError(null) }}
                 placeholder="https://discord.com/api/webhooks/…" spellCheck={false}
                 className="mono" style={{ width: '100%', boxSizing: 'border-box', fontSize: 12.5, padding: '11px 14px' }} />
               <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.7 }}>
-                サーバー設定 → 連携サービス → ウェブフック から発行した URL を貼り付けてください。成立・キャンセルの通知がこのチャンネルに届きます。DM ではなくチャンネル通知を使うことで到達率を確保します。
+                サーバー設定 → 連携サービス → ウェブフック から発行した URL を貼り付けてください。成立・キャンセルの通知がこのチャンネルに届きます。
+                {teamInfo && !teamInfo.isOwner && ' チーム設定への保存はオーナーのみ可能です（あなたの場合はこの端末に保存されます）。'}
               </p>
+              {whError && (
+                <div style={{ display: 'flex', gap: 8, background: 'rgba(255,77,109,0.13)', border: '1px solid rgba(255,77,109,0.4)', borderRadius: 8, padding: '10px 12px', marginTop: 12, fontSize: 12, color: '#ffd7de', lineHeight: 1.6 }}>
+                  <span>▲</span><span>{whError}</span>
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, background: 'rgba(6,10,22,0.6)', border: `1px solid ${LINE}`, borderRadius: 10, padding: '12px 14px' }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: whTested ? 'var(--success)' : 'var(--amber)', boxShadow: `0 0 10px ${whTested ? 'var(--success)' : 'var(--amber)'}`, flex: 'none' }} />
-                <span style={{ fontSize: 12, color: 'var(--text-soft)', flex: 1 }}>{whTested ? '接続確認済み — テスト通知を送信しました' : '未テスト — テスト送信で接続を確認してください'}</span>
-                <button type="button" onClick={() => { setWhTested(true); showToast('テスト通知を送信しました', '#scrim-通知 チャンネルを確認してください') }}
+                <span style={{ fontSize: 12, color: 'var(--text-soft)', flex: 1 }}>{whTested ? '接続確認済み — テスト通知の送信に成功しました' : '未テスト — テスト送信で接続を確認してください'}</span>
+                <button type="button" onClick={() => void testWebhook()} disabled={whBusy || !webhookUrl.trim()}
                   style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '7px 12px' }}>
-                  テスト送信
+                  {whBusy ? '送信中...' : 'テスト送信'}
                 </button>
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 22px', borderTop: `1px solid ${LINE}`, background: 'rgba(0,0,0,0.18)' }}>
-              <button type="button" className="btn-ghost" onClick={() => setWebhookOpen(false)}>閉じる</button>
-              <button type="button" className="btn-primary" onClick={() => { setWebhookOpen(false); showToast('通知設定を保存しました', '') }}>保存</button>
+              <button type="button" className="btn-ghost" onClick={() => setWebhookOpen(false)} disabled={whBusy}>閉じる</button>
+              <button type="button" className="btn-primary" onClick={() => void saveWebhook()} disabled={whBusy}>{whBusy ? '保存中...' : '保存'}</button>
             </div>
           </div>
         </div>
