@@ -26,10 +26,9 @@ export default function QueueStatusBar() {
   useEffect(() => {
     const prev = prevPathnameRef.current
     prevPathnameRef.current = pathname
-    // /match から離脱、または /custom/scrim から離脱した場合それぞれキャンセル
+    // /match から離脱した場合にキャンセル
     const leftMatch = prev === '/match' && pathname !== '/match'
-    const leftScrim = prev.startsWith('/custom/scrim') && !pathname.startsWith('/custom/scrim')
-    if (!leftMatch && !leftScrim) return
+    if (!leftMatch) return
     {
       const uid = cachedUidRef.current
       if (!uid) return
@@ -113,9 +112,9 @@ export default function QueueStatusBar() {
       .limit(1)
 
     if (waitingEntries && waitingEntries.length > 0) {
-      // マッチ画面・scrimキュー画面以外にいる場合は自動キャンセル
+      // マッチ画面以外にいる場合は自動キャンセル
       const currentPath = pathnameRef.current
-      if (currentPath !== '/match' && !currentPath.startsWith('/custom/scrim')) {
+      if (currentPath !== '/match') {
         const { error: cancelErr } = await supabase.rpc('rpc_cancel_queue', { p_queue_entry_id: waitingEntries[0].id })
         if (cancelErr) {
           // キャンセルできていないのに「未参加」表示にしない (実際はまだキュー中)
@@ -202,9 +201,8 @@ export default function QueueStatusBar() {
     router.push(targetPath)
   }, [activeMatch, pathname, router])
 
-  // マッチ画面・scrimキュー画面にいる場合はバーを表示しない（各画面が独自UIを持つ）
+  // マッチ画面にいる場合はバーを表示しない（画面が独自UIを持つ）
   if (pathname === '/match') return null
-  if (pathname.startsWith('/custom/scrim')) return null
   // マッチ関連ページにいる場合もバーを表示しない
   if (pathname.startsWith('/match/') && activeMatch && pathname.includes(activeMatch.id)) return null
 

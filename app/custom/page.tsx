@@ -95,8 +95,6 @@ export default function CustomPage() {
     router.push(`/custom/eights/${lobbyId}`)
   }
 
-  const HP_MAPS = ['酒', 'コロッサス', 'デン', 'スカー', 'グリッドロック', 'ハシエンダ']
-
   return (
     <main>
       <div className="eyebrow">CUSTOM / 8s + SCRIM</div>
@@ -104,7 +102,7 @@ export default function CustomPage() {
         <em>カスタム</em>
       </h1>
       <p className="muted" style={{ marginTop: 10, maxWidth: 640 }}>
-        8人カスタム（8s）と、パーティ単位でレートを近い相手とぶつけるスクリム（scrim）。ランクには影響しません。
+        8人カスタム（8s）と、チーム同士で対戦相手を見つける交流戦ボード（scrim）。ランクには影響しません。
       </p>
 
       {/* Tabs — large cards */}
@@ -117,7 +115,7 @@ export default function CustomPage() {
         <button type="button" className="card" onClick={() => setTab('scrim')}
           style={{ textAlign: 'center', padding: 24, cursor: 'pointer', border: tab === 'scrim' ? '2px solid var(--magenta)' : undefined }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 900, letterSpacing: '-0.02em' }}>SCRIM</div>
-          <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>パーティ vs パーティ / 練習試合</p>
+          <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>チーム vs チーム / 交流戦ボード</p>
         </button>
         <button type="button" className="card" onClick={() => setTab('rules')}
           style={{ textAlign: 'center', padding: 24, cursor: 'pointer', border: tab === 'rules' ? '2px solid var(--violet)' : undefined }}>
@@ -207,27 +205,16 @@ export default function CustomPage() {
         </div>
       )}
 
-      {/* Scrim Tab */}
+      {/* Scrim Tab (交流戦ボード) */}
       {tab === 'scrim' && (
         <div className="section">
-          <h2>Scrim</h2>
-          <p className="muted">パーティ単位でキューをかけ、チームの最高個人レート平均が近い相手とマッチングされます。</p>
+          <h2>交流戦ボード</h2>
+          <p className="muted">1週間分のチームの空き時間を出し合い、ボードから相手チームを選んでその場で対戦を確定します。成立すると両チームの Discord に通知されます。</p>
           <div className="card-strong" style={{ marginTop: 16 }}>
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <div>
-                <p style={{ fontWeight: 700, margin: 0 }}>Scrim キュー</p>
-                <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>パーティを組むか、ソロで助っ人として参加できます</p>
-              </div>
-              <button className="btn-primary" onClick={() => router.push('/custom/scrim')}>
-                Scrim キューへ
-              </button>
-            </div>
-          </div>
-          <div className="card-strong" style={{ marginTop: 16 }}>
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <div>
-                <p style={{ fontWeight: 700, margin: 0 }}>交流戦ボード <span className="badge" style={{ fontSize: 9, marginLeft: 6 }}>NEW</span></p>
-                <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>1週間分のチームの空き時間を出し合って、対戦相手をその場で確定</p>
+                <p style={{ fontWeight: 700, margin: 0 }}>交流戦ボード</p>
+                <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>空き時間の入力・相手探し・成立まですべてここから</p>
               </div>
               <button className="btn-primary" onClick={() => router.push('/custom/board')}>
                 ボードへ
@@ -235,11 +222,12 @@ export default function CustomPage() {
             </div>
           </div>
           <div className="card" style={{ marginTop: 16, padding: '14px 18px' }}>
-            <div className="stat-label" style={{ marginBottom: 8 }}>HARDPOINT マッププール</div>
-            <div className="row" style={{ gap: 6 }}>
-              {HP_MAPS.map(m => <span key={m} className="badge" style={{ fontSize: 11 }}>{m}</span>)}
+            <div className="stat-label" style={{ marginBottom: 8 }}>ポイント</div>
+            <div className="stack-sm" style={{ fontSize: 13 }}>
+              <div className="muted"><span style={{ color: 'var(--magenta)', marginRight: 8, fontWeight: 700 }}>1.</span>メンバーが空き時間を入力（曜日テンプレで自動反映も可）</div>
+              <div className="muted"><span style={{ color: 'var(--magenta)', marginRight: 8, fontWeight: 700 }}>2.</span>4人揃った枠が自動でボードに公開される</div>
+              <div className="muted"><span style={{ color: 'var(--magenta)', marginRight: 8, fontWeight: 700 }}>3.</span>モード（ハーポ回し / サーチ / オバロ / 複合）を選んで相手の ▶ を押すだけ</div>
             </div>
-            <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>scrimではバンピックは行わず、HPの全マップを実施します。</p>
           </div>
         </div>
       )}
@@ -257,14 +245,13 @@ export default function CustomPage() {
               <li>レート制限を設けたロビーも開催可能</li>
               <li>レート変動なし</li>
             </ul>
-            <h3>Scrim ルール</h3>
+            <h3>交流戦ボード（Scrim）ルール</h3>
             <ul>
-              <li>パーティ単位でキュー（ソロ参加も可能 — 助っ人として合流）</li>
-              <li>マッチング: チームの最高個人レート平均が近い順</li>
-              <li>モード: Hardpoint のみ（バンピックなし・全マップ実施）</li>
-              <li>マッププール: {HP_MAPS.join(', ')}</li>
-              <li>ホスト抽選あり</li>
-              <li>1時間半経過で終了提案</li>
+              <li>チーム単位で参加（4人以上のチームが必要）</li>
+              <li>各枠30分（20:00〜25:00）。同じ枠に4人以上揃うと募集として公開</li>
+              <li>モード: ハーポ回し / サーチ / オバロ / 複合（マップ数選択可）</li>
+              <li>成立と同時に両チームの Discord に通知（キャンセル時も通知）</li>
+              <li>キャンセル回数は相手チームから見えます</li>
               <li>レート変動なし</li>
             </ul>
             <h3>共通ルール</h3>

@@ -27,7 +27,7 @@ export default function Footer() {
             <ul>
               <li><Link href="/match">ランクマッチ</Link></li>
               <li><Link href="/custom">8人カスタム</Link></li>
-              <li><Link href="/custom">スクリム</Link></li>
+              <li><Link href="/custom/board">交流戦ボード</Link></li>
               <li><Link href="/tournaments">大会一覧</Link></li>
             </ul>
           </div>
