@@ -275,6 +275,19 @@ export default function BanpickPage() {
   const [showTrophyPopup, setShowTrophyPopup] = useState(false);
 
   const chatBottomRef = useRef<HTMLDivElement | null>(null);
+  const chatBoxRef = useRef<HTMLDivElement | null>(null);
+  const chatPrevCountRef = useRef(0);
+
+  // チャットは最新を下に表示し、新着時は最下部へ自動スクロール
+  // (ユーザーが履歴を遡っている最中は動かさない)
+  useEffect(() => {
+    const box = chatBoxRef.current;
+    if (!box || messages.length === 0) return;
+    const isFirst = chatPrevCountRef.current === 0;
+    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+    if (isFirst || nearBottom) box.scrollTop = box.scrollHeight;
+    chatPrevCountRef.current = messages.length;
+  }, [messages]);
 
   // State 変化で音を鳴らす（realtime でもポーリングでも動作）
   useSoundOnChange(session?.turn_number ?? 0, playBanpickAction);
@@ -602,9 +615,14 @@ export default function BanpickPage() {
       setTrophyRemainingSec(null);
       return;
     }
-    const srCompletedAt = match?.sr_completed_at
-      ? new Date(match.sr_completed_at).getTime()
-      : Date.now();
+    // sr_completed_at はサーバー(_check_sr_completion)が設定する。
+    // 未設定の間にクライアント各自の Date.now() を起点にすると、
+    // プレイヤーごとに締切がずれるためタイマーを開始しない (次のポーリングで値が来る)
+    if (!match?.sr_completed_at) {
+      setTrophyRemainingSec(null);
+      return;
+    }
+    const srCompletedAt = new Date(match.sr_completed_at).getTime();
     const deadline = srCompletedAt + 3 * 60 * 1000;
     const tick = () => {
       const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
@@ -1368,11 +1386,11 @@ export default function BanpickPage() {
           {/* Chat */}
           <div className="card-strong">
             <div className="sec-title"><IconChat /> チャット</div>
-            <div style={{ maxHeight: 320, overflowY: "auto", marginBottom: 10 }} className="stack-sm">
+            <div ref={chatBoxRef} style={{ maxHeight: 320, overflowY: "auto", marginBottom: 10 }} className="stack-sm">
               {messages.length === 0 ? (
                 <div className="muted" style={{ fontSize: 12, padding: "12px 0", textAlign: "center" }}>まだメッセージはありません。</div>
               ) : (
-                messages.map((msg) => {
+                [...messages].reverse().map((msg) => {
                   const isSystem = msg.message_type === "system";
                   const isMine = msg.sender_user_id === myUserId;
                   const bg = isSystem

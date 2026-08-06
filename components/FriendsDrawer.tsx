@@ -199,9 +199,18 @@ export default function FriendsDrawer({ onClose }: { onClose: () => void }) {
                     <div
                       key={f.friendship_id}
                       className="fd-row"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => {
                         router.push(`/users/${f.friend_user_id}`)
                         onClose()
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          router.push(`/users/${f.friend_user_id}`)
+                          onClose()
+                        }
                       }}
                     >
                       <div className="fd-row-avatar">
@@ -317,9 +326,18 @@ export default function FriendsDrawer({ onClose }: { onClose: () => void }) {
           <div className="fd-body">
             <div
               className="fd-dm-row"
+              role="button"
+              tabIndex={0}
               onClick={() => {
                 router.push('/dm')
                 onClose()
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  router.push('/dm')
+                  onClose()
+                }
               }}
             >
               <div className="fd-dm-main">

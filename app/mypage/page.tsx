@@ -695,6 +695,9 @@ export default function MyPage() {
               className="card glow-hover"
               style={{ cursor: 'pointer' }}
               onClick={() => router.push(`/team/${team.id}`)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/team/${team.id}`) } }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                 <div>

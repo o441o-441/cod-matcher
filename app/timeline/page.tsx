@@ -204,8 +204,18 @@ export default function TimelinePage() {
     setThreadReplies(replies.map(r => ({ ...r, author_name: pm.get(r.author_id)?.name ?? '不明', author_rating: pm.get(r.author_id)?.rating ?? null, my_gg: false, my_fire: false, my_repost: false, replies_count: 0, reposts_count: 0, parent_post_id: null, quote_post_id: null })))
   }
 
+  // render中に Date.now() を呼ばない (SSRとの不一致・React purity 対策)。
+  // 現在時刻はstateに持ち、30秒ごとに更新して相対表示を進める
+  const [nowTs, setNowTs] = useState(0)
+  useEffect(() => {
+    setNowTs(Date.now())
+    const iv = setInterval(() => setNowTs(Date.now()), 30000)
+    return () => clearInterval(iv)
+  }, [])
+
   const timeAgo = (d: string) => {
-    const sec = Math.floor((Date.now() - new Date(d).getTime()) / 1000)
+    if (!nowTs) return ''
+    const sec = Math.max(0, Math.floor((nowTs - new Date(d).getTime()) / 1000))
     if (sec < 60) return `${sec}秒前`
     if (sec < 3600) return `${Math.floor(sec / 60)}分前`
     if (sec < 86400) return `${Math.floor(sec / 3600)}時間前`

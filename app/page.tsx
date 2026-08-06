@@ -136,7 +136,7 @@ export default function HomePage() {
             </div>
             <div className="row" style={{ gap: 0, overflow: 'hidden' }}>
               {tourneys.map((t, i) => (
-                <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '4px 18px', borderLeft: i === 0 ? 'none' : '1px solid var(--line)', cursor: 'pointer' }} onClick={() => router.push(`/tournaments/${t.id}`)}>
+                <div key={t.id} role="button" tabIndex={0} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '4px 18px', borderLeft: i === 0 ? 'none' : '1px solid var(--line)', cursor: 'pointer' }} onClick={() => router.push(`/tournaments/${t.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/tournaments/${t.id}`) } }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-strong)', whiteSpace: 'nowrap' }}>{t.title}</div>
                   <div className="muted mono" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{t.format === 'league' ? 'リーグ' : 'トーナメント'} · {t.status === 'recruit' ? '募集中' : '開催中'}</div>
                 </div>
@@ -162,7 +162,7 @@ export default function HomePage() {
             <div className="feed-head"><span className="feed-eyebrow amber">大会告知</span>{tourneys.length > 0 && <span className="badge amber" style={{ fontSize: 9 }}><span className="badge-dot" />LIVE</span>}</div>
             {tourneys.length === 0 ? <p className="muted" style={{ fontSize: 12 }}>大会はありません</p> : (
               <div className="stack-sm">{tourneys.map((t, i) => (
-                <div key={t.id} style={{ paddingTop: i === 0 ? 0 : 10, borderTop: i === 0 ? 'none' : '1px solid var(--line)', cursor: 'pointer' }} onClick={() => router.push(`/tournaments/${t.id}`)}>
+                <div key={t.id} role="button" tabIndex={0} style={{ paddingTop: i === 0 ? 0 : 10, borderTop: i === 0 ? 'none' : '1px solid var(--line)', cursor: 'pointer' }} onClick={() => router.push(`/tournaments/${t.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/tournaments/${t.id}`) } }}>
                   <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-strong)' }}>{t.title}</div>
                   <div className="muted mono" style={{ fontSize: 10, marginTop: 2 }}>{t.format === 'league' ? 'リーグ' : 'トーナメント'} · {t.status === 'recruit' ? '募集中' : '開催中'}</div>
                 </div>
@@ -173,7 +173,7 @@ export default function HomePage() {
             <div className="feed-head"><span className="feed-eyebrow violet">新着レビュー</span><span className="muted mono" style={{ fontSize: 10 }}>{reviews.length} 件</span></div>
             {reviews.length === 0 ? <p className="muted" style={{ fontSize: 12 }}>レビューはまだありません</p> : (
               <div className="stack-sm">{reviews.map((r, i) => (
-                <div key={r.id} style={{ paddingTop: i === 0 ? 0 : 10, borderTop: i === 0 ? 'none' : '1px solid var(--line)', cursor: 'pointer' }} onClick={() => router.push(`/blog/${r.slug}`)}>
+                <div key={r.id} role="button" tabIndex={0} style={{ paddingTop: i === 0 ? 0 : 10, borderTop: i === 0 ? 'none' : '1px solid var(--line)', cursor: 'pointer' }} onClick={() => router.push(`/blog/${r.slug}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/blog/${r.slug}`) } }}>
                   <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-strong)' }}>{r.controller_name ?? r.title}</div>
                   {r.excerpt && <p className="muted" style={{ margin: '4px 0 0', fontSize: 11, lineHeight: 1.5 }}>{r.excerpt.slice(0, 60)}</p>}
                 </div>

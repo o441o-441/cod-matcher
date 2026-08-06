@@ -41,6 +41,7 @@ export default function MenuPage() {
   const [peakRating, setPeakRating] = useState<number | null>(cached?.peakRating ?? null)
   const [wins, setWins] = useState<number | null>(cached?.wins ?? null)
   const [losses, setLosses] = useState<number | null>(cached?.losses ?? null)
+  const [winStreak, setWinStreak] = useState(0)
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [notifications, setNotifications] = useState<{ id: string; type: string; body: string; link: string | null; created_at: string }[]>([])
 
@@ -84,7 +85,7 @@ export default function MenuPage() {
       const [userRes, memberRes, profileRes, notifRes] = await Promise.all([
         supabase.from('users').select('is_profile_complete').eq('auth_user_id', session.user.id).maybeSingle<{ is_profile_complete: boolean | null }>(),
         supabase.from('team_members').select('team_id').eq('user_id', session.user.id).maybeSingle<{ team_id: string | null }>(),
-        supabase.from('profiles').select('is_admin, current_rating, peak_rating, wins, losses').eq('id', session.user.id).maybeSingle<{ is_admin: boolean | null; current_rating: number | null; peak_rating: number | null; wins: number | null; losses: number | null }>(),
+        supabase.from('profiles').select('is_admin, current_rating, peak_rating, wins, losses, win_streak').eq('id', session.user.id).maybeSingle<{ is_admin: boolean | null; current_rating: number | null; peak_rating: number | null; wins: number | null; losses: number | null; win_streak: number | null }>(),
         supabase.from('notifications').select('id, type, body, link, created_at').eq('user_id', session.user.id).eq('is_read', false).order('created_at', { ascending: false }).limit(10),
       ])
 
@@ -120,6 +121,7 @@ export default function MenuPage() {
       setIsAdmin(!!profileRow?.is_admin)
       setRating(profileRow?.current_rating ?? null)
       setPeakRating(profileRow?.peak_rating ?? null)
+      setWinStreak(profileRow?.win_streak ?? 0)
       setWins(profileRow?.wins ?? null)
       setLosses(profileRow?.losses ?? null)
 
@@ -240,8 +242,8 @@ export default function MenuPage() {
                 </div>
                 <div className="stack-sm">
                   <span className="stat-label">連勝</span>
-                  <span className="mono tabular" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' }}>
-                    —
+                  <span className="mono tabular" style={{ fontSize: 18, fontWeight: 700, color: winStreak >= 3 ? 'var(--amber)' : 'var(--text-strong)' }}>
+                    {winStreak > 0 ? `${winStreak}連勝中` : '—'}
                   </span>
                 </div>
               </div>
@@ -505,6 +507,9 @@ export default function MenuPage() {
                   className="card"
                   style={{ cursor: n.link ? 'pointer' : undefined, padding: '14px 16px' }}
                   onClick={() => handleNotificationClick(n)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void handleNotificationClick(n) } }}
                 >
                   <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 12, alignItems: 'center' }}>
                     {/* Dot indicator */}

@@ -191,6 +191,18 @@ export default function ReportPage() {
   ]);
 
   const [reportRemainingSec, setReportRemainingSec] = useState<number | null>(null);
+  const chatBoxRef = useRef<HTMLDivElement | null>(null);
+  const chatPrevCountRef = useRef(0);
+
+  // チャットは最新を下に表示し、新着時は最下部へ自動スクロール
+  useEffect(() => {
+    const box = chatBoxRef.current;
+    if (!box || messages.length === 0) return;
+    const isFirst = chatPrevCountRef.current === 0;
+    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+    if (isFirst || nearBottom) box.scrollTop = box.scrollHeight;
+    chatPrevCountRef.current = messages.length;
+  }, [messages]);
   // 期限超過後に毎秒RPCを連打しないための一度きりガード (trophy timeout と同じパターン)
   const reportTimeoutTriggeredRef = useRef(false);
 
@@ -1110,7 +1122,7 @@ export default function ReportPage() {
           <div className="card-strong">
             <div className="sec-title">チャット</div>
 
-            <div style={{
+            <div ref={chatBoxRef} style={{
               height: 360,
               overflowY: 'auto',
               display: 'flex',
@@ -1121,7 +1133,7 @@ export default function ReportPage() {
               {messages.length === 0 ? (
                 <p className="muted" style={{ padding: 16, textAlign: 'center' }}>メッセージはありません</p>
               ) : (
-                messages.map((msg) => {
+                [...messages].reverse().map((msg) => {
                   const senderName = msg.profiles?.display_name ?? null;
                   const isSystem = msg.message_type === "system";
                   const senderMember = members.find((m) => m.user_id === msg.sender_user_id);

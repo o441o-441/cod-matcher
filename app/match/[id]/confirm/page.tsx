@@ -139,6 +139,18 @@ export default function MatchConfirmPage() {
   const [showNonHostPopup, setShowNonHostPopup] = useState(false);
   const [showLobbyCodePopup, setShowLobbyCodePopup] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const chatBoxRef = useRef<HTMLDivElement | null>(null);
+  const chatPrevCountRef = useRef(0);
+
+  // チャットは最新を下に表示し、新着時は最下部へ自動スクロール
+  useEffect(() => {
+    const box = chatBoxRef.current;
+    if (!box || messages.length === 0) return;
+    const isFirst = chatPrevCountRef.current === 0;
+    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+    if (isFirst || nearBottom) box.scrollTop = box.scrollHeight;
+    chatPrevCountRef.current = messages.length;
+  }, [messages]);
   const prevMsgCountRef = useRef(0);
   const loadBusyRef = useRef(false);
   const cachedUidRef = useRef<string | null>(null);
@@ -806,12 +818,12 @@ export default function MatchConfirmPage() {
         <div>
           <div className="card-strong" style={{ display: "flex", flexDirection: "column" }}>
             <h2 style={{ marginTop: 0 }}>試合チャット</h2>
-            <div style={{ height: 520, overflowY: "auto", borderRadius: "var(--r-md)", border: "1px solid var(--line)", background: "rgba(0,0,0,0.2)", padding: 12, marginTop: 12 }}>
+            <div ref={chatBoxRef} style={{ height: 520, overflowY: "auto", borderRadius: "var(--r-md)", border: "1px solid var(--line)", background: "rgba(0,0,0,0.2)", padding: 12, marginTop: 12 }}>
               <div className="stack-sm">
                 {messages.length === 0 ? (
                   <p className="dim" style={{ fontSize: 14 }}>まだメッセージはありません。</p>
                 ) : (
-                  messages.map((msg) => (
+                  [...messages].reverse().map((msg) => (
                     <div
                       key={msg.id}
                       className="card"
