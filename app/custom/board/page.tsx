@@ -719,11 +719,18 @@ export default function ScrimBoardPage() {
             <span className="badge"><span className="badge-dot" />BLACK OPS 7 · 4v4</span>
             <span className="badge violet">UNRATED — レート変動なし</span>
           </div>
-          <button type="button" className="btn-ghost" onClick={() => { setContactInput(myPrefs.contact ?? ''); setWebhookOpen(true) }}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" strokeWidth="1.6" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" strokeWidth="1.6" /></svg>
-            通知設定
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" className="btn-ghost" onClick={() => router.push('/rules')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              GAルール
+            </button>
+            <button type="button" className="btn-ghost" onClick={() => { setContactInput(myPrefs.contact ?? ''); setWebhookOpen(true) }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" strokeWidth="1.6" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" strokeWidth="1.6" /></svg>
+              通知設定
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1188,7 +1195,7 @@ export default function ScrimBoardPage() {
                   <span>相手の受付範囲 (同格±1帯) の外です。成立は可能ですが、相手の想定と異なる可能性があります。</span>
                 </div>
               )}
-              <p style={{ margin: '14px 0 0', fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.6 }}>成立と同時に両チームの Discord へ通知が送られ、試合ページ(チャット)が開きます。ホスト決め・ロビーコード共有はそこで行います。この対戦は unrated — レートは変動しません。</p>
+              <p style={{ margin: '14px 0 0', fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.6 }}>成立と同時に両チームの Discord へ通知が送られ、試合ページ(チャット)が開きます。ホスト決め・ロビーコード共有はそこで行います。この対戦は unrated — レートは変動しません。対戦は <a href="/rules" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--cyan)', textDecoration: 'underline', textUnderlineOffset: 2 }}>GAルール</a> に準拠します(新しいタブで開きます)。</p>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 22px', borderTop: `1px solid ${LINE}`, background: 'rgba(0,0,0,0.18)' }}>
               <button type="button" className="btn-ghost" onClick={() => setModal(null)} disabled={confirming}>閉じる</button>

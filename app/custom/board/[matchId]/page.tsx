@@ -251,6 +251,7 @@ export default function ScrimMatchPage() {
 
       <div className="row mt-s" style={{ gap: 8 }}>
         <button className="btn-ghost btn-sm" onClick={() => router.push('/custom/board')}>← ボードに戻る</button>
+        <button className="btn-ghost btn-sm" onClick={() => router.push('/rules')}>GAルールを確認</button>
         {isMember && !isCancelled && (
           <button className="btn-danger btn-sm" onClick={() => setCancelOpen(true)}>対戦をキャンセル</button>
         )}
