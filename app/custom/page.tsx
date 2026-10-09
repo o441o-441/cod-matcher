@@ -11,6 +11,14 @@ type LobbyRow = {
   host_name: string | null
 }
 
+type NotifyPrefsRow = {
+  enabled: boolean
+  hour_start: number | null
+  hour_end: number | null
+  rating_min: number | null
+  rating_max: number | null
+}
+
 export default function CustomPage() {
   const router = useRouter()
   const { showToast } = useToast()
@@ -23,6 +31,17 @@ export default function CustomPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [myLobbyId, setMyLobbyId] = useState<string | null>(null)
 
+  // 8s 通知設定 (オプトイン)
+  const [showNotify, setShowNotify] = useState(false)
+  const [notifyBusy, setNotifyBusy] = useState(false)
+  const [notifyOn, setNotifyOn] = useState(false) // 保存済み設定で enabled か (ボタンのバッジ用)
+  const [notifyEnabled, setNotifyEnabled] = useState(true)
+  const [useHours, setUseHours] = useState(false)
+  const [hourStart, setHourStart] = useState(20)
+  const [hourEnd, setHourEnd] = useState(0)
+  const [ratingMin, setRatingMin] = useState<number | null>(null)
+  const [ratingMax, setRatingMax] = useState<number | null>(null)
+
   const loadLobbies = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     const uid = session?.user?.id ?? null
@@ -30,14 +49,31 @@ export default function CustomPage() {
 
     // Check if user is already in an active lobby
     if (uid) {
-      const { data: myMembership } = await supabase
-        .from('eights_lobby_members')
-        .select('lobby_id, eights_lobbies!inner(id, status)')
-        .eq('user_id', uid)
-        .in('eights_lobbies.status', ['open', 'drafting'])
-        .limit(1)
-        .maybeSingle()
+      const [{ data: myMembership }, { data: prefs }] = await Promise.all([
+        supabase
+          .from('eights_lobby_members')
+          .select('lobby_id, eights_lobbies!inner(id, status)')
+          .eq('user_id', uid)
+          .in('eights_lobbies.status', ['open', 'drafting'])
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('eights_notify_prefs')
+          .select('enabled, hour_start, hour_end, rating_min, rating_max')
+          .eq('user_id', uid)
+          .maybeSingle(),
+      ])
       setMyLobbyId((myMembership as { lobby_id: string } | null)?.lobby_id ?? null)
+      const p = prefs as NotifyPrefsRow | null
+      if (p) {
+        setNotifyOn(p.enabled)
+        setNotifyEnabled(p.enabled)
+        setUseHours(p.hour_start != null)
+        if (p.hour_start != null) setHourStart(p.hour_start)
+        if (p.hour_end != null) setHourEnd(p.hour_end)
+        setRatingMin(p.rating_min)
+        setRatingMax(p.rating_max)
+      }
     }
 
     const { data } = await supabase
@@ -83,6 +119,39 @@ export default function CustomPage() {
     if (error) { showToast(error.message, 'error'); return }
     const result = data as { lobby_id: string }
     router.push(`/custom/eights/${result.lobby_id}`)
+  }
+
+  const saveNotifyPrefs = async () => {
+    if (ratingMin != null && ratingMax != null && ratingMin > ratingMax) {
+      showToast('レート帯の下限が上限を超えています', 'error')
+      return
+    }
+    setNotifyBusy(true)
+    const { error } = await supabase.rpc('rpc_eights_set_notify_prefs', {
+      p_enabled: notifyEnabled,
+      p_hour_start: useHours ? hourStart : null,
+      p_hour_end: useHours ? hourEnd : null,
+      p_rating_min: ratingMin,
+      p_rating_max: ratingMax,
+    })
+    if (error) { setNotifyBusy(false); showToast(error.message, 'error'); return }
+
+    // Discordの @8s募集 ロールも同期 (ベストエフォート — 失敗してもサイト内通知は有効)
+    let roleMsg = ''
+    try {
+      const { data: sync, error: syncErr } = await supabase.functions.invoke('discord-8s-role', { body: { enabled: notifyEnabled } })
+      if (syncErr) throw syncErr
+      const s = sync as { ok: boolean; reason?: string }
+      if (s.ok) roleMsg = notifyEnabled ? '。Discordの募集ロールも付与しました' : '。Discordの募集ロールも外しました'
+      else if (s.reason === 'not_in_guild') roleMsg = '（Discordサーバー未参加のためロールは付与されませんでした）'
+    } catch {
+      roleMsg = '（Discordロールの同期には失敗しました）'
+    }
+
+    setNotifyBusy(false)
+    setNotifyOn(notifyEnabled)
+    setShowNotify(false)
+    showToast((notifyEnabled ? '8s開催の通知を受け取ります' : '8s開催の通知をオフにしました') + roleMsg, 'success')
   }
 
   const handleJoin = async (lobbyId: string) => {
@@ -131,12 +200,17 @@ export default function CustomPage() {
             <h2 style={{ margin: 0 }}>開催中の 8s ロビー</h2>
             <div className="row" style={{ gap: 8 }}>
               <span className="badge"><span className="badge-dot" />LIVE {lobbies.length}</span>
+              {myUserId && (
+                <button className="btn-ghost" onClick={() => setShowNotify(true)}>
+                  通知設定{notifyOn ? ' · ON' : ''}
+                </button>
+              )}
               <button className="btn-primary" onClick={() => setShowCreate(true)}>+ 8s を開催する</button>
             </div>
           </div>
 
           <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-            8sを開催すると <span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> の #8s-lobby に @everyone 通知が自動送信されます
+            8sが開催されると、通知設定をオンにしたメンバーにサイト内通知が届きます（レート帯・時間帯で絞り込み可）。<span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> の #8s-lobby にも通知されます
           </p>
 
           {myLobbyId && (
@@ -184,7 +258,7 @@ export default function CustomPage() {
                 <h2 style={{ marginTop: 0 }}>8s を開催する</h2>
                 <div className="card" style={{ padding: '10px 14px', marginBottom: 14, borderColor: 'rgba(88,101,242,0.4)', background: 'rgba(88,101,242,0.08)' }}>
                   <p style={{ margin: 0, fontSize: 12, color: 'var(--text)' }}>
-                    <span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> の #8s-lobby チャンネルに @everyone 通知が自動送信されます
+                    通知設定をオンにしたメンバーへのサイト内通知と、<span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> #8s-lobby への通知が自動送信されます
                   </p>
                 </div>
                 <div style={{ marginBottom: 12 }}>
@@ -198,6 +272,74 @@ export default function CustomPage() {
                 <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
                   <button className="btn-ghost" onClick={() => setShowCreate(false)}>キャンセル</button>
                   <button className="btn-primary" onClick={handleCreate} disabled={busy}>{busy ? '作成中...' : '開催する'}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Notify prefs modal */}
+          {showNotify && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000, padding: 20 }}
+              onClick={() => { if (!notifyBusy) setShowNotify(false) }}>
+              <div className="card-strong" style={{ maxWidth: 460, width: '100%', overflow: 'visible' }} onClick={e => e.stopPropagation()}>
+                <h2 style={{ marginTop: 0 }}>8s 通知設定</h2>
+                <p className="muted" style={{ fontSize: 12, marginTop: 0, marginBottom: 14 }}>
+                  8sロビーが開催されたときに、サイト内通知でお知らせします。参加できないロビー（レート制限超過）は通知されません。
+                  オンにすると <span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> の募集ロールも自動で付与され、#8s-lobby のメンション通知も受け取れます（レート帯・時間帯の絞り込みはサイト内通知のみ）。
+                </p>
+
+                <button type="button" onClick={() => setNotifyEnabled(v => !v)} aria-pressed={notifyEnabled}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', background: 'rgba(6,10,22,0.6)', border: `1px solid ${notifyEnabled ? 'rgba(0,229,255,0.4)' : 'var(--line)'}`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer', marginBottom: 14 }}>
+                  <span style={{ width: 32, height: 18, borderRadius: 9, border: `1px solid ${notifyEnabled ? 'var(--cyan)' : 'var(--line)'}`, background: notifyEnabled ? 'rgba(0,229,255,0.25)' : 'rgba(22,28,58,0.9)', position: 'relative', display: 'inline-block', flex: 'none', transition: 'all .15s' }}>
+                    <span style={{ position: 'absolute', top: 2, left: notifyEnabled ? 16 : 2, width: 12, height: 12, borderRadius: '50%', background: notifyEnabled ? 'var(--cyan)' : 'var(--text-dim)', transition: 'all .15s' }} />
+                  </span>
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)' }}>8s開催の通知を受け取る</span>
+                </button>
+
+                {notifyEnabled && (
+                  <>
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={useHours} onChange={e => setUseHours(e.target.checked)} style={{ width: 'auto' }} />
+                        時間帯を指定する
+                      </label>
+                      {useHours && (
+                        <div className="row" style={{ gap: 8, marginTop: 8, alignItems: 'center' }}>
+                          <select value={hourStart} onChange={e => setHourStart(Number(e.target.value))} style={{ width: 100 }}>
+                            {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h}:00</option>)}
+                          </select>
+                          <span className="muted">〜</span>
+                          <select value={hourEnd} onChange={e => setHourEnd(Number(e.target.value))} style={{ width: 100 }}>
+                            {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h}:00</option>)}
+                          </select>
+                        </div>
+                      )}
+                      {useHours && (
+                        <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
+                          この時間帯に開催された8sだけ通知します。終了を開始より前にすると日跨ぎ（例: 22:00〜2:00）。{hourStart === hourEnd ? '開始と終了が同じ場合は常時通知になります。' : ''}
+                        </p>
+                      )}
+                    </div>
+
+                    <div style={{ marginBottom: 16 }}>
+                      <label className="stat-label">レート帯（任意）</label>
+                      <div className="row" style={{ gap: 8, marginTop: 6, alignItems: 'center' }}>
+                        <input type="number" value={ratingMin ?? ''} onChange={e => setRatingMin(e.target.value ? Number(e.target.value) : null)}
+                          placeholder="下限なし" min={0} max={4000} step={100} style={{ width: 130 }} />
+                        <span className="muted">〜</span>
+                        <input type="number" value={ratingMax ?? ''} onChange={e => setRatingMax(e.target.value ? Number(e.target.value) : null)}
+                          placeholder="上限なし" min={0} max={4000} step={100} style={{ width: 130 }} />
+                      </div>
+                      <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
+                        ホストのピークレートがこの範囲のロビーだけ通知します。空欄で指定なし。
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
+                  <button className="btn-ghost" onClick={() => setShowNotify(false)} disabled={notifyBusy}>キャンセル</button>
+                  <button className="btn-primary" onClick={() => void saveNotifyPrefs()} disabled={notifyBusy}>{notifyBusy ? '保存中...' : '保存'}</button>
                 </div>
               </div>
             </div>
