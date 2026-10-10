@@ -43,6 +43,13 @@ type MatchRow = {
 
 type TeamNameMap = Record<string, string>
 
+type TeamAchievement = {
+  placement: number
+  achieved_at: string
+  tournament_id: string
+  title: string
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_MEMBERS = 5
 
@@ -63,6 +70,7 @@ export default function TeamDetailPage() {
   const [members, setMembers] = useState<TeamMemberRow[]>([])
   const [matches, setMatches] = useState<MatchRow[]>([])
   const [teamNames, setTeamNames] = useState<TeamNameMap>({})
+  const [achievements, setAchievements] = useState<TeamAchievement[]>([])
   const [loading, setLoading] = useState(true)
 
   const [myUserId, setMyUserId] = useState<string | null>(null)
@@ -222,6 +230,22 @@ export default function TeamDetailPage() {
       for (const item of (teamsData ?? []) as { id: string; name: string }[]) map[item.id] = item.name
       setTeamNames(map)
     }
+
+    // 大会実績 (記録はメンバーごとなので大会×順位で重複排除)
+    const { data: achData } = await supabase
+      .from('tournament_achievements')
+      .select('placement, achieved_at, tournament_id, tournaments!inner(title)')
+      .eq('team_id', teamId)
+      .order('achieved_at', { ascending: false })
+    const achSeen = new Set<string>()
+    const achList: TeamAchievement[] = []
+    for (const a of ((achData ?? []) as unknown as { placement: number; achieved_at: string; tournament_id: string; tournaments: { title: string } | null }[])) {
+      const key = `${a.tournament_id}-${a.placement}`
+      if (achSeen.has(key)) continue
+      achSeen.add(key)
+      achList.push({ placement: a.placement, achieved_at: a.achieved_at, tournament_id: a.tournament_id, title: a.tournaments?.title ?? '大会' })
+    }
+    setAchievements(achList)
 
     setLoading(false)
   }
@@ -717,6 +741,44 @@ export default function TeamDetailPage() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Tournament achievements */}
+        {achievements.length > 0 && (
+          <div className="section">
+            <div className="card-strong">
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div className="sec-title" style={{ margin: 0 }}>大会実績</div>
+                <div className="row" style={{ gap: 10 }}>
+                  {achievements.filter(a => a.placement === 1).length > 0 && (
+                    <span className="badge" style={{ color: 'var(--gold, #ffd700)', borderColor: 'rgba(255,215,0,0.4)' }}>🏆 優勝 {achievements.filter(a => a.placement === 1).length}回</span>
+                  )}
+                  {achievements.filter(a => a.placement === 2).length > 0 && (
+                    <span className="badge">🥈 準優勝 {achievements.filter(a => a.placement === 2).length}回</span>
+                  )}
+                </div>
+              </div>
+              <div className="stack-sm">
+                {achievements.map((a) => (
+                  <div key={`${a.tournament_id}-${a.placement}`} className="card" style={{ padding: '10px 14px', cursor: 'pointer' }}
+                    onClick={() => router.push(`/tournaments/${a.tournament_id}/results`)}>
+                    <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
+                      <div className="row" style={{ gap: 10, minWidth: 0 }}>
+                        <span style={{ fontSize: 16 }}>{a.placement === 1 ? '🏆' : '🥈'}</span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: 13.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.title}</div>
+                          <div className="muted" style={{ fontSize: 11 }}>{a.placement === 1 ? '優勝' : '準優勝'}</div>
+                        </div>
+                      </div>
+                      <span className="mono muted" style={{ fontSize: 11, flex: 'none' }}>
+                        {new Date(a.achieved_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}

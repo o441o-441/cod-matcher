@@ -24,6 +24,14 @@ type LegacyUser = {
   platform: string | null
 }
 
+type AchievementRow = {
+  placement: number
+  team_label: string | null
+  achieved_at: string
+  tournament_id: string
+  tournaments: { title: string } | null
+}
+
 export default function UserProfilePage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
@@ -49,6 +57,7 @@ export default function UserProfilePage() {
   const [followersCount, setFollowersCount] = useState(0)
   const [isFollowing, setIsFollowing] = useState(false)
   const [myUid, setMyUid] = useState<string | null>(null)
+  const [achievements, setAchievements] = useState<AchievementRow[]>([])
 
   type SeasonOption = { id: string; name: string; start_date: string; end_date: string; is_active: boolean }
   const [seasons, setSeasons] = useState<SeasonOption[]>([])
@@ -74,7 +83,7 @@ export default function UserProfilePage() {
       setSignedIn(!!myId)
 
       // Parallel: profiles, users, team_members, seasons, follow counts
-      const [profileRes, legacyRes, memberRes, seasonRes, { count: fwingCount }, { count: fwerCount }, { data: amFollowing }] = await Promise.all([
+      const [profileRes, legacyRes, memberRes, seasonRes, { count: fwingCount }, { count: fwerCount }, { data: amFollowing }, achieveRes] = await Promise.all([
         supabase.from('profiles').select('id, display_name, current_rating, is_banned, is_monitor, is_approved, bio').eq('id', userId).maybeSingle<ProfileRow>(),
         supabase.from('users').select('controller, activision_id, discord_name, platform').eq('auth_user_id', userId).maybeSingle<LegacyUser>(),
         supabase.from('team_members').select('team_id').eq('user_id', userId).maybeSingle<{ team_id: string }>(),
@@ -82,6 +91,7 @@ export default function UserProfilePage() {
         supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId),
         supabase.from('follows').select('*', { count: 'exact', head: true }).eq('followee_id', userId),
         myId ? supabase.from('follows').select('follower_id').eq('follower_id', myId).eq('followee_id', userId).maybeSingle() : Promise.resolve({ data: null }),
+        supabase.from('tournament_achievements').select('placement, team_label, achieved_at, tournament_id, tournaments!inner(title)').eq('user_id', userId).order('achieved_at', { ascending: false }),
       ])
 
       setProfile(profileRes.data ?? null)
@@ -89,6 +99,7 @@ export default function UserProfilePage() {
       setFollowingCount(fwingCount ?? 0)
       setFollowersCount(fwerCount ?? 0)
       setIsFollowing(!!amFollowing)
+      setAchievements(((achieveRes.data ?? []) as unknown) as AchievementRow[])
 
       if (memberRes.data?.team_id) {
         const { data: teamRow } = await supabase
@@ -370,6 +381,44 @@ export default function UserProfilePage() {
                 )}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Tournament achievements */}
+      {achievements.length > 0 && (
+        <div className="section">
+          <div className="card-strong">
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div className="sec-title" style={{ margin: 0 }}>大会実績</div>
+              <div className="row" style={{ gap: 10 }}>
+                {achievements.filter(a => a.placement === 1).length > 0 && (
+                  <span className="badge" style={{ color: 'var(--gold, #ffd700)', borderColor: 'rgba(255,215,0,0.4)' }}>🏆 優勝 {achievements.filter(a => a.placement === 1).length}回</span>
+                )}
+                {achievements.filter(a => a.placement === 2).length > 0 && (
+                  <span className="badge">🥈 準優勝 {achievements.filter(a => a.placement === 2).length}回</span>
+                )}
+              </div>
+            </div>
+            <div className="stack-sm">
+              {achievements.map((a, i) => (
+                <div key={`${a.tournament_id}-${a.placement}-${i}`} className="card" style={{ padding: '10px 14px', cursor: 'pointer' }}
+                  onClick={() => router.push(`/tournaments/${a.tournament_id}/results`)}>
+                  <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
+                    <div className="row" style={{ gap: 10, minWidth: 0 }}>
+                      <span style={{ fontSize: 16 }}>{a.placement === 1 ? '🏆' : '🥈'}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.tournaments?.title ?? '大会'}</div>
+                        <div className="muted" style={{ fontSize: 11 }}>{a.placement === 1 ? '優勝' : '準優勝'}{a.team_label ? ` · ${a.team_label}` : ''}</div>
+                      </div>
+                    </div>
+                    <span className="mono muted" style={{ fontSize: 11, flex: 'none' }}>
+                      {new Date(a.achieved_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
