@@ -356,6 +356,7 @@ export default function CustomPage() {
               <div className="muted"><span style={{ color: 'var(--magenta)', marginRight: 8, fontWeight: 700 }}>1.</span>メンバーが空き時間を入力（曜日テンプレで自動反映も可）</div>
               <div className="muted"><span style={{ color: 'var(--magenta)', marginRight: 8, fontWeight: 700 }}>2.</span>4人揃った枠が自動でボードに公開される</div>
               <div className="muted"><span style={{ color: 'var(--magenta)', marginRight: 8, fontWeight: 700 }}>3.</span>モード（ハーポ回し / サーチ / オバロ / 複合）を選んで相手の ▶ を押すだけ</div>
+              <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>+</span>チームがなくても「混成ルーム」で日時を決めて4人集めれば参加できます（他チームの人との混合もOK）</div>
             </div>
           </div>
         </div>

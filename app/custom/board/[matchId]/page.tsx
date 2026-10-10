@@ -16,8 +16,10 @@ type MatchRow = {
   date: string
   slot_start: number
   slot_end: number
-  host_team_id: string
-  guest_team_id: string
+  host_team_id: string | null
+  guest_team_id: string | null
+  host_room_id: string | null
+  guest_room_id: string | null
   hp_maps: number
   snd_maps: number
   ovl_maps: number
@@ -62,9 +64,10 @@ export default function ScrimMatchPage() {
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [myTeamId, setMyTeamId] = useState<string | null>(null)
   const [match, setMatch] = useState<MatchRow | null>(null)
-  const [teamNames, setTeamNames] = useState<Record<string, string>>({})
-  const [contacts, setContacts] = useState<Record<string, string | null>>({})
-  const [memberNames, setMemberNames] = useState<Record<string, { name: string; teamId: string }>>({})
+  const [sideNames, setSideNames] = useState<{ host: string; guest: string }>({ host: '不明', guest: '不明' })
+  const [contacts, setContacts] = useState<{ host: string | null; guest: string | null }>({ host: null, guest: null })
+  const [memberNames, setMemberNames] = useState<Record<string, { name: string; side: 'host' | 'guest' }>>({})
+  const [myRoomSide, setMyRoomSide] = useState(false) // 自分が混成ルーム側のメンバーか
   const [messages, setMessages] = useState<MessageRow[]>([])
   const [input, setInput] = useState('')
   const [lobbyCode, setLobbyCode] = useState('')
@@ -76,7 +79,9 @@ export default function ScrimMatchPage() {
   const chatBoxRef = useRef<HTMLDivElement | null>(null)
   const chatPrevCountRef = useRef(0)
 
-  const isMember = !!myTeamId && !!match && (match.host_team_id === myTeamId || match.guest_team_id === myTeamId)
+  const isMember = !!match && (
+    (!!myTeamId && (match.host_team_id === myTeamId || match.guest_team_id === myTeamId)) || myRoomSide
+  )
 
   useEffect(() => {
     if (!toast) return
@@ -115,32 +120,55 @@ export default function ScrimMatchPage() {
         setMatch(m)
         if (!m) { setLoading(false); return }
 
-        const teamIds = [m.host_team_id, m.guest_team_id]
-        const [{ data: teamRows }, { data: prefRows }] = await Promise.all([
-          supabase.from('teams').select('id, name').in('id', teamIds),
-          supabase.from('scrim_team_prefs').select('team_id, public_contact').in('team_id', teamIds),
+        const teamIds = [m.host_team_id, m.guest_team_id].filter((v): v is string => !!v)
+        const roomIds = [m.host_room_id, m.guest_room_id].filter((v): v is string => !!v)
+        const [{ data: teamRows }, { data: prefRows }, { data: roomRows }, { data: roomMemberRows }] = await Promise.all([
+          teamIds.length > 0 ? supabase.from('teams').select('id, name').in('id', teamIds) : Promise.resolve({ data: [] }),
+          teamIds.length > 0 ? supabase.from('scrim_team_prefs').select('team_id, public_contact').in('team_id', teamIds) : Promise.resolve({ data: [] }),
+          roomIds.length > 0 ? supabase.from('scrim_mixed_rooms').select('id, name').in('id', roomIds) : Promise.resolve({ data: [] }),
+          roomIds.length > 0 ? supabase.from('scrim_mixed_room_members').select('room_id, user_id, profiles!inner(display_name)').in('room_id', roomIds) : Promise.resolve({ data: [] }),
         ])
         const tn: Record<string, string> = {}
         for (const t of (teamRows ?? []) as { id: string; name: string }[]) tn[t.id] = t.name
-        setTeamNames(tn)
+        const rn: Record<string, string> = {}
+        for (const r of (roomRows ?? []) as { id: string; name: string }[]) rn[r.id] = r.name
+        const nameOf = (teamId: string | null, roomId: string | null) =>
+          teamId ? (tn[teamId] ?? '不明') : `${rn[roomId ?? ''] ?? '不明'}【混成】`
+        setSideNames({
+          host: nameOf(m.host_team_id, m.host_room_id),
+          guest: nameOf(m.guest_team_id, m.guest_room_id),
+        })
         const cm: Record<string, string | null> = {}
         for (const p of (prefRows ?? []) as { team_id: string; public_contact: string | null }[]) cm[p.team_id] = p.public_contact
-        setContacts(cm)
+        setContacts({
+          host: m.host_team_id ? (cm[m.host_team_id] ?? null) : null,
+          guest: m.guest_team_id ? (cm[m.guest_team_id] ?? null) : null,
+        })
+
+        const roomMembersList = ((roomMemberRows ?? []) as unknown as { room_id: string; user_id: string; profiles: { display_name: string | null } }[])
 
         if (uid) {
           const { data: tm } = await supabase.from('team_members').select('team_id').eq('user_id', uid).maybeSingle()
           const teamId = (tm as { team_id: string } | null)?.team_id ?? null
           setMyTeamId(teamId)
+          const inRoomSide = roomMembersList.some(r => r.user_id === uid)
+          setMyRoomSide(inRoomSide)
 
-          if (teamId && teamIds.includes(teamId)) {
-            // 送信者名の解決用に両チームのメンバー名を取得
-            const { data: members } = await supabase
-              .from('team_members')
-              .select('user_id, team_id, profiles!inner(display_name)')
-              .in('team_id', teamIds)
-            const mn: Record<string, { name: string; teamId: string }> = {}
-            for (const r of ((members ?? []) as unknown as { user_id: string; team_id: string; profiles: { display_name: string | null } }[])) {
-              mn[r.user_id] = { name: r.profiles?.display_name ?? '(名前未設定)', teamId: r.team_id }
+          const isTeamSide = !!teamId && teamIds.includes(teamId)
+          if (isTeamSide || inRoomSide) {
+            // 送信者名の解決用に両サイドのメンバー名を取得
+            const mn: Record<string, { name: string; side: 'host' | 'guest' }> = {}
+            if (teamIds.length > 0) {
+              const { data: members } = await supabase
+                .from('team_members')
+                .select('user_id, team_id, profiles!inner(display_name)')
+                .in('team_id', teamIds)
+              for (const r of ((members ?? []) as unknown as { user_id: string; team_id: string; profiles: { display_name: string | null } }[])) {
+                mn[r.user_id] = { name: r.profiles?.display_name ?? '(名前未設定)', side: r.team_id === m.host_team_id ? 'host' : 'guest' }
+              }
+            }
+            for (const r of roomMembersList) {
+              mn[r.user_id] = { name: r.profiles?.display_name ?? '(名前未設定)', side: r.room_id === m.host_room_id ? 'host' : 'guest' }
             }
             setMemberNames(mn)
             await loadMessages()
@@ -228,9 +256,17 @@ export default function ScrimMatchPage() {
     )
   }
 
-  const hostName = teamNames[match.host_team_id] ?? '不明'
-  const guestName = teamNames[match.guest_team_id] ?? '不明'
-  const oppTeamId = myTeamId === match.host_team_id ? match.guest_team_id : match.host_team_id
+  const hostName = sideNames.host
+  const guestName = sideNames.guest
+  const mySide: 'host' | 'guest' | null =
+    myUserId && memberNames[myUserId]
+      ? memberNames[myUserId].side
+      : myTeamId && match.host_team_id === myTeamId
+        ? 'host'
+        : myTeamId && match.guest_team_id === myTeamId
+          ? 'guest'
+          : null
+  const oppName = mySide === 'host' ? guestName : hostName
   const isCancelled = match.status === 'cancelled'
 
   return (
@@ -264,12 +300,12 @@ export default function ScrimMatchPage() {
       )}
 
       {/* 公開連絡先 (設定しているチームのみ) */}
-      {(contacts[match.host_team_id] || contacts[match.guest_team_id]) && (
+      {(contacts.host || contacts.guest) && (
         <div className="card" style={{ marginTop: 16, padding: '12px 16px' }}>
           <div className="stat-label" style={{ marginBottom: 6 }}>チームの公開連絡先</div>
           <div className="stack-sm" style={{ fontSize: 13 }}>
-            {contacts[match.host_team_id] && <div><span style={{ fontWeight: 700 }}>{hostName}:</span> <span className="muted">{contacts[match.host_team_id]}</span></div>}
-            {contacts[match.guest_team_id] && <div><span style={{ fontWeight: 700 }}>{guestName}:</span> <span className="muted">{contacts[match.guest_team_id]}</span></div>}
+            {contacts.host && <div><span style={{ fontWeight: 700 }}>{hostName}:</span> <span className="muted">{contacts.host}</span></div>}
+            {contacts.guest && <div><span style={{ fontWeight: 700 }}>{guestName}:</span> <span className="muted">{contacts.guest}</span></div>}
           </div>
         </div>
       )}
@@ -294,8 +330,8 @@ export default function ScrimMatchPage() {
                       const isSystem = msg.message_type === 'system'
                       const isCode = msg.message_type === 'lobby_code'
                       const sender = msg.sender_user_id ? memberNames[msg.sender_user_id] : null
-                      const senderTeam = sender ? (sender.teamId === match.host_team_id ? hostName : guestName) : null
-                      const isMyTeamMsg = sender?.teamId === myTeamId
+                      const senderTeam = sender ? sideNames[sender.side] : null
+                      const isMyTeamMsg = !!sender && !!mySide && sender.side === mySide
                       return (
                         <div key={msg.id} className="card" style={{
                           padding: '8px 12px',
@@ -360,7 +396,7 @@ export default function ScrimMatchPage() {
       <ConfirmDialog
         open={cancelOpen}
         title="対戦をキャンセルしますか？"
-        message={`${teamNames[oppTeamId] ?? '相手チーム'} との対戦を取り消します。相手チームの Discord にキャンセル通知が送られ、枠はボードに戻ります。キャンセル回数は相手チームから見えるようになります。`}
+        message={`${oppName} との対戦を取り消します。相手の参加メンバーにキャンセル通知が送られ、枠はボードに戻ります。キャンセル回数は相手から見えるようになります。`}
         confirmText={cancelling ? 'キャンセル中...' : 'キャンセルする'}
         cancelText="戻る"
         onConfirm={doCancel}

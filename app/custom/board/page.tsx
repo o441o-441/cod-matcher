@@ -23,13 +23,28 @@ type MatchRow = {
   date: string
   slot_start: number
   slot_end: number
-  host_team_id: string
-  guest_team_id: string
+  host_team_id: string | null
+  guest_team_id: string | null
+  host_room_id: string | null
+  guest_room_id: string | null
   hp_maps: number
   snd_maps: number
   ovl_maps: number
   status: string
 }
+
+type RoomRow = {
+  id: string
+  name: string
+  host_user_id: string
+  date: string
+  slot_start: number
+  slot_end: number
+  note: string | null
+  status: string
+}
+
+type RoomMember = { uid: string; name: string; rating: number | null }
 
 const DAYS = 7
 const SLOTS = ['20:00', '20:30', '21:00', '21:30', '22:00', '22:30', '23:00', '23:30', '24:00', '24:30']
@@ -109,6 +124,17 @@ export default function ScrimBoardPage() {
   const [teamStats, setTeamStats] = useState<Record<string, { games: number; cancels: number }>>({})
   const [myMine, setMyMine] = useState<Record<string, number[]>>({}) // date -> 自分の選択スロット
 
+  // 混成ルーム
+  const [rooms, setRooms] = useState<RoomRow[]>([])
+  const [roomMembers, setRoomMembers] = useState<Record<string, RoomMember[]>>({})
+  const [roomCreateOpen, setRoomCreateOpen] = useState(false)
+  const [roomName, setRoomName] = useState('')
+  const [roomDay, setRoomDay] = useState(0)
+  const [roomStart, setRoomStart] = useState(0)
+  const [roomEnd, setRoomEnd] = useState(10)
+  const [roomNote, setRoomNote] = useState('')
+  const [roomBusy, setRoomBusy] = useState(false)
+
   // UI 状態
   const [editDay, setEditDay] = useState(0)
   const [viewDay, setViewDay] = useState(0)
@@ -118,7 +144,8 @@ export default function ScrimBoardPage() {
   const [combo, setCombo] = useState<{ hp: number; snd: number; ovl: number }>({ hp: 0, snd: 2, ovl: 2 })
   const [near, setNear] = useState(false)
   const [hoverRun, setHoverRun] = useState<string | null>(null)
-  const [modal, setModal] = useState<{ teamId: string; day: number; start: number; len: number } | null>(null)
+  const [modal, setModal] = useState<{ side: 'team' | 'room'; targetId: string; day: number; start: number; len: number } | null>(null)
+  const [modalAs, setModalAs] = useState<'team' | 'room'>('team') // 自分の立場 (両方持つ場合の選択)
   const [confirming, setConfirming] = useState(false)
   const [cancelId, setCancelId] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState(false)
@@ -164,13 +191,32 @@ export default function ScrimBoardPage() {
   // ---- データ読み込み ----
   const loadBoard = useCallback(async () => {
     const dates = weekDateStrs()
-    const [{ data: countRows, error: cErr }, { data: prefRows }, { data: matchRows }, { data: allMatches }] = await Promise.all([
+    const [{ data: countRows, error: cErr }, { data: prefRows }, { data: matchRows }, { data: allMatches }, { data: roomRows }] = await Promise.all([
       supabase.from('scrim_slot_counts').select('team_id, date, slot_index, available, avg_rating, min_rating, max_rating').in('date', dates),
       supabase.from('scrim_team_prefs').select('team_id, accept_hp, accept_snd, accept_ovl, accept_range, public_contact'),
       supabase.from('scrim_matches').select('*').in('date', dates).eq('status', 'confirmed'),
       supabase.from('scrim_matches').select('host_team_id, guest_team_id, status'),
+      supabase.from('scrim_mixed_rooms').select('*').in('date', dates),
     ])
     if (cErr) { console.error('scrim_slot_counts error:', cErr); return }
+
+    // 混成ルーム + メンバー (名前・レートはボード表示とティア算出に使用)
+    const roomList = (roomRows ?? []) as RoomRow[]
+    setRooms(roomList)
+    if (roomList.length > 0) {
+      const { data: rmRows } = await supabase
+        .from('scrim_mixed_room_members')
+        .select('room_id, user_id, profiles!inner(display_name, current_rating)')
+        .in('room_id', roomList.map(r => r.id))
+      const rmMap: Record<string, RoomMember[]> = {}
+      for (const r of ((rmRows ?? []) as unknown as { room_id: string; user_id: string; profiles: { display_name: string | null; current_rating: number | null } }[])) {
+        if (!rmMap[r.room_id]) rmMap[r.room_id] = []
+        rmMap[r.room_id].push({ uid: r.user_id, name: r.profiles?.display_name ?? '(名前未設定)', rating: r.profiles?.current_rating ?? null })
+      }
+      setRoomMembers(rmMap)
+    } else {
+      setRoomMembers({})
+    }
 
     const cm: Record<string, number[]> = {}
     const rm: Record<string, { avg: (number | null)[]; min: (number | null)[]; max: (number | null)[] }> = {}
@@ -196,8 +242,9 @@ export default function ScrimBoardPage() {
     setMatches(mrows)
 
     const stats: Record<string, { games: number; cancels: number }> = {}
-    for (const m of (allMatches ?? []) as { host_team_id: string; guest_team_id: string; status: string }[]) {
+    for (const m of (allMatches ?? []) as { host_team_id: string | null; guest_team_id: string | null; status: string }[]) {
       for (const tid of [m.host_team_id, m.guest_team_id]) {
+        if (!tid) continue // 混成ルーム側は実績集計の対象外
         if (!stats[tid]) stats[tid] = { games: 0, cancels: 0 }
         if (m.status === 'confirmed' || m.status === 'completed') stats[tid].games++
         if (m.status === 'cancelled') stats[tid].cancels++
@@ -208,7 +255,7 @@ export default function ScrimBoardPage() {
     // 表示対象チーム: 週内に空きがある or 成立に関与 or 自チーム
     const ids = new Set<string>()
     Object.keys(cm).forEach(k => ids.add(k.split('|')[0]))
-    mrows.forEach(m => { ids.add(m.host_team_id); ids.add(m.guest_team_id) })
+    mrows.forEach(m => { if (m.host_team_id) ids.add(m.host_team_id); if (m.guest_team_id) ids.add(m.guest_team_id) })
     setTeamInfo(prev => { if (prev) ids.add(prev.id); return prev })
     if (ids.size > 0) {
       const { data: teamRows } = await supabase
@@ -307,6 +354,8 @@ export default function ScrimBoardPage() {
   useEffect(() => {
     const ch = supabase.channel('scrim-board')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scrim_matches' }, () => void loadBoard())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scrim_mixed_rooms' }, () => void loadBoard())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scrim_mixed_room_members' }, () => void loadBoard())
       .subscribe()
     return () => { void supabase.removeChannel(ch) }
   }, [loadBoard])
@@ -434,6 +483,49 @@ export default function ScrimBoardPage() {
     return g != null && g > 1
   }
 
+  // ---- 混成ルーム: 導出値 ----
+  const roomMembersOf = (roomId: string) => roomMembers[roomId] ?? []
+  const roomAvg = (roomId: string): number | null => {
+    const rs = roomMembersOf(roomId).map(m => m.rating).filter((v): v is number => v != null)
+    return rs.length ? Math.round(rs.reduce((a, b) => a + b, 0) / rs.length) : null
+  }
+  const myRoomForDay = (day: number): RoomRow | null => {
+    const dateStr = weekDays[day]?.dateStr
+    if (!dateStr || !myUserId) return null
+    return rooms.find(r => r.date === dateStr && r.status === 'open' && roomMembersOf(r.id).some(m => m.uid === myUserId)) ?? null
+  }
+  // ボードに載せるルーム: その日・募集中・4人以上
+  const boardRooms = (() => {
+    const dateStr = weekDays[viewDay]?.dateStr
+    return rooms
+      .filter(r => r.date === dateStr && r.status === 'open' && roomMembersOf(r.id).length >= 4)
+      .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+  })()
+  // ルーム一覧 (週内の募集中。人数不問 — 募集掲示板を兼ねる)
+  const weekOpenRooms = rooms
+    .filter(r => r.status === 'open')
+    .sort((a, b) => a.date.localeCompare(b.date) || a.slot_start - b.slot_start)
+  const roomTierGap = (roomId: string) => {
+    const other = getTier(roomAvg(roomId))
+    if (other.idx === 0 || myDayTier.idx === 0) return null
+    return Math.abs(other.idx - myDayTier.idx)
+  }
+  // 成立行の表示名・自分の対戦判定 (チーム/ルーム両対応)
+  const sideName = (m: MatchRow, side: 'host' | 'guest') => {
+    const tid = side === 'host' ? m.host_team_id : m.guest_team_id
+    const rid = side === 'host' ? m.host_room_id : m.guest_room_id
+    if (tid) return teams.find(t => t.id === tid)?.name ?? '不明'
+    const r = rooms.find(x => x.id === rid)
+    return r ? `${r.name}【混成】` : '不明【混成】'
+  }
+  const isMySide = (m: MatchRow, side: 'host' | 'guest') => {
+    const tid = side === 'host' ? m.host_team_id : m.guest_team_id
+    const rid = side === 'host' ? m.host_room_id : m.guest_room_id
+    if (tid && teamInfo && tid === teamInfo.id) return true
+    return !!rid && !!myUserId && roomMembersOf(rid).some(x => x.uid === myUserId)
+  }
+  const isMyMatch = (m: MatchRow) => isMySide(m, 'host') || isMySide(m, 'guest')
+
   // 表示行: 自チームを先頭に、その日に空きか成立のあるチーム
   const visibleTeams = (() => {
     const dateStr = weekDays[viewDay]?.dateStr
@@ -531,14 +623,19 @@ export default function ScrimBoardPage() {
     const dateStr = weekDays[modal.day]?.dateStr
     if (!dateStr) return
     const m = currentMaps()
+    // 自分の立場: チーム未所属なら自動でルーム、両方あれば modalAs の選択に従う
+    const asRoom = myRoomForDay(modal.day)
+    const useRoomSide = !!asRoom && (!teamInfo || modalAs === 'room')
     setConfirming(true)
     const { data, error } = await supabase.rpc('rpc_scrimboard_confirm', {
-      p_host_team_id: modal.teamId,
       p_date: dateStr,
       p_slot_start: modal.start,
       p_hp_maps: m.hp,
       p_snd_maps: m.snd,
       p_ovl_maps: m.ovl,
+      p_target_team_id: modal.side === 'team' ? modal.targetId : null,
+      p_target_room_id: modal.side === 'room' ? modal.targetId : null,
+      p_as_room_id: useRoomSide ? asRoom.id : null,
     })
     setConfirming(false)
     if (error) {
@@ -554,7 +651,43 @@ export default function ScrimBoardPage() {
       router.push(`/custom/board/${matchIdNew}`)
       return
     }
-    showToast('対戦が成立しました', '両チームの Discord に通知しました')
+    showToast('対戦が成立しました', '参加メンバーに通知しました')
+    void loadBoard()
+  }
+
+  // ---- 混成ルーム操作 ----
+  const roomCreate = async () => {
+    if (!myUserId) { showToast('ログインが必要です', '混成ルームの作成にはログインしてください'); return }
+    const dateStr = weekDays[roomDay]?.dateStr
+    if (!dateStr) return
+    if (!roomName.trim()) { showToast('ルーム名を入力してください', '例: 金曜ミックス'); return }
+    if (roomEnd <= roomStart) { showToast('時間帯の指定が不正です', '終了は開始より後にしてください'); return }
+    setRoomBusy(true)
+    const { error } = await supabase.rpc('rpc_scrimboard_room_create', {
+      p_name: roomName.trim(), p_date: dateStr, p_slot_start: roomStart, p_slot_end: roomEnd, p_note: roomNote.trim() || null,
+    })
+    setRoomBusy(false)
+    if (error) { showToast('ルームを作成できませんでした', error.message); return }
+    setRoomCreateOpen(false); setRoomName(''); setRoomNote('')
+    showToast('混成ルームを作成しました', '4人集まるとボードに掲載されます')
+    void loadBoard()
+  }
+  const roomJoin = async (roomId: string) => {
+    if (!myUserId) { showToast('ログインが必要です', '混成ルームへの参加にはログインしてください'); return }
+    setRoomBusy(true)
+    const { error } = await supabase.rpc('rpc_scrimboard_room_join', { p_room_id: roomId })
+    setRoomBusy(false)
+    if (error) { showToast('参加できませんでした', error.message); return }
+    showToast('混成ルームに参加しました', '4人集まるとボードに掲載されます')
+    void loadBoard()
+  }
+  const roomLeave = async (roomId: string) => {
+    setRoomBusy(true)
+    const { data, error } = await supabase.rpc('rpc_scrimboard_room_leave', { p_room_id: roomId })
+    setRoomBusy(false)
+    if (error) { showToast('操作に失敗しました', error.message); return }
+    const disbanded = (data as { disbanded?: boolean } | null)?.disbanded
+    showToast(disbanded ? 'ルームを解散しました' : 'ルームを抜けました', disbanded ? 'ホストが抜けたためルームは解散されました' : '')
     void loadBoard()
   }
 
@@ -642,15 +775,25 @@ export default function ScrimBoardPage() {
   }
 
   // ---- モーダル用導出値 ----
-  const modalTeam = modal ? teams.find(x => x.id === modal.teamId) ?? null : null
-  const modalPool = modal && modalTeam ? Math.min(...countsFor(modalTeam.id, modal.day).slice(modal.start, modal.start + modal.len)) : 0
-  const modalSpanRating = modal && modalTeam ? spanRating(modalTeam.id, modal.day, modal.start, modal.len) : { avg: null, min: null, max: null }
-  const modalStats = modalTeam ? teamStats[modalTeam.id] ?? { games: 0, cancels: 0 } : { games: 0, cancels: 0 }
-  const modalPrefs: PrefsRow = modalTeam ? prefsFor(modalTeam.id) : { hp: true, snd: true, ovl: true, range: 'any', contact: null }
+  const modalIsRoom = modal?.side === 'room'
+  const modalTarget = modal
+    ? (modal.side === 'team'
+      ? (teams.find(x => x.id === modal.targetId) ?? null)
+      : ((rooms.find(x => x.id === modal.targetId) as { id: string; name: string } | undefined) ?? null))
+    : null
+  const modalPool = modal && modalTarget
+    ? (modalIsRoom ? roomMembersOf(modal.targetId).length : Math.min(...countsFor(modal.targetId, modal.day).slice(modal.start, modal.start + modal.len)))
+    : 0
+  const modalSpanRating = modal && modalTarget
+    ? (modalIsRoom ? { avg: roomAvg(modal.targetId), min: null, max: null } : spanRating(modal.targetId, modal.day, modal.start, modal.len))
+    : { avg: null, min: null, max: null }
+  const modalStats = modal && !modalIsRoom && modalTarget ? teamStats[modal.targetId] ?? { games: 0, cancels: 0 } : { games: 0, cancels: 0 }
+  const modalPrefs: PrefsRow = modal && !modalIsRoom && modalTarget ? prefsFor(modal.targetId) : { hp: true, snd: true, ovl: true, range: 'any', contact: null }
+  const modalMyRoom = modal ? myRoomForDay(modal.day) : null
 
   const cancelMatch = cancelId !== null ? matches.find(x => x.id === cancelId) ?? null : null
   const cancelOppName = cancelMatch
-    ? (teams.find(t => t.id === (cancelMatch.host_team_id === teamInfo?.id ? cancelMatch.guest_team_id : cancelMatch.host_team_id))?.name ?? '相手チーム')
+    ? (isMySide(cancelMatch, 'host') ? sideName(cancelMatch, 'guest') : sideName(cancelMatch, 'host'))
     : ''
 
   const modeDefs: [Mode, string][] = [['hp', 'ハーポ回し · 90分'], ['snd', 'サーチ'], ['ovl', 'オバロ'], ['custom', '複合'], ['all', 'すべて (俯瞰)']]
@@ -898,7 +1041,7 @@ export default function ScrimBoardPage() {
           <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
             {myUserId ? 'チームに所属すると空き時間を入力できます' : 'ログインしてチームに所属すると空き時間を入力できます'}
           </p>
-          <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>ボードの閲覧は誰でもできます。対戦を組むには4人以上のチームが必要です。</p>
+          <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>ボードの閲覧は誰でもできます。対戦を組むには4人以上のチーム、または下の<span style={{ color: '#c9b8ff', fontWeight: 700 }}>混成ルーム</span>(チーム不要・誰でも参加可)が必要です。</p>
           <div className="row" style={{ marginTop: 12 }}>
             {myUserId ? (
               <>
@@ -911,6 +1054,68 @@ export default function ScrimBoardPage() {
           </div>
         </section>
       )}
+
+      {/* ===== 混成ルーム (チームの垣根を越えた一時ロスター) ===== */}
+      <section className="card-strong" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 6 }}>
+          <div>
+            <div className="sec-title" style={{ marginBottom: 4, color: 'var(--violet)' }}>MIXED</div>
+            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.02em' }}>混成ルーム — チームの垣根なしで4人を集める</div>
+          </div>
+          <button type="button" className="btn-primary" onClick={() => { setRoomDay(viewDay); setRoomCreateOpen(true) }}
+            style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', padding: '8px 14px' }}>
+            + ルームを作る
+          </button>
+        </div>
+        <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-dim)' }}>
+          日時を決めてルームを作り、メンバーを募集。チーム所属・無所属を問わず誰でも参加できます。
+          4人集まるとその日のボードに「MIXED」として掲載され、チームと同じ流れで対戦を組めます（1ルーム = 1対戦、1人が同じ日に入れるルームは1つ）。
+        </p>
+        {weekOpenRooms.length === 0 ? (
+          <p className="dim" style={{ fontSize: 12, margin: 0 }}>募集中の混成ルームはありません — 最初のルームを作ってみましょう</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {weekOpenRooms.map(r => {
+              const ms = roomMembersOf(r.id)
+              const mineRoom = !!myUserId && ms.some(m => m.uid === myUserId)
+              const day = dateToDay(r.date)
+              const tier = getTier(roomAvg(r.id))
+              return (
+                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: 'rgba(6,10,22,0.6)', border: `1px solid ${mineRoom ? 'rgba(139,92,246,0.45)' : LINE}`, borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>
+                      {r.name}{' '}
+                      <span className="mono" style={{ fontSize: 9, letterSpacing: '0.1em', color: '#c9b8ff', border: '1px solid rgba(139,92,246,0.45)', borderRadius: 3, padding: '0 4px', verticalAlign: 2 }}>MIXED</span>
+                    </div>
+                    <div className="mono" style={{ fontSize: 11.5, letterSpacing: '0.04em', marginTop: 2, color: 'var(--text-soft)' }}>
+                      {day >= 0 ? dayLabel(day) : r.date} {slotLabel(r.slot_start)} – {slotLabel(r.slot_end)} · <span style={{ color: tier.color }}>{tier.label}</span>
+                    </div>
+                    {r.note && <div style={{ fontSize: 11.5, color: 'var(--text-dim)', marginTop: 2 }}>{r.note}</div>}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                      {ms.map(m => (
+                        <span key={m.uid} className="mono" style={{ fontSize: 10.5, color: m.uid === r.host_user_id ? 'var(--amber)' : 'var(--text-soft)', background: 'rgba(6,10,22,0.75)', border: `1px solid ${LINE}`, borderRadius: 6, padding: '2px 8px' }}>
+                          {m.name}{m.uid === r.host_user_id ? ' ★' : ''}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: ms.length >= 4 ? 'var(--success)' : 'var(--text-dim)' }}>{ms.length}/5</span>
+                  {ms.length >= 4
+                    ? <span className="badge success" style={{ fontSize: 9 }}><span className="badge-dot" />ボード掲載中</span>
+                    : <span className="badge" style={{ fontSize: 9 }}>あと{4 - ms.length}人</span>}
+                  {mineRoom ? (
+                    <button type="button" className="btn-ghost btn-sm" disabled={roomBusy} onClick={() => void roomLeave(r.id)}>
+                      {r.host_user_id === myUserId ? '解散' : '抜ける'}
+                    </button>
+                  ) : (
+                    <button type="button" className="btn-primary btn-sm" disabled={roomBusy || ms.length >= 5} onClick={() => void roomJoin(r.id)}>参加</button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
 
       {/* ===== STEP 2 : ボード ===== */}
       <section className="card-strong" style={{ marginBottom: 20 }}>
@@ -1009,7 +1214,7 @@ export default function ScrimBoardPage() {
         )}
 
         {/* ボードグリッド */}
-        {visibleTeams.length === 0 ? (
+        {visibleTeams.length === 0 && boardRooms.length === 0 ? (
           <div className="empty" style={{ marginTop: 16 }}>
             <p className="muted" style={{ marginBottom: 8 }}>{dayLabel(viewDay)} に募集中のチームはまだありません</p>
             <p className="dim" style={{ fontSize: 12 }}>STEP1 で空き時間を入力すると、4人揃った枠が自動でここに公開されます</p>
@@ -1056,7 +1261,7 @@ export default function ScrimBoardPage() {
                       const inRun = !!r
                       const hatch = inRun && mode !== 'all' && !canStart
                       const lit = !!hoverRun && !!r && hoverRun === `${t.id}-${r[0]}`
-                      const clickable = !!teamInfo && !isMe && !dimMode && inRun && mode !== 'all' && need > 0
+                      const clickable = !!(teamInfo || myRoomForDay(viewDay)) && !isMe && !dimMode && inRun && mode !== 'all' && need > 0
                       let bg: string, border: string, numCl: string, text: string, numSize = 15
                       if (set) {
                         bg = 'rgba(255,176,32,0.15)'; border = '1px solid rgba(255,176,32,0.55)'
@@ -1075,9 +1280,10 @@ export default function ScrimBoardPage() {
                         numCl = '#333c52'; text = '·'; numSize = 12
                       }
                       const click = clickable ? () => {
-                        if (canStart) { setModal({ teamId: t.id, day: viewDay, start: i, len: need }); return }
+                        const open = (start: number) => { setModal({ side: 'team', targetId: t.id, day: viewDay, start, len: need }); setModalAs(teamInfo ? 'team' : 'room') }
+                        if (canStart) { open(i); return }
                         const snap = Math.min(r![1] - need + 1, 10 - need)
-                        if (snap >= r![0]) setModal({ teamId: t.id, day: viewDay, start: snap, len: need })
+                        if (snap >= r![0]) open(snap)
                         else showToast(`この空きには ${currentModeLabel()} が入りません`, `空きが ${r![1] - r![0] + 1}枠 (${(r![1] - r![0] + 1) * 30}分) しかありません`)
                       } : undefined
                       return (
@@ -1095,8 +1301,75 @@ export default function ScrimBoardPage() {
                             boxShadow: lit && !set ? 'inset 0 0 0 1px rgba(0,229,255,0.6), 0 0 12px rgba(0,229,255,0.15)' : 'none',
                           }}>
                           <span className="mono" style={{ fontSize: numSize, lineHeight: 1, color: numCl, letterSpacing: '0.04em' }}>{text}</span>
-                          {canStart && !dimMode && !isMe && !!teamInfo && (
+                          {canStart && !dimMode && !isMe && !!(teamInfo || myRoomForDay(viewDay)) && (
                             <span style={{ position: 'absolute', left: 7, top: '50%', transform: 'translateY(-50%)', color: 'var(--cyan)', fontSize: 9, textShadow: '0 0 8px rgba(0,229,255,0.8)' }}>▶</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+              {/* 混成ルーム行 (4人以上・募集中) */}
+              {boardRooms.map(r => {
+                const ms = roomMembersOf(r.id)
+                const isMineRoom = !!myUserId && ms.some(m => m.uid === myUserId)
+                const tier = getTier(roomAvg(r.id))
+                const gap = roomTierGap(r.id)
+                const dimNear = near && !isMineRoom && !(gap == null || gap <= 1)
+                const canAct = !!(teamInfo || myRoomForDay(viewDay)) && !isMineRoom && mode !== 'all' && need > 0
+                const openModal = (start: number) => { setModal({ side: 'room', targetId: r.id, day: viewDay, start, len: need }); setModalAs(teamInfo ? 'team' : 'room') }
+                return (
+                  <div key={`room-${r.id}`} style={{ display: 'grid', gridTemplateColumns: '176px repeat(10, minmax(66px, 1fr))', gap: 5, alignItems: 'center', marginBottom: 5, opacity: dimNear ? 0.3 : 1, transition: 'opacity .2s' }}>
+                    <div style={{ position: 'sticky', left: 0, zIndex: 2, background: 'linear-gradient(90deg, #0a0e20 82%, transparent)', minWidth: 0, padding: '4px 10px 4px 12px', borderLeft: `2px solid ${isMineRoom ? 'var(--violet)' : 'transparent'}`, borderRadius: 2 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {r.name}{' '}
+                        <span className="mono" style={{ fontSize: 9, letterSpacing: '0.1em', color: '#c9b8ff', border: '1px solid rgba(139,92,246,0.45)', borderRadius: 3, padding: '0 4px', verticalAlign: 2 }}>MIXED</span>
+                      </div>
+                      <div className="mono" style={{ fontSize: 10.5, letterSpacing: '0.04em', color: isMineRoom ? 'var(--violet)' : tier.color }}>
+                        {tier.label}{isMineRoom ? ' · 参加中' : ''}
+                      </div>
+                    </div>
+                    {SLOTS.map((_, i) => {
+                      const inWin = i >= r.slot_start && i < r.slot_end
+                      const canStart = inWin && mode !== 'all' && need > 0 && i + need <= r.slot_end && i + need <= 10
+                      const hatch = inWin && mode !== 'all' && !canStart
+                      const lit = !!hoverRun && hoverRun === `room-${r.id}` && inWin
+                      const clickable = canAct && inWin
+                      let bg: string, border: string, numCl: string, text: string, numSize = 15
+                      if (inWin) {
+                        bg = hatch
+                          ? 'repeating-linear-gradient(45deg, transparent 0 4px, rgba(139,92,246,0.16) 4px 6px), rgba(139,92,246,0.06)'
+                          : 'rgba(139,92,246,0.14)'
+                        border = '1px solid rgba(139,92,246,0.5)'
+                        numCl = '#d9ccff'; text = String(ms.length)
+                      } else {
+                        bg = 'rgba(6,9,20,0.9)'; border = '1px solid transparent'
+                        numCl = '#333c52'; text = '·'; numSize = 12
+                      }
+                      const click = clickable ? () => {
+                        if (canStart) { openModal(i); return }
+                        const snap = Math.min(r.slot_end - need, 10 - need)
+                        if (snap >= r.slot_start) openModal(snap)
+                        else showToast(`この時間帯には ${currentModeLabel()} が入りません`, `時間帯が ${(r.slot_end - r.slot_start) * 30}分 しかありません`)
+                      } : undefined
+                      return (
+                        <div key={`room-${r.id}-${i}`}
+                          onClick={click}
+                          onMouseEnter={inWin ? () => setHoverRun(`room-${r.id}`) : undefined}
+                          onMouseLeave={() => { if (hoverRun) setHoverRun(null) }}
+                          onKeyDown={click ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); click() } } : undefined}
+                          role={clickable ? 'button' : undefined}
+                          tabIndex={clickable ? 0 : undefined}
+                          aria-label={clickable ? `混成ルーム ${r.name} ${dayLabel(viewDay)} ${slotLabel(i)} の枠を選択` : undefined}
+                          style={{
+                            position: 'relative', height: 52, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                            transition: 'all .12s', background: bg, border, cursor: clickable ? 'pointer' : 'default',
+                            boxShadow: lit ? 'inset 0 0 0 1px rgba(139,92,246,0.6), 0 0 12px rgba(139,92,246,0.15)' : 'none',
+                          }}>
+                          <span className="mono" style={{ fontSize: numSize, lineHeight: 1, color: numCl, letterSpacing: '0.04em' }}>{text}</span>
+                          {canStart && canAct && (
+                            <span style={{ position: 'absolute', left: 7, top: '50%', transform: 'translateY(-50%)', color: 'var(--violet)', fontSize: 9, textShadow: '0 0 8px rgba(139,92,246,0.8)' }}>▶</span>
                           )}
                         </div>
                       )
@@ -1131,22 +1404,20 @@ export default function ScrimBoardPage() {
           <div className="sec-title" style={{ color: 'var(--amber)' }}>今週の成立</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[...matches].sort((x, y) => x.date.localeCompare(y.date) || x.slot_start - y.slot_start).map(mt => {
-              const host = teams.find(x => x.id === mt.host_team_id)
-              const guest = teams.find(x => x.id === mt.guest_team_id)
-              const mine = teamInfo && (mt.host_team_id === teamInfo.id || mt.guest_team_id === teamInfo.id)
+              const mine = isMyMatch(mt)
               const day = dateToDay(mt.date)
               return (
                 <div key={mt.id} style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', background: 'rgba(6,10,22,0.6)', border: `1px solid ${mine ? 'rgba(255,176,32,0.35)' : LINE}`, borderRadius: 10, padding: '14px 16px' }}>
                   <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--amber-soft)', border: '1px solid rgba(255,176,32,0.4)', display: 'grid', placeItems: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12, color: 'var(--amber)' }}>VS</div>
                   <div style={{ flex: 1, minWidth: 200 }}>
                     <div style={{ fontSize: 14.5, fontWeight: 700 }}>
-                      {host?.name ?? '不明'} <span className="muted" style={{ fontWeight: 400 }}>vs</span> {guest?.name ?? '不明'}
+                      {sideName(mt, 'host')} <span className="muted" style={{ fontWeight: 400 }}>vs</span> {sideName(mt, 'guest')}
                     </div>
                     <div className="mono" style={{ fontSize: 12, color: 'var(--amber)', letterSpacing: '0.04em' }}>
                       {day >= 0 ? dayLabel(day) : mt.date} {slotLabel(mt.slot_start)} – {slotLabel(mt.slot_end)} · {matchLabel(mt)}
                     </div>
                   </div>
-                  <span className="badge success"><span className="badge-dot" />Discord 通知済み</span>
+                  <span className="badge success"><span className="badge-dot" />参加メンバーに通知済み</span>
                   {mine && (
                     <>
                       <button type="button" className="btn-primary" onClick={() => router.push(`/custom/board/${mt.id}`)} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>試合ページ・チャット</button>
@@ -1161,41 +1432,73 @@ export default function ScrimBoardPage() {
       )}
 
       {/* ===== 成立ダイアログ ===== */}
-      {modal && modalTeam && (
+      {modal && modalTarget && (
         <BodyPortal>
         <div style={{ position: 'fixed', inset: 0, zIndex: 2500, display: 'grid', placeItems: 'center', padding: 24 }} role="dialog" aria-modal="true" aria-label="対戦の確認">
           <div onClick={() => { if (!confirming) setModal(null) }} style={{ position: 'absolute', inset: 0, background: 'rgba(5,8,14,0.72)', backdropFilter: 'blur(8px)' }} />
           <div style={{ position: 'relative', width: '100%', maxWidth: 440, background: 'rgba(22,28,58,0.96)', border: `1px solid ${LINE_STRONG}`, borderRadius: 14, boxShadow: '0 24px 80px rgba(0,0,0,0.6)', animation: 'modal-card-in 180ms ease-out', overflow: 'hidden' }}>
             <div style={{ padding: '20px 22px 14px', borderBottom: `1px solid ${LINE}` }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>{modalTeam.name}</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>
+                {modalTarget.name}
+                {modalIsRoom && <span className="mono" style={{ fontSize: 10, letterSpacing: '0.1em', color: '#c9b8ff', border: '1px solid rgba(139,92,246,0.45)', borderRadius: 3, padding: '1px 6px', marginLeft: 8, verticalAlign: 4 }}>MIXED</span>}
+              </div>
               <div className="mono" style={{ fontSize: 13, color: 'var(--cyan)', letterSpacing: '0.04em', marginTop: 4 }}>{dayLabel(modal.day)} {slotLabel(modal.start)} – {slotLabel(modal.start + modal.len)} · {currentModeLabel()}</div>
             </div>
             <div style={{ padding: '16px 22px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>出場帯 (この時間の平均)</span><span style={{ fontWeight: 600, color: getTier(modalSpanRating.avg).color }}>{getTier(modalSpanRating.avg).label}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>帯の幅</span><span>{modalSpanRating.min != null && modalSpanRating.max != null ? `${getTier(modalSpanRating.min).label} 〜 ${getTier(modalSpanRating.max).label}` : '—'}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>この時間の人数</span><span className="mono">{modalPool} 人</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>交流戦実績</span><span>{modalStats.games ? `${modalStats.games} 戦 / キャンセル ${modalStats.cancels}` : 'なし (新規チーム)'}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}>
-                <span style={{ color: 'var(--text-soft)' }}>受付モード</span>
-                <span>{([['hp', 'ハーポ'], ['snd', 'サーチ'], ['ovl', 'オバロ']] as ['hp' | 'snd' | 'ovl', string][]).filter(([k]) => modalPrefs[k]).map(([, l]) => l).join('・') || 'なし'}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}>
-                <span style={{ color: 'var(--text-soft)' }}>受付範囲</span>
-                <span>{modalPrefs.range === 'similar' ? '同格 ±1帯' : '誰でも歓迎'}</span>
-              </div>
-              {modalPrefs.contact && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>{modalIsRoom ? '出場帯 (メンバー平均)' : '出場帯 (この時間の平均)'}</span><span style={{ fontWeight: 600, color: getTier(modalSpanRating.avg).color }}>{getTier(modalSpanRating.avg).label}</span></div>
+              {!modalIsRoom && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>帯の幅</span><span>{modalSpanRating.min != null && modalSpanRating.max != null ? `${getTier(modalSpanRating.min).label} 〜 ${getTier(modalSpanRating.max).label}` : '—'}</span></div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>{modalIsRoom ? 'メンバー' : 'この時間の人数'}</span><span className="mono">{modalPool} 人</span></div>
+              {modalIsRoom ? (
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}>
-                  <span style={{ color: 'var(--text-soft)' }}>公開連絡先</span>
-                  <span style={{ wordBreak: 'break-all', textAlign: 'right' }}>{modalPrefs.contact}</span>
+                  <span style={{ color: 'var(--text-soft)', flex: 'none' }}>参加者</span>
+                  <span style={{ textAlign: 'right' }}>{roomMembersOf(modal.targetId).map(m => m.name).join('・')}</span>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>交流戦実績</span><span>{modalStats.games ? `${modalStats.games} 戦 / キャンセル ${modalStats.cancels}` : 'なし (新規チーム)'}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}>
+                    <span style={{ color: 'var(--text-soft)' }}>受付モード</span>
+                    <span>{([['hp', 'ハーポ'], ['snd', 'サーチ'], ['ovl', 'オバロ']] as ['hp' | 'snd' | 'ovl', string][]).filter(([k]) => modalPrefs[k]).map(([, l]) => l).join('・') || 'なし'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}>
+                    <span style={{ color: 'var(--text-soft)' }}>受付範囲</span>
+                    <span>{modalPrefs.range === 'similar' ? '同格 ±1帯' : '誰でも歓迎'}</span>
+                  </div>
+                  {modalPrefs.contact && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}>
+                      <span style={{ color: 'var(--text-soft)' }}>公開連絡先</span>
+                      <span style={{ wordBreak: 'break-all', textAlign: 'right' }}>{modalPrefs.contact}</span>
+                    </div>
+                  )}
+                </>
+              )}
+              {/* 自分の立場: チームとルームの両方を持つ場合に選択 */}
+              {teamInfo && modalMyRoom && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: 'rgba(6,10,22,0.5)', border: `1px solid ${LINE}`, borderRadius: 8, padding: '10px 12px', marginTop: 12 }}>
+                  <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>出る側:</span>
+                  {([['team', teamInfo.name], ['room', `${modalMyRoom.name}【混成】`]] as ['team' | 'room', string][]).map(([k, label]) => (
+                    <button key={k} type="button" aria-pressed={modalAs === k}
+                      onClick={() => setModalAs(k)}
+                      style={{
+                        fontSize: 11.5, fontWeight: 600, borderRadius: 999, padding: '5px 12px', cursor: 'pointer', transition: 'all .12s',
+                        background: modalAs === k ? 'rgba(139,92,246,0.18)' : 'rgba(6,10,22,0.6)',
+                        color: modalAs === k ? '#c9b8ff' : 'var(--text-dim)',
+                        border: `1px solid ${modalAs === k ? 'rgba(139,92,246,0.5)' : LINE}`,
+                      }}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
               )}
-              {modal && outOfHostRange(modal.teamId) && (
+              {modal && !modalIsRoom && outOfHostRange(modal.targetId) && (
                 <div style={{ display: 'flex', gap: 9, background: 'rgba(255,176,32,0.12)', border: '1px solid rgba(255,176,32,0.4)', borderRadius: 8, padding: '10px 12px', marginTop: 12, fontSize: 12, color: '#ffe2ae', lineHeight: 1.6 }}>
                   <span>▲</span>
                   <span>相手の受付範囲 (同格±1帯) の外です。成立は可能ですが、相手の想定と異なる可能性があります。</span>
                 </div>
               )}
-              <p style={{ margin: '14px 0 0', fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.6 }}>成立と同時に両チームの Discord へ通知が送られ、試合ページ(チャット)が開きます。ホスト決め・ロビーコード共有はそこで行います。この対戦は unrated — レートは変動しません。対戦は <a href="/rules" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--cyan)', textDecoration: 'underline', textUnderlineOffset: 2 }}>GAルール</a> に準拠します(新しいタブで開きます)。</p>
+              <p style={{ margin: '14px 0 0', fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.6 }}>成立と同時に参加メンバーへ通知が送られ (チームはDiscord・混成ルームはサイト内通知)、試合ページ(チャット)が開きます。ホスト決め・ロビーコード共有はそこで行います。この対戦は unrated — レートは変動しません。対戦は <a href="/rules" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--cyan)', textDecoration: 'underline', textUnderlineOffset: 2 }}>GAルール</a> に準拠します(新しいタブで開きます)。</p>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 22px', borderTop: `1px solid ${LINE}`, background: 'rgba(0,0,0,0.18)' }}>
               <button type="button" className="btn-ghost" onClick={() => setModal(null)} disabled={confirming}>閉じる</button>
@@ -1214,12 +1517,73 @@ export default function ScrimBoardPage() {
           <div style={{ position: 'relative', width: '100%', maxWidth: 400, background: 'rgba(22,28,58,0.96)', border: '1px solid rgba(255,77,109,0.4)', borderRadius: 14, boxShadow: '0 24px 80px rgba(0,0,0,0.6)', animation: 'modal-card-in 180ms ease-out', padding: 22 }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>対戦をキャンセルしますか?</div>
             <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--text-soft)', lineHeight: 1.7 }}>
-              {cancelOppName} との {dateToDay(cancelMatch.date) >= 0 ? dayLabel(dateToDay(cancelMatch.date)) : cancelMatch.date} {slotLabel(cancelMatch.slot_start)} – {slotLabel(cancelMatch.slot_end)} の対戦を取り消します。相手チームの Discord にキャンセル通知が送られ、枠はボードに戻ります。
+              {cancelOppName} との {dateToDay(cancelMatch.date) >= 0 ? dayLabel(dateToDay(cancelMatch.date)) : cancelMatch.date} {slotLabel(cancelMatch.slot_start)} – {slotLabel(cancelMatch.slot_end)} の対戦を取り消します。相手の参加メンバーにキャンセル通知が送られ、枠はボードに戻ります。
             </p>
             <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--danger)' }}>キャンセル回数は相手チームから見えるようになります。</p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
               <button type="button" className="btn-ghost" onClick={() => setCancelId(null)} disabled={cancelling}>戻る</button>
               <button type="button" className="btn-danger" onClick={() => void doCancel()} disabled={cancelling}>{cancelling ? 'キャンセル中...' : 'キャンセルする'}</button>
+            </div>
+          </div>
+        </div>
+        </BodyPortal>
+      )}
+
+      {/* ===== 混成ルーム作成ダイアログ ===== */}
+      {roomCreateOpen && (
+        <BodyPortal>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2500, display: 'grid', placeItems: 'center', padding: 24 }} role="dialog" aria-modal="true" aria-label="混成ルームの作成">
+          <div onClick={() => { if (!roomBusy) setRoomCreateOpen(false) }} style={{ position: 'absolute', inset: 0, background: 'rgba(5,8,14,0.72)', backdropFilter: 'blur(8px)' }} />
+          <div style={{ position: 'relative', width: '100%', maxWidth: 440, background: 'rgba(22,28,58,0.96)', border: `1px solid ${LINE_STRONG}`, borderRadius: 14, boxShadow: '0 24px 80px rgba(0,0,0,0.6)', animation: 'modal-card-in 180ms ease-out', overflow: 'hidden' }}>
+            <div style={{ padding: '20px 22px 14px', borderBottom: `1px solid ${LINE}` }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>混成ルームを作る</div>
+              <div style={{ fontSize: 12, color: 'var(--text-soft)', marginTop: 4 }}>チーム所属・無所属を問わず誰でも参加できます。4人集まるとボードに掲載されます。</div>
+            </div>
+            <div style={{ padding: '18px 22px' }}>
+              <label htmlFor="mr-name" className="stat-label" style={{ display: 'block', marginBottom: 6 }}>ルーム名</label>
+              <input id="mr-name" value={roomName} onChange={e => setRoomName(e.target.value)} maxLength={30}
+                placeholder="例: 金曜ミックス" style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '10px 14px' }} />
+
+              <label className="stat-label" style={{ display: 'block', margin: '14px 0 6px' }}>日付</label>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                {weekDays.map((wd, i) => {
+                  const on = roomDay === i
+                  return (
+                    <button key={i} type="button" className="mono sb-hoverline" aria-pressed={on} onClick={() => setRoomDay(i)}
+                      style={{
+                        fontSize: 11.5, fontWeight: on ? 700 : 600, padding: '7px 10px', borderRadius: 8, cursor: 'pointer', transition: 'all .12s',
+                        background: on ? 'rgba(139,92,246,0.18)' : 'rgba(6,10,22,0.75)',
+                        color: on ? '#c9b8ff' : 'var(--text-dim)',
+                        border: `1px solid ${on ? 'rgba(139,92,246,0.5)' : LINE}`,
+                      }}>
+                      {i === 0 ? `今日 ${wd.label}` : wd.label}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <label className="stat-label" style={{ display: 'block', margin: '14px 0 6px' }}>参加できる時間帯</label>
+              <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                <select value={roomStart} onChange={e => setRoomStart(Number(e.target.value))} style={{ width: 110 }}>
+                  {Array.from({ length: 10 }, (_, i) => <option key={i} value={i}>{slotLabel(i)}</option>)}
+                </select>
+                <span className="muted">〜</span>
+                <select value={roomEnd} onChange={e => setRoomEnd(Number(e.target.value))} style={{ width: 110 }}>
+                  {Array.from({ length: 10 }, (_, i) => <option key={i + 1} value={i + 1}>{slotLabel(i + 1)}</option>)}
+                </select>
+              </div>
+
+              <label htmlFor="mr-note" className="stat-label" style={{ display: 'block', margin: '14px 0 6px' }}>ひとこと (任意)</label>
+              <input id="mr-note" value={roomNote} onChange={e => setRoomNote(e.target.value)} maxLength={200}
+                placeholder="例: エンジョイ勢歓迎 / サーチ中心希望" style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '10px 14px' }} />
+
+              <p style={{ margin: '12px 0 0', fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.6 }}>
+                1ルーム = 1対戦です。成立するとルームは募集終了になり、キャンセルされると募集中に戻ります。ホストが抜けるとルームは解散されます。
+              </p>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 22px', borderTop: `1px solid ${LINE}`, background: 'rgba(0,0,0,0.18)' }}>
+              <button type="button" className="btn-ghost" onClick={() => setRoomCreateOpen(false)} disabled={roomBusy}>閉じる</button>
+              <button type="button" className="btn-primary" onClick={() => void roomCreate()} disabled={roomBusy}>{roomBusy ? '作成中...' : 'ルームを作成'}</button>
             </div>
           </div>
         </div>
