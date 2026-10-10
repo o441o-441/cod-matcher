@@ -229,6 +229,18 @@ export default function EightsLobbyPage() {
         </div>
       </div>
 
+      {/* 8人成立バナー: VC集合の案内 */}
+      {members.length >= 8 && (
+        <div className="card" style={{ borderColor: 'rgba(0,245,160,0.4)', background: 'var(--success-soft)', marginTop: 16, padding: '12px 16px' }}>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--success)' }}>
+            ✅ 8人揃いました！ <span style={{ color: '#5865F2' }}>ASCENT公式Discordサーバー</span>のボイスチャットに集合してください
+          </p>
+          <p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>
+            VCに集合後、ホストがチームを振り分けます（参加メンバーにはDiscordとサイト内通知でも案内済みです）
+          </p>
+        </div>
+      )}
+
       {/* Member roster (pre-draft) */}
       {!isDrafting && (
         <div className="section card-strong">
