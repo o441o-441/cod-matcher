@@ -4,9 +4,9 @@
 -- 従来: 8s開催時に Discord #8s-lobby へ @everyone 一斉通知のみ。
 -- 変更: 「8s通知を受け取る」をオプトインした人にだけ届ける。
 --   (1) サイト内通知 (notifications) — レート帯・時間帯の条件付き
---   (2) Discord はロールメンションに変更 (@everyone 廃止)
---       ロールIDは app_settings key='discord_8s_role_id' に設定。
---       未設定ならメンションなしの Embed のみ送信。
+--   (2) Discord は条件に合致した人への個人メンション (@everyone 廃止)
+--       サイト内通知と同じ絞り込みがDiscord側にも効く。
+--       Discord ID は auth.identities (provider='discord') から取得。
 -- ============================================================
 
 -- ------------------------------------------------------------
@@ -88,9 +88,13 @@ $$;
 
 -- ------------------------------------------------------------
 -- 3) ロビー作成 RPC を更新
---    - サイト内通知: オプトイン者のうち条件 (時間帯/レート帯/参加可否) に
---      合う人へ INSERT。直近10分に8s通知を受けた人はスキップ (連投対策)。
---    - Discord: @everyone をやめ、discord_8s_role_id のロールメンションに。
+--    - 通知対象者をレート帯/時間帯/参加可否で1回抽出し、
+--      サイト内通知と Discord 個人メンションの両方に使う。
+--      直近10分に8s通知を受けた人はスキップ (連投対策)。
+--    - Discord: 抽出された人だけを <@ユーザーID> で個人メンション。
+--      ロール・Bot は不要 (Webhookのみで完結)。
+--      content 2000字 / allowed_mentions 100件の制限があるため、
+--      80人ずつに分割して複数メッセージで送信 (Embedは先頭のみ)。
 --    どちらもベストエフォート (失敗してもロビー作成は成功)。
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.rpc_eights_create_lobby(p_title text, p_rate_cap integer DEFAULT NULL::integer)
@@ -103,12 +107,16 @@ DECLARE
   v_uid uuid := auth.uid();
   v_lid uuid;
   v_webhook_url text;
-  v_role_id text;
   v_host_name text;
   v_host_peak integer;
   v_rate_label text;
-  v_payload jsonb;
   v_hour integer;
+  v_recipients uuid[];
+  v_mention_ids text[];
+  v_chunk text[];
+  v_embed jsonb;
+  v_total integer;
+  v_pos integer;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'not authenticated'; END IF;
   IF length(trim(p_title)) < 1 THEN RAISE EXCEPTION 'タイトルを入力してください'; END IF;
@@ -122,58 +130,69 @@ BEGIN
   SELECT display_name, peak_rating INTO v_host_name, v_host_peak FROM profiles WHERE id = v_uid;
   v_rate_label := CASE WHEN p_rate_cap IS NOT NULL THEN '≤ ' || p_rate_cap ELSE 'なし' END;
 
-  -- サイト内通知 (オプトイン者のみ)
+  -- 通知対象者の抽出 + サイト内通知 (オプトイン者のみ)
   BEGIN
     v_hour := extract(hour FROM now() AT TIME ZONE 'Asia/Tokyo')::integer;
 
-    INSERT INTO notifications (user_id, type, body, link, is_read)
-    SELECT np.user_id,
-           'eights_lobby',
-           '⚡ 8s 開催: ' || trim(p_title) || '（ホスト: ' || coalesce(v_host_name, '不明') || ' / レート制限: ' || v_rate_label || '）',
-           '/custom/eights/' || v_lid,
-           false
-    FROM eights_notify_prefs np
-    JOIN profiles pr ON pr.id = np.user_id
-    WHERE np.enabled
-      AND np.user_id <> v_uid
-      AND NOT pr.is_banned
-      AND (pr.suspended_until IS NULL OR pr.suspended_until < now())
-      -- 参加できないロビーは通知しない (ピークレート上限)
-      AND (p_rate_cap IS NULL OR pr.peak_rating <= p_rate_cap)
-      -- 時間帯指定 (JST)。start=end は常時扱い、start>end は日跨ぎ
-      AND (np.hour_start IS NULL
-           OR np.hour_start = np.hour_end
-           OR (np.hour_start < np.hour_end AND v_hour >= np.hour_start AND v_hour < np.hour_end)
-           OR (np.hour_start > np.hour_end AND (v_hour >= np.hour_start OR v_hour < np.hour_end)))
-      -- レート帯指定: ホストのピークレートが関心帯に入っているか
-      AND (np.rating_min IS NULL OR coalesce(v_host_peak, 1500) >= np.rating_min)
-      AND (np.rating_max IS NULL OR coalesce(v_host_peak, 1500) <= np.rating_max)
-      -- 既にアクティブなロビーに居る人はどうせ参加できないので除外
-      AND NOT EXISTS (
-        SELECT 1 FROM eights_lobby_members m JOIN eights_lobbies l ON l.id = m.lobby_id
-        WHERE m.user_id = np.user_id AND l.status IN ('open','drafting'))
-      -- 直近10分に8s通知を受けた人はスキップ (開催連投によるスパム防止)
-      AND NOT EXISTS (
-        SELECT 1 FROM notifications n
-        WHERE n.user_id = np.user_id AND n.type = 'eights_lobby'
-          AND n.created_at > now() - interval '10 minutes')
-    LIMIT 500;
+    SELECT array_agg(user_id) INTO v_recipients FROM (
+      SELECT np.user_id
+      FROM eights_notify_prefs np
+      JOIN profiles pr ON pr.id = np.user_id
+      WHERE np.enabled
+        AND np.user_id <> v_uid
+        AND NOT pr.is_banned
+        AND (pr.suspended_until IS NULL OR pr.suspended_until < now())
+        -- 参加できないロビーは通知しない (ピークレート上限)
+        AND (p_rate_cap IS NULL OR pr.peak_rating <= p_rate_cap)
+        -- 時間帯指定 (JST)。start=end は常時扱い、start>end は日跨ぎ
+        AND (np.hour_start IS NULL
+             OR np.hour_start = np.hour_end
+             OR (np.hour_start < np.hour_end AND v_hour >= np.hour_start AND v_hour < np.hour_end)
+             OR (np.hour_start > np.hour_end AND (v_hour >= np.hour_start OR v_hour < np.hour_end)))
+        -- レート帯指定: ホストのピークレートが関心帯に入っているか
+        AND (np.rating_min IS NULL OR coalesce(v_host_peak, 1500) >= np.rating_min)
+        AND (np.rating_max IS NULL OR coalesce(v_host_peak, 1500) <= np.rating_max)
+        -- 既にアクティブなロビーに居る人はどうせ参加できないので除外
+        AND NOT EXISTS (
+          SELECT 1 FROM eights_lobby_members m JOIN eights_lobbies l ON l.id = m.lobby_id
+          WHERE m.user_id = np.user_id AND l.status IN ('open','drafting'))
+        -- 直近10分に8s通知を受けた人はスキップ (開催連投によるスパム防止)
+        AND NOT EXISTS (
+          SELECT 1 FROM notifications n
+          WHERE n.user_id = np.user_id AND n.type = 'eights_lobby'
+            AND n.created_at > now() - interval '10 minutes')
+      LIMIT 500
+    ) s;
+
+    IF v_recipients IS NOT NULL THEN
+      INSERT INTO notifications (user_id, type, body, link, is_read)
+      SELECT r,
+             'eights_lobby',
+             '⚡ 8s 開催: ' || trim(p_title) || '（ホスト: ' || coalesce(v_host_name, '不明') || ' / レート制限: ' || v_rate_label || '）',
+             '/custom/eights/' || v_lid,
+             false
+      FROM unnest(v_recipients) AS r;
+    END IF;
   EXCEPTION WHEN OTHERS THEN
     NULL;
   END;
 
-  -- Discord 通知 (ロールメンション)
+  -- Discord 通知 (条件に合致した人だけ個人メンション。80人ずつ分割送信)
   BEGIN
     SELECT value INTO v_webhook_url FROM app_settings WHERE key = 'discord_8s_webhook';
-    SELECT value INTO v_role_id FROM app_settings WHERE key = 'discord_8s_role_id';
-    IF v_role_id IS NOT NULL AND v_role_id !~ '^\d+$' THEN v_role_id := NULL; END IF;
 
-    v_payload := jsonb_build_object(
-      'content', CASE WHEN v_role_id IS NOT NULL THEN '<@&' || v_role_id || '>' ELSE '' END,
-      'allowed_mentions', CASE WHEN v_role_id IS NOT NULL
-        THEN jsonb_build_object('parse', jsonb_build_array(), 'roles', jsonb_build_array(v_role_id))
-        ELSE jsonb_build_object('parse', jsonb_build_array()) END,
-      'embeds', jsonb_build_array(jsonb_build_object(
+    IF v_webhook_url IS NOT NULL THEN
+      IF v_recipients IS NOT NULL THEN
+        SELECT array_agg(i.provider_id ORDER BY i.provider_id)
+        INTO v_mention_ids
+        FROM auth.identities i
+        WHERE i.provider = 'discord'
+          AND i.user_id = ANY(v_recipients)
+          AND i.provider_id ~ '^\d+$';
+      END IF;
+      v_total := coalesce(array_length(v_mention_ids, 1), 0);
+
+      v_embed := jsonb_build_array(jsonb_build_object(
         'title', '⚡ 8s 開催: ' || trim(p_title),
         'description', '8人カスタムマッチのロビーが作成されました。参加者募集中！',
         'color', 65535,
@@ -184,11 +203,28 @@ BEGIN
         ),
         'footer', jsonb_build_object('text', 'ASCENT · 8s Lobby'),
         'timestamp', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-      ))
-    );
+      ));
 
-    IF v_webhook_url IS NOT NULL THEN
-      PERFORM net.http_post(url := v_webhook_url, body := v_payload);
+      IF v_total = 0 THEN
+        -- 対象者なし: メンションなしの Embed のみ
+        PERFORM net.http_post(url := v_webhook_url, body := jsonb_build_object(
+          'content', '',
+          'allowed_mentions', jsonb_build_object('parse', jsonb_build_array()),
+          'embeds', v_embed
+        ));
+      ELSE
+        -- 80人ずつ分割。Embed は先頭メッセージのみ、2通目以降はメンションのみ
+        v_pos := 1;
+        WHILE v_pos <= v_total LOOP
+          v_chunk := v_mention_ids[v_pos : least(v_pos + 79, v_total)];
+          PERFORM net.http_post(url := v_webhook_url, body := jsonb_build_object(
+            'content', (SELECT string_agg('<@' || x || '>', ' ') FROM unnest(v_chunk) AS x),
+            'allowed_mentions', jsonb_build_object('parse', jsonb_build_array(), 'users', (SELECT jsonb_agg(x) FROM unnest(v_chunk) AS x)),
+            'embeds', CASE WHEN v_pos = 1 THEN v_embed ELSE '[]'::jsonb END
+          ));
+          v_pos := v_pos + 80;
+        END LOOP;
+      END IF;
     END IF;
   EXCEPTION WHEN OTHERS THEN
     NULL;

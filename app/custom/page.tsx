@@ -134,24 +134,11 @@ export default function CustomPage() {
       p_rating_min: ratingMin,
       p_rating_max: ratingMax,
     })
-    if (error) { setNotifyBusy(false); showToast(error.message, 'error'); return }
-
-    // Discordの @8s募集 ロールも同期 (ベストエフォート — 失敗してもサイト内通知は有効)
-    let roleMsg = ''
-    try {
-      const { data: sync, error: syncErr } = await supabase.functions.invoke('discord-8s-role', { body: { enabled: notifyEnabled } })
-      if (syncErr) throw syncErr
-      const s = sync as { ok: boolean; reason?: string }
-      if (s.ok) roleMsg = notifyEnabled ? '。Discordの募集ロールも付与しました' : '。Discordの募集ロールも外しました'
-      else if (s.reason === 'not_in_guild') roleMsg = '（Discordサーバー未参加のためロールは付与されませんでした）'
-    } catch {
-      roleMsg = '（Discordロールの同期には失敗しました）'
-    }
-
     setNotifyBusy(false)
+    if (error) { showToast(error.message, 'error'); return }
     setNotifyOn(notifyEnabled)
     setShowNotify(false)
-    showToast((notifyEnabled ? '8s開催の通知を受け取ります' : '8s開催の通知をオフにしました') + roleMsg, 'success')
+    showToast(notifyEnabled ? '8s開催の通知を受け取ります（サイト内 + Discordメンション）' : '8s開催の通知をオフにしました', 'success')
   }
 
   const handleJoin = async (lobbyId: string) => {
@@ -210,7 +197,7 @@ export default function CustomPage() {
           </div>
 
           <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-            8sが開催されると、通知設定をオンにしたメンバーにサイト内通知が届きます（レート帯・時間帯で絞り込み可）。<span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> の #8s-lobby にも通知されます
+            8sが開催されると、通知設定をオンにしたメンバーにサイト内通知と <span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> #8s-lobby での個人メンションが届きます（レート帯・時間帯で絞り込み可）
           </p>
 
           {myLobbyId && (
@@ -258,7 +245,7 @@ export default function CustomPage() {
                 <h2 style={{ marginTop: 0 }}>8s を開催する</h2>
                 <div className="card" style={{ padding: '10px 14px', marginBottom: 14, borderColor: 'rgba(88,101,242,0.4)', background: 'rgba(88,101,242,0.08)' }}>
                   <p style={{ margin: 0, fontSize: 12, color: 'var(--text)' }}>
-                    通知設定をオンにしたメンバーへのサイト内通知と、<span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> #8s-lobby への通知が自動送信されます
+                    通知設定をオンにしたメンバーへのサイト内通知と、<span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> #8s-lobby への個人メンション通知が自動送信されます
                   </p>
                 </div>
                 <div style={{ marginBottom: 12 }}>
@@ -284,8 +271,8 @@ export default function CustomPage() {
               <div className="card-strong" style={{ maxWidth: 460, width: '100%', overflow: 'visible' }} onClick={e => e.stopPropagation()}>
                 <h2 style={{ marginTop: 0 }}>8s 通知設定</h2>
                 <p className="muted" style={{ fontSize: 12, marginTop: 0, marginBottom: 14 }}>
-                  8sロビーが開催されたときに、サイト内通知でお知らせします。参加できないロビー（レート制限超過）は通知されません。
-                  オンにすると <span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> の募集ロールも自動で付与され、#8s-lobby のメンション通知も受け取れます（レート帯・時間帯の絞り込みはサイト内通知のみ）。
+                  8sロビーが開催されたときに、サイト内通知と <span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> #8s-lobby での個人メンションでお知らせします。
+                  レート帯・時間帯の指定は両方に効きます。参加できないロビー（レート制限超過）は通知されません。
                 </p>
 
                 <button type="button" onClick={() => setNotifyEnabled(v => !v)} aria-pressed={notifyEnabled}
