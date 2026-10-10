@@ -32,13 +32,13 @@ export default function RulesPage() {
               <li>モード、マップを設定</li>
               <li>ルールを設定</li>
               <li>ロビーコードをASCENTに送信</li>
-              <li>勢力を確認（メンバーがJSOC、ギルドに正しく振り分けられているか）</li>
+              <li>チーム振り分けを確認（メンバーがチーム1、チーム2に正しく振り分けられているか）</li>
               <li>試合開始</li>
             </ol>
           </div>
           <img
             src="/tutorial.png"
-            alt="プライベートマッチロビーの見方 - ロビーコード、JSOC（チーム1）、ギルド（チーム2）の位置"
+            alt="プライベートマッチロビーの見方 - ロビーコード、チーム1、チーム2の位置"
             style={{ width: '100%', borderRadius: 'var(--r-lg)', marginTop: 16 }}
           />
         </div>

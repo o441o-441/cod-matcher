@@ -508,8 +508,7 @@ export default function MatchConfirmPage() {
                 HARDPOINT, SEARCH&amp;DESTROY, OVERLOADの順に行い、先に2勝したチームが勝者となります。
               </p>
               <p className="muted" style={{ fontSize: 13, lineHeight: 1.8, marginTop: 12 }}>
-                ※勢力はチーム1がJSOC、チーム2がギルドとなります。<br />
-                &nbsp;&nbsp;プレイヤーにカーソルを合わせてリロードボタンで勢力を移動できます。
+                ※プレイヤーにカーソルを合わせてリロードボタンでチームを移動できます。
               </p>
             </div>
             <div className="modal-foot" style={{ justifyContent: "center" }}>
@@ -787,12 +786,14 @@ export default function MatchConfirmPage() {
                       {state.side ? (() => {
                         const teamAIsAlpha = teamAssignment.teamA === alphaTeam?.id;
                         const pickerIsAlpha = teamAIsAlpha;
+                        // 内部値は JSOC/ギルド のまま。表示のみ チーム1/チーム2 に変換
+                        const sideLabel = (s: string) => (s === "JSOC" ? "チーム1" : "チーム2");
                         const alphaSide = pickerIsAlpha ? state.side : (state.side === "JSOC" ? "ギルド" : "JSOC");
                         const bravoSide = alphaSide === "JSOC" ? "ギルド" : "JSOC";
                         return (
                           <div>
                             <span className="muted">サイド: </span>
-                            <span style={{ color: "var(--cyan)", fontWeight: 600 }}>Alpha: {alphaSide} / Bravo: {bravoSide}</span>
+                            <span style={{ color: "var(--cyan)", fontWeight: 600 }}>Alpha: {sideLabel(alphaSide)} / Bravo: {sideLabel(bravoSide)}</span>
                           </div>
                         );
                       })() : (
@@ -883,7 +884,7 @@ export default function MatchConfirmPage() {
         <h2 style={{ marginTop: 0 }}>ロビー画面の見方</h2>
         <img
           src="/tutorial.png"
-          alt="プライベートマッチロビーの見方 - ロビーコード、JSOC（チーム1）、ギルド（チーム2）の位置"
+          alt="プライベートマッチロビーの見方 - ロビーコード、チーム1、チーム2の位置"
           style={{ width: "100%", borderRadius: "var(--r-md)", border: "1px solid var(--line)", marginTop: 12 }}
         />
       </div>

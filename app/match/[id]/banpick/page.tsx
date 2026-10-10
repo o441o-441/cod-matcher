@@ -29,7 +29,7 @@ const BANPICK_TUTORIAL = [
   { title: "バンピックとは", body: "HP / SND / OVL の中から重み付きランダムで1つモードが選ばれ、そのモードでBAN → PICK → サイド選択を行います（BO1）。選出確率: HP 約67% / SND 約22% / OVL 約11%" },
   { title: "BAN", body: "マップを1つ選んで除外します。BANされたマップには取り消し線が付き、PICKできなくなります。各チーム1回ずつBANします。" },
   { title: "PICK", body: "残りのマップから試合で使うマップを選びます。選ばれたマップはハイライト表示されます。" },
-  { title: "サイド選択", body: "マップが決まったら、JSOC / ギルド のどちらのサイドでプレイするか選びます。" },
+  { title: "サイド選択", body: "マップが決まったら、チーム1 / チーム2 のどちらのサイドでプレイするか選びます。" },
   { title: "制限時間", body: "各ステップには5分の制限時間があります。時間切れの場合、操作すべきだった側の敗北になります。" },
   { title: "ホスト決定", body: "バンピック完了後、自動でパーティリーダーの中からランダムにホストが決定されます。" },
   { title: "ロール自動割り当て", body: "トロフィー使用者（各チーム2人）はランダムで自動選出されます。S&Dの場合はSR・スモーク使用者（各チーム1人）も自動選出されます。" },
@@ -155,7 +155,9 @@ const PHASE_NAME: Record<"hp" | "snd" | "ovl", string> = {
   ovl: "オーバーロード",
 };
 
+// サイドの内部値 (DB保存値)。過去データとの互換のため値は変えず、表示は SIDE_LABELS で変換する
 const SIDE_OPTIONS = ["JSOC", "ギルド"];
+const SIDE_LABELS: Record<string, string> = { JSOC: "チーム1", "ギルド": "チーム2" };
 
 const MAP_META: Record<string, { id: string; en: string }> = {
   "酒": { id: "sake", en: "Sake" },
@@ -1193,7 +1195,6 @@ export default function BanpickPage() {
                           }}>
                             {isAlphaSide ? "チーム1" : "チーム2"}
                           </div>
-                          <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>{s}</div>
                         </button>
                       );
                     })}
@@ -1256,7 +1257,7 @@ export default function BanpickPage() {
                     {sideLabel && (
                       <div style={{ marginTop: 6 }}>
                         <span className={`side-chip ${sideLabel === "JSOC" ? "alpha" : "bravo"}`}>
-                          {sideLabel}
+                          {SIDE_LABELS[sideLabel] ?? sideLabel}
                         </span>
                       </div>
                     )}

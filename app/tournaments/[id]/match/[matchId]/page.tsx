@@ -253,7 +253,7 @@ export default function TournamentMatchPage() {
             <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
               {match.banpick_action === 'ban' && 'マップを1つBANしてください'}
               {match.banpick_action === 'pick_map' && 'マップを1つ選択してください'}
-              {match.banpick_action === 'pick_side' && 'サイドを選択してください (JSOC / ギルド)'}
+              {match.banpick_action === 'pick_side' && 'サイドを選択してください (チーム1 / チーム2)'}
             </div>
           </div>
 
@@ -311,12 +311,10 @@ export default function TournamentMatchPage() {
                 <button className="card" style={{ padding: 20, cursor: 'pointer', textAlign: 'center', border: '2px solid var(--cyan)' }}
                   onClick={() => handleAction('pick_side', 'JSOC')} disabled={busy}>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, color: 'var(--cyan)' }}>チーム1</div>
-                  <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>JSOC</div>
                 </button>
                 <button className="card" style={{ padding: 20, cursor: 'pointer', textAlign: 'center', border: '2px solid var(--magenta)' }}
                   onClick={() => handleAction('pick_side', 'ギルド')} disabled={busy}>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, color: 'var(--magenta)' }}>チーム2</div>
-                  <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>ギルド</div>
                 </button>
               </div>
             </div>
@@ -348,13 +346,13 @@ export default function TournamentMatchPage() {
                   <div style={{ textAlign: 'center', padding: '6px 8px', borderRadius: 4, background: 'rgba(0,229,255,0.05)', border: '1px solid rgba(0,229,255,0.2)' }}>
                     <div className="muted" style={{ fontSize: 10 }}>{teamA?.teamName ?? 'A'}</div>
                     <div style={{ fontWeight: 700, fontSize: 14, marginTop: 2, color: 'var(--cyan)' }}>
-                      {g.side === 'JSOC' ? 'JSOC (チーム1)' : 'ギルド (チーム2)'}
+                      {g.side === 'JSOC' ? 'チーム1' : 'チーム2'}
                     </div>
                   </div>
                   <div style={{ textAlign: 'center', padding: '6px 8px', borderRadius: 4, background: 'rgba(255,0,170,0.05)', border: '1px solid rgba(255,0,170,0.2)' }}>
                     <div className="muted" style={{ fontSize: 10 }}>{teamB?.teamName ?? 'B'}</div>
                     <div style={{ fontWeight: 700, fontSize: 14, marginTop: 2, color: 'var(--magenta)' }}>
-                      {g.side === 'JSOC' ? 'ギルド (チーム2)' : 'JSOC (チーム1)'}
+                      {g.side === 'JSOC' ? 'チーム2' : 'チーム1'}
                     </div>
                   </div>
                 </div>
