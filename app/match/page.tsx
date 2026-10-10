@@ -197,6 +197,7 @@ export default function MatchPage() {
   const [rulesAccepted, setRulesAccepted] = useState(true);
   const [rulesVersion, setRulesVersion] = useState("1");
   const [rulesRevised, setRulesRevised] = useState(false);
+  const [myActivisionId, setMyActivisionId] = useState<string | null>(null); // null=未読込, ''=未設定
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [autoMatching, setAutoMatching] = useState(false);
@@ -298,15 +299,17 @@ export default function MatchPage() {
       }
 
       // Phase 1: profile + party membership (always), invites + friends + team (initial only)
-      const [profileRes, partyMemberRes, pendingInvitesRes, friendsRes, membershipRes] = await Promise.all([
+      const [profileRes, partyMemberRes, pendingInvitesRes, friendsRes, membershipRes, actIdRes] = await Promise.all([
         supabase.from("profiles").select("id,display_name,current_rating,is_banned,is_onboarded,is_admin").eq("id", uid).maybeSingle<ProfileRow>(),
         supabase.from("party_members").select("id,party_id,user_id").eq("user_id", uid).returns<PartyMemberRow[]>(),
         opts?.silent ? Promise.resolve({ data: null, error: null }) : supabase.rpc("rpc_list_my_pending_party_invites"),
         opts?.silent ? Promise.resolve({ data: null, error: null }) : supabase.rpc("rpc_list_my_friends"),
         opts?.silent ? Promise.resolve({ data: null, error: null }) : supabase.from("team_members").select("team_id").eq("user_id", uid).maybeSingle<{ team_id: string }>(),
+        supabase.from("users").select("activision_id").eq("auth_user_id", uid).maybeSingle<{ activision_id: string | null }>(),
       ]);
 
       if (profileRes.error) throw profileRes.error;
+      setMyActivisionId(((actIdRes.data?.activision_id) ?? "").trim());
 
       let resolvedProfile = profileRes.data ?? null;
       if (!resolvedProfile || !resolvedProfile.is_onboarded) {
@@ -1107,6 +1110,18 @@ export default function MatchPage() {
             初期設定が未完了のため対戦に参加できません。
             <button type="button" onClick={() => router.push("/onboarding")} className="btn-ghost btn-sm" style={{ marginLeft: 8 }}>
               初期設定を完了する
+            </button>
+          </span>
+        </div>
+      )}
+
+      {/* ── Activision ID 未設定警告 ── */}
+      {profile && profile.is_onboarded && myActivisionId === "" && (
+        <div className="card" style={{ borderColor: 'rgba(255,176,32,0.35)', background: 'var(--amber-soft)', marginBottom: 16 }}>
+          <span className="amber" style={{ fontSize: 14 }}>
+            Activision ID が未設定のためランクマッチに参加できません（ゲーム内のロビー招待に必要です）。
+            <button type="button" onClick={() => router.push("/profile/edit")} className="btn-ghost btn-sm" style={{ marginLeft: 8 }}>
+              プロフィール編集で設定する
             </button>
           </span>
         </div>
