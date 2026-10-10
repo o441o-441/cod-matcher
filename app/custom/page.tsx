@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
+import LivePanel from '@/components/LivePanel'
 
 type LobbyRow = {
   id: string; title: string; host_user_id: string; status: string
@@ -160,6 +161,10 @@ export default function CustomPage() {
       <p className="muted" style={{ marginTop: 10, maxWidth: 640 }}>
         8人カスタム（8s）と、チーム同士で対戦相手を見つける交流戦ボード（scrim）。ランクには影響しません。
       </p>
+
+      <div style={{ marginTop: 16 }}>
+        <LivePanel />
+      </div>
 
       {/* Tabs — large cards */}
       <div className="grid-3 section">

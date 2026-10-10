@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import { usePageView } from '@/lib/usePageView'
+import LivePanel from '@/components/LivePanel'
 
 type TourneyRow = { id: string; title: string; format: string; status: string }
 type AnnouncementRow = { id: string; title: string; created_at: string }
@@ -107,6 +108,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* いまのASCENT (ライブパネル) */}
+      <LivePanel />
 
       {/* 4 Mode Cards */}
       <section className="grid-2" style={{ gap: 14, marginBottom: 18 }}>
