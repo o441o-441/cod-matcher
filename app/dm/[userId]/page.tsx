@@ -48,13 +48,9 @@ export default function DmConversationPage() {
 
     setMessages((data ?? []) as MessageRow[])
 
-    // Mark unread as read
-    await supabase
-      .from('direct_messages')
-      .update({ is_read: true })
-      .eq('sender_user_id', pid)
-      .eq('receiver_user_id', uid)
-      .eq('is_read', false)
+    // 既読化 (direct_messages にUPDATEポリシーが無いため専用RPCで行う)
+    const { error: readErr } = await supabase.rpc('rpc_dm_mark_read', { p_partner_id: pid })
+    if (readErr) console.error('rpc_dm_mark_read error:', readErr)
   }
 
   useEffect(() => {
