@@ -36,6 +36,9 @@ export default function OnboardingPage() {
   const [skillLevel, setSkillLevel] = useState('1500') // 迷ったら中級者 (既定値)
   const [showDetails, setShowDetails] = useState(false)
   const [nameLocked, setNameLocked] = useState(false) // 登録済みユーザーの再訪問時は表示名変更不可
+  const [notify8s, setNotify8s] = useState(true) // 8s開催通知 (初期ON)
+  // 再訪時に既存の時間帯・レート帯設定を消さないための引き継ぎ値
+  const [notifyExtra, setNotifyExtra] = useState<{ hs: number | null; he: number | null; rmin: number | null; rmax: number | null }>({ hs: null, he: null, rmin: null, rmax: null })
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
 
@@ -48,7 +51,7 @@ export default function OnboardingPage() {
         return
       }
 
-      const [{ data }, { data: prof }] = await Promise.all([
+      const [{ data }, { data: prof }, { data: notifyPrefs }] = await Promise.all([
         supabase
           .from('users')
           .select('display_name, activision_id, controller, platform')
@@ -59,7 +62,17 @@ export default function OnboardingPage() {
           .select('display_name, is_onboarded')
           .eq('id', session.user.id)
           .maybeSingle<{ display_name: string | null; is_onboarded: boolean }>(),
+        supabase
+          .from('eights_notify_prefs')
+          .select('enabled, hour_start, hour_end, rating_min, rating_max')
+          .eq('user_id', session.user.id)
+          .maybeSingle<{ enabled: boolean; hour_start: number | null; hour_end: number | null; rating_min: number | null; rating_max: number | null }>(),
       ])
+
+      if (notifyPrefs) {
+        setNotify8s(notifyPrefs.enabled)
+        setNotifyExtra({ hs: notifyPrefs.hour_start, he: notifyPrefs.hour_end, rmin: notifyPrefs.rating_min, rmax: notifyPrefs.rating_max })
+      }
 
       if (data) {
         if (data.display_name) setDisplayName(data.display_name)
@@ -183,6 +196,16 @@ export default function OnboardingPage() {
       return
     }
 
+    // 8s通知設定 (失敗しても登録自体は続行。/custom の通知設定から再設定可能)
+    const { error: notifyErr } = await supabase.rpc('rpc_eights_set_notify_prefs', {
+      p_enabled: notify8s,
+      p_hour_start: notifyExtra.hs,
+      p_hour_end: notifyExtra.he,
+      p_rating_min: notifyExtra.rmin,
+      p_rating_max: notifyExtra.rmax,
+    })
+    if (notifyErr) console.error('rpc_eights_set_notify_prefs error:', notifyErr)
+
     router.push('/menu')
   }
 
@@ -255,6 +278,20 @@ export default function OnboardingPage() {
             <option value="1600">上級者（クリムゾン以上）</option>
           </select>
         </div>
+
+        {/* 8s開催通知 (初期ON) */}
+        <button type="button" onClick={() => setNotify8s(v => !v)} aria-pressed={notify8s}
+          style={{ display: 'flex', alignItems: 'flex-start', gap: 10, width: '100%', background: 'rgba(6,10,22,0.5)', border: `1px solid ${notify8s ? 'rgba(0,229,255,0.4)' : 'rgba(140,160,220,0.15)'}`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer', textAlign: 'left' }}>
+          <span style={{ width: 32, height: 18, borderRadius: 9, border: `1px solid ${notify8s ? 'var(--cyan)' : 'rgba(140,160,220,0.3)'}`, background: notify8s ? 'rgba(0,229,255,0.25)' : 'rgba(22,28,58,0.9)', position: 'relative', display: 'inline-block', flex: 'none', marginTop: 2, transition: 'all .15s' }}>
+            <span style={{ position: 'absolute', top: 2, left: notify8s ? 16 : 2, width: 12, height: 12, borderRadius: '50%', background: notify8s ? 'var(--cyan)' : 'var(--text-dim)', transition: 'all .15s' }} />
+          </span>
+          <span>
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text)', display: 'block' }}>8s（8人カスタム）開催の通知を受け取る</span>
+            <span className="muted" style={{ fontSize: 11.5, display: 'block', marginTop: 2 }}>
+              8sロビーが立つとサイト内通知とDiscordの個人メンションでお知らせします。時間帯・レート帯の絞り込みやOFFへの変更は、カスタムページの「通知設定」からいつでもできます。
+            </span>
+          </span>
+        </button>
 
         {/* 任意項目は折りたたみ (あとからマイページで設定可能) */}
         <button type="button" onClick={() => setShowDetails(v => !v)}
