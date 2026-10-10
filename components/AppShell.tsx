@@ -8,6 +8,7 @@ import Footer from './Footer'
 import FriendsDrawer from './FriendsDrawer'
 import WinStreakHost from './WinStreakCelebration'
 import QueueStatusBar from './QueueStatusBar'
+import DiscordGuildGate from './DiscordGuildGate'
 
 const HIDE_SHELL_ROUTES = ['/auth/callback', '/onboarding']
 
@@ -98,6 +99,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {friendsOpen && <FriendsDrawer onClose={() => setFriendsOpen(false)} />}
       <WinStreakHost />
       <QueueStatusBar />
+      {uid && <DiscordGuildGate uid={uid} />}
     </div>
   )
 }

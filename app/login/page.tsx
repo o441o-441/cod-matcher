@@ -8,6 +8,8 @@ export default function LoginPage() {
       provider: 'discord',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
+        // guilds.join: ログイン時に専用Discordサーバーへ自動参加させる
+        scopes: 'identify email guilds.join',
       },
     })
 
