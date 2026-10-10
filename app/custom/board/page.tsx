@@ -42,6 +42,7 @@ type RoomRow = {
   slot_end: number
   note: string | null
   status: string
+  last_notified_at: string | null
 }
 
 type RoomMember = { uid: string; name: string; rating: number | null }
@@ -134,6 +135,7 @@ export default function ScrimBoardPage() {
   const [roomEnd, setRoomEnd] = useState(10)
   const [roomNote, setRoomNote] = useState('')
   const [roomBusy, setRoomBusy] = useState(false)
+  const [roomNotifyOn, setRoomNotifyOn] = useState(true) // 混成ルーム募集通知の受信設定 (行なし=ON)
 
   // UI 状態
   const [editDay, setEditDay] = useState(0)
@@ -336,6 +338,14 @@ export default function ScrimBoardPage() {
           } else {
             try { const l = localStorage.getItem(WH_LOCAL_KEY); if (l) setWebhookUrl(l) } catch { /* noop */ }
           }
+          // 混成ルーム募集通知の受信設定 (行なし = ON)
+          const { data: rnPref } = await supabase
+            .from('mixed_room_notify_prefs')
+            .select('enabled')
+            .eq('user_id', uid)
+            .maybeSingle<{ enabled: boolean }>()
+          if (rnPref) setRoomNotifyOn(rnPref.enabled)
+
           await Promise.all([loadMine(uid), loadTemplate(uid)])
         }
 
@@ -681,6 +691,27 @@ export default function ScrimBoardPage() {
     showToast('混成ルームに参加しました', '4人集まるとボードに掲載されます')
     void loadBoard()
   }
+  const roomNotify = async (roomId: string) => {
+    setRoomBusy(true)
+    const { data, error } = await supabase.rpc('rpc_scrimboard_room_notify', { p_room_id: roomId })
+    setRoomBusy(false)
+    if (error) { showToast('通知を送れませんでした', error.message); return }
+    const n = (data as { notified?: number } | null)?.notified ?? 0
+    showToast('募集通知を送信しました', `${n}人にサイト内通知とDiscordメンションを送りました（1ルーム1日1回まで）`)
+    void loadBoard()
+  }
+  const roomNotifiedToday = (r: RoomRow) => {
+    if (!r.last_notified_at) return false
+    const today = weekDays[0]?.dateStr
+    return !!today && fmtDate(new Date(r.last_notified_at)) === today
+  }
+  const toggleRoomNotifyPref = async () => {
+    const next = !roomNotifyOn
+    setRoomNotifyOn(next)
+    const { error } = await supabase.rpc('rpc_scrimboard_room_notify_pref', { p_enabled: next })
+    if (error) { setRoomNotifyOn(!next); showToast('設定の保存に失敗しました', error.message) }
+  }
+
   const roomLeave = async (roomId: string) => {
     setRoomBusy(true)
     const { data, error } = await supabase.rpc('rpc_scrimboard_room_leave', { p_room_id: roomId })
@@ -1062,10 +1093,21 @@ export default function ScrimBoardPage() {
             <div className="sec-title" style={{ marginBottom: 4, color: 'var(--violet)' }}>MIXED</div>
             <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.02em' }}>混成ルーム — チームの垣根なしで4人を集める</div>
           </div>
-          <button type="button" className="btn-primary" onClick={() => { setRoomDay(viewDay); setRoomCreateOpen(true) }}
-            style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', padding: '8px 14px' }}>
-            + ルームを作る
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            {myUserId && (
+              <button type="button" onClick={() => void toggleRoomNotifyPref()} aria-pressed={roomNotifyOn}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-soft)', background: 'transparent', border: 'none', cursor: 'pointer', userSelect: 'none' }}>
+                <span style={{ width: 32, height: 18, borderRadius: 9, border: `1px solid ${roomNotifyOn ? 'var(--violet)' : LINE_STRONG}`, background: roomNotifyOn ? 'rgba(139,92,246,0.25)' : 'rgba(22,28,58,0.9)', position: 'relative', display: 'inline-block', transition: 'all .15s' }}>
+                  <span style={{ position: 'absolute', top: 2, left: roomNotifyOn ? 16 : 2, width: 12, height: 12, borderRadius: '50%', background: roomNotifyOn ? 'var(--violet)' : 'var(--text-dim)', transition: 'all .15s' }} />
+                </span>
+                募集通知を受け取る
+              </button>
+            )}
+            <button type="button" className="btn-primary" onClick={() => { setRoomDay(viewDay); setRoomCreateOpen(true) }}
+              style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', padding: '8px 14px' }}>
+              + ルームを作る
+            </button>
+          </div>
         </div>
         <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-dim)' }}>
           日時を決めてルームを作り、メンバーを募集。チーム所属・無所属を問わず誰でも参加できます。
@@ -1104,9 +1146,16 @@ export default function ScrimBoardPage() {
                     ? <span className="badge success" style={{ fontSize: 9 }}><span className="badge-dot" />ボード掲載中</span>
                     : <span className="badge" style={{ fontSize: 9 }}>あと{4 - ms.length}人</span>}
                   {mineRoom ? (
-                    <button type="button" className="btn-ghost btn-sm" disabled={roomBusy} onClick={() => void roomLeave(r.id)}>
-                      {r.host_user_id === myUserId ? '解散' : '抜ける'}
-                    </button>
+                    <>
+                      <button type="button" className="btn-primary btn-sm" disabled={roomBusy || roomNotifiedToday(r)}
+                        title={roomNotifiedToday(r) ? '本日は通知済みです（1ルーム1日1回）' : '全ユーザーに募集を通知します'}
+                        onClick={() => void roomNotify(r.id)}>
+                        {roomNotifiedToday(r) ? '📣 本日通知済み' : '📣 通知を送る'}
+                      </button>
+                      <button type="button" className="btn-ghost btn-sm" disabled={roomBusy} onClick={() => void roomLeave(r.id)}>
+                        {r.host_user_id === myUserId ? '解散' : '抜ける'}
+                      </button>
+                    </>
                   ) : (
                     <button type="button" className="btn-primary btn-sm" disabled={roomBusy || ms.length >= 5} onClick={() => void roomJoin(r.id)}>参加</button>
                   )}
