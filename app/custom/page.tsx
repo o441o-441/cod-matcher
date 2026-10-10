@@ -8,8 +8,14 @@ import LivePanel from '@/components/LivePanel'
 
 type LobbyRow = {
   id: string; title: string; host_user_id: string; status: string
-  rate_cap: number | null; created_at: string; member_count: number
-  host_name: string | null
+  rate_cap: number | null; scheduled_at: string | null; created_at: string
+  member_count: number; host_name: string | null
+}
+
+// 開催時刻の表示 (例: 10/12 22:00)
+const fmtSchedule = (iso: string) => {
+  const d = new Date(iso)
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 type NotifyPrefsRow = {
@@ -29,6 +35,9 @@ export default function CustomPage() {
   const [busy, setBusy] = useState(false)
   const [createTitle, setCreateTitle] = useState('')
   const [createRateCap, setCreateRateCap] = useState<number | null>(null)
+  const [scheduleMode, setScheduleMode] = useState<'now' | 'later'>('now')
+  const [schedDay, setSchedDay] = useState(0) // 0=今日, 1=明日
+  const [schedTime, setSchedTime] = useState('22:00')
   const [showCreate, setShowCreate] = useState(false)
   const [myLobbyId, setMyLobbyId] = useState<string | null>(null)
 
@@ -79,11 +88,11 @@ export default function CustomPage() {
 
     const { data } = await supabase
       .from('eights_lobbies')
-      .select('id, title, host_user_id, status, rate_cap, created_at')
+      .select('id, title, host_user_id, status, rate_cap, scheduled_at, created_at')
       .in('status', ['open', 'drafting'])
       .order('created_at', { ascending: false })
 
-    const rows = (data ?? []) as { id: string; title: string; host_user_id: string; status: string; rate_cap: number | null; created_at: string }[]
+    const rows = (data ?? []) as { id: string; title: string; host_user_id: string; status: string; rate_cap: number | null; scheduled_at: string | null; created_at: string }[]
 
     // Get member counts + host names
     const hostIds = [...new Set(rows.map(r => r.host_user_id))]
@@ -111,10 +120,24 @@ export default function CustomPage() {
 
   const handleCreate = async () => {
     if (!createTitle.trim()) { showToast('タイトルを入力してください', 'error'); return }
+
+    // 開催時刻 (時間指定の場合)
+    let scheduledAt: string | null = null
+    if (scheduleMode === 'later') {
+      if (!schedTime) { showToast('開催時刻を入力してください', 'error'); return }
+      const [hh, mm] = schedTime.split(':').map(Number)
+      const d = new Date()
+      d.setDate(d.getDate() + schedDay)
+      d.setHours(hh, mm, 0, 0)
+      if (d.getTime() <= Date.now()) { showToast('開催時刻は未来の時刻を指定してください', 'error'); return }
+      scheduledAt = d.toISOString()
+    }
+
     setBusy(true)
     const { data, error } = await supabase.rpc('rpc_eights_create_lobby', {
       p_title: createTitle.trim(),
       p_rate_cap: createRateCap,
+      p_scheduled_at: scheduledAt,
     })
     setBusy(false)
     if (error) { showToast(error.message, 'error'); return }
@@ -226,6 +249,9 @@ export default function CustomPage() {
                       <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>ホスト: {l.host_name}</div>
                     </div>
                     <div className="row" style={{ gap: 8 }}>
+                      {l.scheduled_at && (
+                        <span className="badge violet">🕙 {fmtSchedule(l.scheduled_at)} 開催</span>
+                      )}
                       <span className="badge">{l.member_count}/8</span>
                       {l.rate_cap ? (
                         <span className="badge amber">≤ {l.rate_cap}</span>
@@ -257,9 +283,33 @@ export default function CustomPage() {
                   <label htmlFor="c-title" className="stat-label">ロビー名</label>
                   <input id="c-title" value={createTitle} onChange={e => setCreateTitle(e.target.value)} placeholder="例: YN's Lobby" style={{ marginTop: 6 }} />
                 </div>
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 12 }}>
                   <label htmlFor="c-rate" className="stat-label">ピークレート制限（任意）</label>
                   <input id="c-rate" type="number" value={createRateCap ?? ''} onChange={e => setCreateRateCap(e.target.value ? Number(e.target.value) : null)} placeholder="例: 2000（空欄で制限なし）" min={1000} max={3000} step={100} style={{ marginTop: 6 }} />
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label className="stat-label">開催時間</label>
+                  <div className="row" style={{ gap: 8, marginTop: 6 }}>
+                    {([['now', '今すぐ'], ['later', '時間指定']] as ['now' | 'later', string][]).map(([k, label]) => (
+                      <button key={k} type="button" className={`btn-sm ${scheduleMode === k ? 'btn-primary' : 'btn-ghost'}`}
+                        onClick={() => setScheduleMode(k)}>{label}</button>
+                    ))}
+                  </div>
+                  {scheduleMode === 'later' && (
+                    <>
+                      <div className="row" style={{ gap: 8, marginTop: 10, alignItems: 'center' }}>
+                        {([[0, '今日'], [1, '明日']] as [number, string][]).map(([d, label]) => (
+                          <button key={d} type="button" className={`btn-sm ${schedDay === d ? 'btn-primary' : 'btn-ghost'}`}
+                            onClick={() => setSchedDay(d)}>{label}</button>
+                        ))}
+                        <input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} style={{ width: 120 }} />
+                      </div>
+                      <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
+                        募集は今すぐ始まり、開催時刻になるとメンバー全員に集合通知（サイト内+Discordメンション）が飛びます。
+                      </p>
+                    </>
+                  )}
                 </div>
                 <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
                   <button className="btn-ghost" onClick={() => setShowCreate(false)}>キャンセル</button>

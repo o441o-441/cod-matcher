@@ -97,7 +97,7 @@ $$;
 --      80人ずつに分割して複数メッセージで送信 (Embedは先頭のみ)。
 --    どちらもベストエフォート (失敗してもロビー作成は成功)。
 -- ------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.rpc_eights_create_lobby(p_title text, p_rate_cap integer DEFAULT NULL::integer)
+CREATE OR REPLACE FUNCTION public.rpc_eights_create_lobby(p_title text, p_rate_cap integer DEFAULT NULL::integer, p_scheduled_at timestamptz DEFAULT NULL)
 RETURNS json
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -110,6 +110,7 @@ DECLARE
   v_host_name text;
   v_host_peak integer;
   v_rate_label text;
+  v_when_label text;
   v_hour integer;
   v_recipients uuid[];
   v_mention_ids text[];
@@ -120,19 +121,26 @@ DECLARE
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'not authenticated'; END IF;
   IF length(trim(p_title)) < 1 THEN RAISE EXCEPTION 'タイトルを入力してください'; END IF;
+  IF p_scheduled_at IS NOT NULL THEN
+    IF p_scheduled_at <= now() THEN RAISE EXCEPTION '開催時刻は未来の時刻を指定してください'; END IF;
+    IF p_scheduled_at > now() + interval '48 hours' THEN RAISE EXCEPTION '開催時刻は48時間以内で指定してください'; END IF;
+  END IF;
   IF EXISTS (SELECT 1 FROM eights_lobby_members m JOIN eights_lobbies l ON l.id = m.lobby_id WHERE m.user_id = v_uid AND l.status IN ('open','drafting')) THEN
     RAISE EXCEPTION '既に他のロビーに参加しています';
   END IF;
 
-  INSERT INTO eights_lobbies (host_user_id, title, rate_cap) VALUES (v_uid, trim(p_title), p_rate_cap) RETURNING id INTO v_lid;
+  INSERT INTO eights_lobbies (host_user_id, title, rate_cap, scheduled_at) VALUES (v_uid, trim(p_title), p_rate_cap, p_scheduled_at) RETURNING id INTO v_lid;
   INSERT INTO eights_lobby_members (lobby_id, user_id, weapon_role) VALUES (v_lid, v_uid, 'FLEX');
 
   SELECT display_name, peak_rating INTO v_host_name, v_host_peak FROM profiles WHERE id = v_uid;
   v_rate_label := CASE WHEN p_rate_cap IS NOT NULL THEN '≤ ' || p_rate_cap ELSE 'なし' END;
+  v_when_label := CASE WHEN p_scheduled_at IS NULL THEN '今すぐ'
+    ELSE to_char(p_scheduled_at AT TIME ZONE 'Asia/Tokyo', 'MM/DD HH24:MI') END;
 
   -- 通知対象者の抽出 + サイト内通知 (オプトイン者のみ)
   BEGIN
-    v_hour := extract(hour FROM now() AT TIME ZONE 'Asia/Tokyo')::integer;
+    -- 時間帯フィルタは「開催時刻」基準 (予約開催なら開催時刻のJST時)
+    v_hour := extract(hour FROM coalesce(p_scheduled_at, now()) AT TIME ZONE 'Asia/Tokyo')::integer;
 
     SELECT array_agg(user_id) INTO v_recipients FROM (
       SELECT np.user_id
@@ -168,7 +176,7 @@ BEGIN
       INSERT INTO notifications (user_id, type, body, link, is_read)
       SELECT r,
              'eights_lobby',
-             '⚡ 8s 開催: ' || trim(p_title) || '（ホスト: ' || coalesce(v_host_name, '不明') || ' / レート制限: ' || v_rate_label || '）',
+             '⚡ 8s 開催: ' || trim(p_title) || '（開催: ' || v_when_label || ' / ホスト: ' || coalesce(v_host_name, '不明') || ' / レート制限: ' || v_rate_label || '）',
              '/custom/eights/' || v_lid,
              false
       FROM unnest(v_recipients) AS r;
@@ -195,8 +203,10 @@ BEGIN
       v_embed := jsonb_build_array(jsonb_build_object(
         'title', '⚡ 8s 開催: ' || trim(p_title),
         'description', '8人カスタムマッチのロビーが作成されました。参加者募集中！',
+        'url', 'https://ascent-esports.com/custom/eights/' || v_lid,
         'color', 65535,
         'fields', jsonb_build_array(
+          jsonb_build_object('name', '開催', 'value', v_when_label, 'inline', true),
           jsonb_build_object('name', 'ホスト', 'value', coalesce(v_host_name, '不明'), 'inline', true),
           jsonb_build_object('name', 'レート制限', 'value', v_rate_label, 'inline', true),
           jsonb_build_object('name', '参加状況', 'value', '1 / 8', 'inline', true)
@@ -226,6 +236,18 @@ BEGIN
         END LOOP;
       END IF;
     END IF;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  -- X (plze) への告知 (ベストエフォート。_x_post 未設定ならスキップ)
+  BEGIN
+    PERFORM _x_post(
+      '⚡ 8s（プライベートマッチ）募集中！【' || v_when_label || ' 開催】ホスト: ' || coalesce(v_host_name, '不明')
+      || CASE WHEN p_rate_cap IS NOT NULL THEN '（レート ≤ ' || p_rate_cap || '）' ELSE '' END || E'\n'
+      || '参加はこちら → https://ascent-esports.com/custom/eights/' || v_lid || E'\n'
+      || 'plze #cod #MW4'
+    );
   EXCEPTION WHEN OTHERS THEN
     NULL;
   END;

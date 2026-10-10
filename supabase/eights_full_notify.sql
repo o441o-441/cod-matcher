@@ -24,6 +24,7 @@ DECLARE
   v_mention_ids jsonb;
   v_webhook_url text;
   v_page text;
+  v_gather text;
 BEGIN
   SELECT * INTO v_lobby FROM eights_lobbies WHERE id = NEW.lobby_id;
   IF v_lobby IS NULL THEN RETURN NEW; END IF;
@@ -38,12 +39,16 @@ BEGIN
   UPDATE eights_lobbies SET full_notified_at = now() WHERE id = NEW.lobby_id;
 
   v_page := 'https://ascent-esports.com/custom/eights/' || NEW.lobby_id;
+  -- 予約開催 (開催時刻が未来) なら「時間になったら集合」、即時なら「今すぐ集合」
+  v_gather := CASE WHEN v_lobby.scheduled_at IS NOT NULL AND v_lobby.scheduled_at > now()
+    THEN '開催は ' || to_char(v_lobby.scheduled_at AT TIME ZONE 'Asia/Tokyo', 'MM/DD HH24:MI') || ' — 時間になったらASCENT公式サーバーのボイスチャットに集合してください'
+    ELSE 'ASCENT公式サーバーのボイスチャットに集合してください' END;
 
   -- サイト内通知 (8人全員)
   BEGIN
     INSERT INTO notifications (user_id, type, body, link, is_read)
     SELECT u, 'eights_full',
-           '✅ 8s「' || v_lobby.title || '」が8人揃いました！ASCENT公式サーバーのボイスチャットに集合してください',
+           '✅ 8s「' || v_lobby.title || '」が8人揃いました！' || v_gather,
            '/custom/eights/' || NEW.lobby_id, false
     FROM unnest(v_member_ids) AS u;
   EXCEPTION WHEN OTHERS THEN NULL;
@@ -65,11 +70,11 @@ BEGIN
       ) t;
 
       PERFORM net.http_post(url := v_webhook_url, body := jsonb_build_object(
-        'content', coalesce(v_mention_text, '') || E'\n✅ **8人揃いました！ASCENT公式サーバーのボイスチャットに集合してください**',
+        'content', coalesce(v_mention_text, '') || E'\n✅ **8人揃いました！** ' || v_gather,
         'allowed_mentions', jsonb_build_object('parse', jsonb_build_array(), 'users', coalesce(v_mention_ids, '[]'::jsonb)),
         'embeds', jsonb_build_array(jsonb_build_object(
           'title', '✅ 8s 成立: ' || v_lobby.title,
-          'description', 'メンバーが8人揃いました。公式サーバーのVCに集合後、ホストがチームを振り分けます。',
+          'description', 'メンバーが8人揃いました。VCに集合後、ホストがチームを振り分けます。',
           'url', v_page,
           'color', 65440,
           'footer', jsonb_build_object('text', 'ASCENT · 8s Lobby'),

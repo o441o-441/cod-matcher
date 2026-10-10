@@ -13,6 +13,12 @@ type Member = {
 
 const ROLE_COLOR: Record<string, string> = { AR: 'var(--cyan)', SMG: 'var(--magenta)', FLEX: 'var(--violet)' }
 
+// 開催時刻の表示 (例: 10/12 22:00)
+const fmtSchedule = (iso: string) => {
+  const d = new Date(iso)
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 export default function EightsLobbyPage() {
   const params = useParams()
   const router = useRouter()
@@ -20,7 +26,8 @@ export default function EightsLobbyPage() {
   const lobbyId = typeof params.id === 'string' ? params.id : null
 
   const [loading, setLoading] = useState(true)
-  const [lobby, setLobby] = useState<{ title: string; host_user_id: string; status: string; rate_cap: number | null } | null>(null)
+  const [lobby, setLobby] = useState<{ title: string; host_user_id: string; status: string; rate_cap: number | null; scheduled_at: string | null } | null>(null)
+  const [schedFuture, setSchedFuture] = useState(false) // 開催時刻が未来か (読込時に判定)
   const [members, setMembers] = useState<Member[]>([])
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -43,10 +50,12 @@ export default function EightsLobbyPage() {
     }
 
     const [{ data: l }, { data: mData }] = await Promise.all([
-      supabase.from('eights_lobbies').select('title, host_user_id, status, rate_cap').eq('id', lobbyId).maybeSingle(),
+      supabase.from('eights_lobbies').select('title, host_user_id, status, rate_cap, scheduled_at').eq('id', lobbyId).maybeSingle(),
       supabase.from('eights_lobby_members').select('user_id, weapon_role, team_side').eq('lobby_id', lobbyId),
     ])
     setLobby(l as typeof lobby)
+    const sched = (l as { scheduled_at: string | null } | null)?.scheduled_at
+    setSchedFuture(!!sched && new Date(sched).getTime() > Date.now())
 
     const userIds = ((mData ?? []) as { user_id: string }[]).map(m => m.user_id)
     const { data: profiles } = userIds.length > 0
@@ -223,20 +232,23 @@ export default function EightsLobbyPage() {
           <em>{lobby.title}</em>
         </h1>
         <div className="row" style={{ gap: 8 }}>
+          {lobby.scheduled_at && <span className="badge violet">🕙 {fmtSchedule(lobby.scheduled_at)} 開催</span>}
           <span className="badge"><span className="badge-dot" />{members.length}/8</span>
           {lobby.rate_cap ? <span className="badge amber">≤ {lobby.rate_cap}</span> : <span className="badge" style={{ fontSize: 9 }}>制限なし</span>}
           <button className="btn-ghost btn-sm" onClick={leaveLobby}>退出</button>
         </div>
       </div>
 
-      {/* 8人成立バナー: VC集合の案内 */}
+      {/* 8人成立バナー: VC集合の案内 (予約開催なら開催時刻を表示) */}
       {members.length >= 8 && (
         <div className="card" style={{ borderColor: 'rgba(0,245,160,0.4)', background: 'var(--success-soft)', marginTop: 16, padding: '12px 16px' }}>
           <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--success)' }}>
-            ✅ 8人揃いました！ <span style={{ color: '#5865F2' }}>ASCENT公式Discordサーバー</span>のボイスチャットに集合してください
+            {lobby.scheduled_at && schedFuture
+              ? <>✅ 8人揃いました！ 開催は 🕙 {fmtSchedule(lobby.scheduled_at)} — 時間になったら<span style={{ color: '#5865F2' }}>ASCENT公式Discordサーバー</span>のボイスチャットに集合してください</>
+              : <>✅ 8人揃いました！ <span style={{ color: '#5865F2' }}>ASCENT公式Discordサーバー</span>のボイスチャットに集合してください</>}
           </p>
           <p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>
-            VCに集合後、ホストがチームを振り分けます（参加メンバーにはDiscordとサイト内通知でも案内済みです）
+            VCに集合後、ホストがチームを振り分けます（参加メンバーにはDiscordとサイト内通知でも案内が飛びます）
           </p>
         </div>
       )}
