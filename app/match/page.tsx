@@ -9,9 +9,11 @@ import { usePageView } from "@/lib/usePageView";
 import { LoadingSkeleton } from "@/components/UIState";
 import QueueRadar from '@/components/QueueRadar';
 
-const RULES_KEY = "rules_accepted_v1";
+// 同意済みバージョンのローカルキャッシュ (正は profiles.rules_accepted_version)
+const RULES_LOCAL_KEY = "rules_accepted_version";
+const RULES_LEGACY_KEY = "rules_accepted_v1"; // バージョン管理導入前の旧キー
 
-function RulesGate({ onAccept }: { onAccept: () => void }) {
+function RulesGate({ onAccept, revised }: { onAccept: () => void; revised: boolean }) {
   const router = useRouter();
   return (
     <div
@@ -31,6 +33,11 @@ function RulesGate({ onAccept }: { onAccept: () => void }) {
         style={{ width: "100%", maxWidth: 520, padding: 24 }}
       >
         <h2 style={{ marginTop: 0 }}>ルール確認</h2>
+        {revised && (
+          <div className="card" style={{ padding: '10px 14px', marginBottom: 12, borderColor: 'rgba(255,176,32,0.4)', background: 'rgba(255,176,32,0.08)' }}>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--amber)', fontWeight: 700 }}>ルールが改定されました。最新の内容を確認のうえ、再度同意してください。</p>
+          </div>
+        )}
         <p style={{ lineHeight: 1.8 }}>
           ASCENT では GA（ジェントルマンズアグリーメント）に基づいたルールを採用しています。
           対戦に参加する前に、以下のルールを確認してください。
@@ -188,6 +195,8 @@ export default function MatchPage() {
   const router = useRouter();
 
   const [rulesAccepted, setRulesAccepted] = useState(true);
+  const [rulesVersion, setRulesVersion] = useState("1");
+  const [rulesRevised, setRulesRevised] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [autoMatching, setAutoMatching] = useState(false);
@@ -472,11 +481,43 @@ export default function MatchPage() {
   }, [supabase]);
 
   useEffect(() => {
-    setRulesAccepted(!!localStorage.getItem(RULES_KEY));
+    let cancelled = false;
+    const checkRules = async () => {
+      try {
+        const { data, error } = await supabase.rpc("rpc_get_rules_consent");
+        if (error) throw error;
+        const r = data as { version: string; accepted_version: string | null };
+        if (cancelled) return;
+        setRulesVersion(r.version);
+        const localV = localStorage.getItem(RULES_LOCAL_KEY);
+        const legacy = localStorage.getItem(RULES_LEGACY_KEY);
+        if (r.accepted_version === r.version || localV === r.version) {
+          setRulesAccepted(true);
+          return;
+        }
+        // 旧キー時代 (バージョン管理導入前) の同意は v1 として引き継ぎ、DBに記録
+        if (legacy && r.version === "1") {
+          setRulesAccepted(true);
+          localStorage.setItem(RULES_LOCAL_KEY, "1");
+          void supabase.rpc("rpc_accept_rules");
+          return;
+        }
+        // 過去に何らかの同意があった = 改定による再同意
+        setRulesRevised(!!(r.accepted_version || localV || legacy));
+        setRulesAccepted(false);
+      } catch {
+        // 取得失敗時はローカル記録でフォールバック (サイトを止めない)
+        if (!cancelled) setRulesAccepted(!!localStorage.getItem(RULES_LOCAL_KEY) || !!localStorage.getItem(RULES_LEGACY_KEY));
+      }
+    };
+    void checkRules();
+    return () => { cancelled = true; };
   }, []);
 
   const handleAcceptRules = () => {
-    localStorage.setItem(RULES_KEY, "1");
+    localStorage.setItem(RULES_LOCAL_KEY, rulesVersion);
+    // DBにも記録 (未ログイン時は失敗するがローカル記録で続行できる)
+    void supabase.rpc("rpc_accept_rules");
     setRulesAccepted(true);
   };
 
@@ -1026,7 +1067,7 @@ export default function MatchPage() {
 
   return (
     <main className="page">
-      {!rulesAccepted && <RulesGate onAccept={handleAcceptRules} />}
+      {!rulesAccepted && <RulesGate onAccept={handleAcceptRules} revised={rulesRevised} />}
 
       {/* ── Header ── */}
       <div className="rowx" style={{ marginBottom: 24 }}>
