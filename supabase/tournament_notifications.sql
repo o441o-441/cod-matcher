@@ -153,6 +153,7 @@ BEGIN
     'embeds', jsonb_build_array(jsonb_build_object(
       'title', '🏆 大会公開: ' || NEW.title,
       'description', coalesce(nullif(trim(coalesce(NEW.description, '')), ''), 'エントリー受付中！'),
+      'url', 'https://ascent-esports.com/tournaments/' || NEW.id,
       'color', 16755200,
       'fields', jsonb_build_array(
         jsonb_build_object('name', '形式', 'value', coalesce(NEW.format, '-'), 'inline', true),
@@ -214,6 +215,7 @@ BEGIN
       'embeds', jsonb_build_array(jsonb_build_object(
         'title', '⏰ ' || v_label || ': ' || t.title,
         'description', 'エントリーがまだの方はお早めに！',
+        'url', 'https://ascent-esports.com/tournaments/' || t.id,
         'color', CASE WHEN v_stage = 2 THEN 16729156 ELSE 16755200 END,
         'fields', jsonb_build_array(
           jsonb_build_object('name', '締切', 'value', v_deadline_label, 'inline', true),
