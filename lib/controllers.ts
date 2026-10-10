@@ -7,6 +7,18 @@ export type ControllerGroup = {
   options: string[]
 }
 
+// デバイス名の表記ゆれ正規化 (保存時に適用):
+// 全角英数記号→半角、全角スペース→半角、連続空白の圧縮、前後trim。
+// コントローラー別ランキングはこの文字列でグループ化されるため、
+// 機械的なゆれをここで吸収する。
+export function normalizeDeviceName(input: string): string {
+  return input
+    .replace(/[！-～]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/　/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export const CONTROLLER_GROUPS: ControllerGroup[] = [
   {
     manufacturer: 'Sony',

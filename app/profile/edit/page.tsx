@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
-import { CONTROLLER_GROUPS } from '@/lib/controllers'
+import { CONTROLLER_GROUPS, normalizeDeviceName } from '@/lib/controllers'
 
 type UserRow = {
   id: string
@@ -84,18 +84,17 @@ export default function ProfileEditPage() {
       return
     }
 
-    const trimmedDisplayName = displayName.trim()
     const trimmedActivisionId = activisionId.trim()
 
-    if (!trimmedDisplayName) {
-      showToast('表示名を入力してください', 'error')
+    if (!trimmedActivisionId) {
+      showToast('Activision IDを入力してください', 'error')
       return
     }
 
     setSaving(true)
 
     // Activision ID 重複チェック（BAN 済ユーザーと照合）
-    if (trimmedActivisionId) {
+    {
       const { data: reuseCheck } = await supabase.rpc('rpc_check_activision_reuse', {
         p_activision_id: trimmedActivisionId,
       })
@@ -106,23 +105,19 @@ export default function ProfileEditPage() {
       }
     }
 
+    // 表示名は登録後変更不可のため更新しない
     const { error } = await supabase
       .from('users')
       .update({
-        display_name: trimmedDisplayName,
-        activision_id: trimmedActivisionId || null,
-        controller: controller || null,
+        activision_id: trimmedActivisionId,
+        controller: normalizeDeviceName(controller) || null,
         platform: platform || null,
       })
       .eq('id', profile.id)
 
     if (error) {
       console.error('save profile error:', error)
-      if (error.code === '23505') {
-        showToast('既に使われている名前です。別の名前を入力してください。', 'error')
-      } else {
-        showToast('プロフィール更新に失敗しました', 'error')
-      }
+      showToast('プロフィール更新に失敗しました', 'error')
       setSaving(false)
       return
     }
@@ -130,18 +125,11 @@ export default function ProfileEditPage() {
     if (authUserId) {
       const { error: profileErr } = await supabase
         .from('profiles')
-        .update({
-          display_name: trimmedDisplayName,
-          bio: bio.trim() || null,
-        })
+        .update({ bio: bio.trim() || null })
         .eq('id', authUserId)
       if (profileErr) {
         console.error('save profile error:', profileErr)
-        if (profileErr.code === '23505') {
-          showToast('既に使われている名前です。別の名前を入力してください。', 'error')
-        } else {
-          showToast('プロフィール更新に失敗しました', 'error')
-        }
+        showToast('プロフィール更新に失敗しました', 'error')
         setSaving(false)
         return
       }
@@ -170,7 +158,7 @@ export default function ProfileEditPage() {
       <h1 className="display" style={{ marginBottom: 8 }}>
         <em>Edit</em> Profile
       </h1>
-      <p className="muted">表示名と Activision ID を編集できます</p>
+      <p className="muted">Activision ID・使用デバイスなどを編集できます</p>
 
       <div className="section" style={{ maxWidth: 760, margin: '0 auto' }}>
         <div className="card-strong">
@@ -178,46 +166,46 @@ export default function ProfileEditPage() {
 
           <div className="stack">
             <div>
-              <label htmlFor="pe-name" className="stat-label">DISPLAY NAME</label>
-              <input
-                id="pe-name"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="表示名を入力"
-                style={{ marginTop: 6 }}
-              />
+              <label className="stat-label">DISPLAY NAME</label>
+              <div style={{ marginTop: 6, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, color: 'var(--text-strong)' }}>
+                {displayName || '未設定'}
+              </div>
+              <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>
+                表示名は登録後に変更できません（誰だか分からなくなるのを防ぐため）
+              </p>
             </div>
 
             <div>
-              <label htmlFor="pe-actid" className="stat-label">ACTIVISION ID</label>
+              <label htmlFor="pe-actid" className="stat-label">ACTIVISION ID<span style={{ marginLeft: 8, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--danger)', border: '1px solid rgba(255,77,109,0.4)', borderRadius: 4, padding: '1px 6px', verticalAlign: 1 }}>必須</span></label>
               <input
                 id="pe-actid"
                 value={activisionId}
                 onChange={(e) => setActivisionId(e.target.value)}
-                placeholder="Activision IDを入力"
+                placeholder="例: PlayerName#1234567"
                 style={{ marginTop: 6 }}
               />
+              <p className="muted" style={{ marginTop: 4, fontSize: 12, lineHeight: 1.7 }}>
+                <span style={{ color: 'var(--amber)' }}>ゲーム内でActivision IDを変更した場合は、必ずここも更新してください。登録IDが実際のIDと一致しない場合は規約違反の対象となります。</span>
+              </p>
             </div>
 
             <div>
               <label htmlFor="pe-device" className="stat-label">DEVICE</label>
-              <select
+              <input
                 id="pe-device"
                 value={controller}
                 onChange={(e) => setController(e.target.value)}
+                placeholder="例: DualSense Edge / Viper V3 Pro など自由に入力"
+                maxLength={40}
                 style={{ marginTop: 6 }}
-              >
-                <option value="">選択してください</option>
-                {CONTROLLER_GROUPS.map((g) => (
-                  <optgroup key={g.manufacturer} label={g.manufacturer}>
-                    {g.options.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </optgroup>
+                list="device-suggestions"
+              />
+              <datalist id="device-suggestions">
+                {CONTROLLER_GROUPS.flatMap(g => g.options).map(opt => (
+                  <option key={opt} value={opt} />
                 ))}
-              </select>
+              </datalist>
+              <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>入力を始めると候補が表示されます。リストにないデバイスは自由に入力できます。</p>
             </div>
 
             <div>
