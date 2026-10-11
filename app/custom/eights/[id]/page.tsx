@@ -107,6 +107,14 @@ export default function EightsLobbyPage() {
     else void loadData()
   }
 
+  const announceTeams = async () => {
+    setBusy(true)
+    const { error } = await supabase.rpc('rpc_eights_announce_teams', { p_lobby_id: lobbyId })
+    setBusy(false)
+    if (error) { showToast(error.message, 'error'); return }
+    showToast('チーム編成をDiscordとサイト内通知で全員に送信しました', 'success')
+  }
+
   const movePlayer = async (userId: string, toSide: string, swapWith?: string) => {
     const { error } = await supabase.rpc('rpc_eights_move_player', {
       p_lobby_id: lobbyId, p_user_id: userId, p_to_side: toSide, p_swap_with: swapWith ?? null,
@@ -314,13 +322,19 @@ export default function EightsLobbyPage() {
           <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
             <h2 style={{ margin: 0 }}>チーム振り分け</h2>
             {isHost && (
-              <div className="row" style={{ gap: 8 }}>
+              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
                 <button className="btn-ghost" onClick={() => autoAssign('random')} disabled={busy}>ランダム振り分け</button>
                 <button className="btn-primary" onClick={() => autoAssign('considered')} disabled={busy}>考慮して振り分け</button>
+                <button
+                  onClick={() => void announceTeams()}
+                  disabled={busy || alphaTeam.length + bravoTeam.length < 8}
+                  style={{ fontSize: 13, fontWeight: 700, background: 'rgba(0,245,160,0.14)', border: '1px solid rgba(0,245,160,0.4)', color: 'var(--success)' }}>
+                  📣 この編成をDiscordに送信
+                </button>
               </div>
             )}
           </div>
-          {isHost && <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>ドラッグ&ドロップ、またはタップで選択→移動先チームをタップしてプレイヤーを移動できます。</p>}
+          {isHost && <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>ドラッグ&ドロップ、またはタップで選択→移動先チームをタップしてプレイヤーを移動できます。編成が決まったら「この編成をDiscordに送信」でメンバー全員に共有できます。</p>}
 
           {/* Balance meter */}
           <div className="card" style={{ padding: '14px 18px', marginBottom: 16 }}>

@@ -107,6 +107,8 @@ DECLARE
   v_uid uuid := auth.uid();
   v_lid uuid;
   v_webhook_url text;
+  v_announce_url text;
+  v_announce_secret text;
   v_host_name text;
   v_host_peak integer;
   v_rate_label text;
@@ -187,17 +189,36 @@ BEGIN
 
   -- Discord 通知 (条件に合致した人だけ個人メンション。80人ずつ分割送信)
   BEGIN
-    SELECT value INTO v_webhook_url FROM app_settings WHERE key = 'discord_8s_webhook';
+    IF v_recipients IS NOT NULL THEN
+      SELECT array_agg(i.provider_id ORDER BY i.provider_id)
+      INTO v_mention_ids
+      FROM auth.identities i
+      WHERE i.provider = 'discord'
+        AND i.user_id = ANY(v_recipients)
+        AND i.provider_id ~ '^\d+$';
+    END IF;
 
-    IF v_webhook_url IS NOT NULL THEN
-      IF v_recipients IS NOT NULL THEN
-        SELECT array_agg(i.provider_id ORDER BY i.provider_id)
-        INTO v_mention_ids
-        FROM auth.identities i
-        WHERE i.provider = 'discord'
-          AND i.user_id = ANY(v_recipients)
-          AND i.provider_id ~ '^\d+$';
-      END IF;
+    -- Bot送信 (「参加する」ボタン付き) が設定済みなら Edge Function 経由で送る
+    SELECT value INTO v_announce_url FROM app_settings WHERE key = 'discord_announce_url';
+    SELECT value INTO v_announce_secret FROM app_settings WHERE key = 'edge_internal_secret';
+    IF v_announce_url IS NOT NULL AND v_announce_secret IS NOT NULL THEN
+      PERFORM net.http_post(
+        url := v_announce_url,
+        headers := jsonb_build_object('Content-Type', 'application/json', 'x-internal-secret', v_announce_secret),
+        body := jsonb_build_object(
+          'lobby_id', v_lid,
+          'title', trim(p_title),
+          'host_name', coalesce(v_host_name, '不明'),
+          'rate_label', v_rate_label,
+          'when_label', v_when_label,
+          'mention_ids', coalesce(to_jsonb(v_mention_ids), '[]'::jsonb)
+        )
+      );
+    ELSE
+      -- フォールバック: 従来の Webhook 送信 (ボタンなし)
+      SELECT value INTO v_webhook_url FROM app_settings WHERE key = 'discord_8s_webhook';
+
+      IF v_webhook_url IS NOT NULL THEN
       v_total := coalesce(array_length(v_mention_ids, 1), 0);
 
       v_embed := jsonb_build_array(jsonb_build_object(
@@ -234,6 +255,7 @@ BEGIN
           ));
           v_pos := v_pos + 80;
         END LOOP;
+      END IF;
       END IF;
     END IF;
   EXCEPTION WHEN OTHERS THEN
