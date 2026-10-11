@@ -100,6 +100,7 @@ Deno.serve(async (req) => {
         type: 1,
         components: [
           { type: 2, style: 1, label: '参加する', custom_id: `eights_join:${body.lobby_id}` },
+          { type: 2, style: 4, label: '参加をやめる', custom_id: `eights_leave:${body.lobby_id}` },
           { type: 2, style: 5, label: 'ロビーを見る', url: lobbyUrl },
         ],
       },

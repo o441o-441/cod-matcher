@@ -12,6 +12,8 @@
 //       「参加状況」フィールドも更新する。
 //   - 「ロール: AR/SMG/FLEX」ボタン (custom_id: eights_role:<lobby_id>:<ROLE>)
 //     → ロビーメンバーの武器ロールを設定する。
+//   - 「参加をやめる」ボタン (custom_id: eights_leave:<lobby_id>)
+//     → 参加をキャンセル。ホストが抜けた場合はロビー終了として表示を更新。
 //
 // 必要な secrets:
 //   DISCORD_PUBLIC_KEY — Discordアプリの Public Key (署名検証用)
@@ -125,6 +127,58 @@ Deno.serve(async (req) => {
     } catch (e) {
       console.error('discord-interactions error', e)
       return ephemeral('エラーが発生しました。サイトから参加してください → https://ascent-esports.com/custom')
+    }
+  }
+
+  // 参加キャンセルボタン
+  if (payload.type === 3 && String(payload.data?.custom_id ?? '').startsWith('eights_leave:')) {
+    const lobbyId = String(payload.data!.custom_id).split(':')[1]
+    const discordId = payload.member?.user?.id ?? payload.user?.id
+    if (!discordId || !/^[0-9a-f-]{36}$/i.test(lobbyId)) return ephemeral('リクエストを処理できませんでした')
+
+    try {
+      const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+      const { data, error } = await admin.rpc('rpc_discord_eights_leave', {
+        p_discord_id: String(discordId),
+        p_lobby_id: lobbyId,
+      })
+      if (error) {
+        console.error('rpc_discord_eights_leave error', error)
+        return ephemeral('エラーが発生しました。サイトから操作してください → https://ascent-esports.com/custom')
+      }
+      const r = data as { ok: boolean; code?: string; message?: string; member_count?: number; lobby_closed?: boolean }
+      if (!r.ok) {
+        if (r.code === 'not_registered') return ephemeral('ASCENT未登録のため操作できません → https://ascent-esports.com/login')
+        if (r.code === 'not_member') return ephemeral('このロビーには参加していません')
+        if (r.code === 'closed') return ephemeral('このロビーは既に終了しています')
+        return ephemeral(`キャンセルできませんでした: ${r.message ?? '不明なエラー'}`)
+      }
+
+      // 告知メッセージを更新 (ベストエフォート)。ホスト退出でロビー終了ならボタンを外す
+      try {
+        const botToken = Deno.env.get('DISCORD_BOT_TOKEN')
+        const msg = payload.message
+        if (botToken && msg?.embeds?.length && payload.channel_id) {
+          const embeds = msg.embeds
+          for (const e of embeds) {
+            for (const f of e.fields ?? []) {
+              if (f.name === '参加状況') f.value = r.lobby_closed ? '終了' : `${r.member_count} / 8`
+            }
+          }
+          await fetch(`https://discord.com/api/v10/channels/${payload.channel_id}/messages/${msg.id}`, {
+            method: 'PATCH',
+            headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(r.lobby_closed ? { embeds, components: [] } : { embeds }),
+          })
+        }
+      } catch { /* noop */ }
+
+      return ephemeral(r.lobby_closed
+        ? '✅ 退出しました。ホストが抜けたためこのロビーは終了しました'
+        : `✅ 参加をキャンセルしました（現在 ${r.member_count}/8人）`)
+    } catch (e) {
+      console.error('discord-interactions leave error', e)
+      return ephemeral('エラーが発生しました。サイトから操作してください → https://ascent-esports.com/custom')
     }
   }
 

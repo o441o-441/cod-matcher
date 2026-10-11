@@ -53,6 +53,53 @@ END;
 $$;
 
 -- ------------------------------------------------------------
+-- Discord ID からの参加キャンセル (service_role 専用)
+-- ホストが抜けた場合は既存仕様どおりロビーが終了する
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.rpc_discord_eights_leave(p_discord_id text, p_lobby_id uuid)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_role text := coalesce((current_setting('request.jwt.claims', true))::jsonb->>'role', '');
+  v_user uuid;
+  v_lobby record;
+  v_count int;
+  v_closed boolean;
+BEGIN
+  IF v_role <> 'service_role' THEN RAISE EXCEPTION 'forbidden'; END IF;
+  IF p_discord_id !~ '^\d+$' THEN RETURN json_build_object('ok', false, 'code', 'bad_request'); END IF;
+
+  SELECT user_id INTO v_user
+  FROM auth.identities
+  WHERE provider = 'discord' AND provider_id = p_discord_id
+  LIMIT 1;
+  IF v_user IS NULL THEN RETURN json_build_object('ok', false, 'code', 'not_registered'); END IF;
+
+  SELECT * INTO v_lobby FROM eights_lobbies WHERE id = p_lobby_id;
+  IF v_lobby IS NULL OR v_lobby.status NOT IN ('open', 'drafting') THEN
+    RETURN json_build_object('ok', false, 'code', 'closed');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM eights_lobby_members WHERE lobby_id = p_lobby_id AND user_id = v_user) THEN
+    RETURN json_build_object('ok', false, 'code', 'not_member');
+  END IF;
+
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_user::text, 'role', 'authenticated')::text, true);
+  BEGIN
+    PERFORM rpc_eights_leave_lobby(p_lobby_id);
+  EXCEPTION WHEN OTHERS THEN
+    RETURN json_build_object('ok', false, 'code', 'leave_error', 'message', SQLERRM);
+  END;
+
+  SELECT count(*) INTO v_count FROM eights_lobby_members WHERE lobby_id = p_lobby_id;
+  SELECT (status = 'closed') INTO v_closed FROM eights_lobbies WHERE id = p_lobby_id;
+  RETURN json_build_object('ok', true, 'member_count', v_count, 'lobby_closed', coalesce(v_closed, false));
+END;
+$$;
+
+-- ------------------------------------------------------------
 -- Discord ID からの武器ロール設定 (service_role 専用)
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.rpc_discord_eights_set_role(p_discord_id text, p_lobby_id uuid, p_role text)
