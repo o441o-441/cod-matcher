@@ -66,10 +66,10 @@ BEGIN
   SELECT count(*) INTO v_matches
   FROM scrim_matches WHERE status = 'confirmed' AND date = v_today;
 
-  -- 21:00以降 (slot_index >= 2) に4人揃った空き枠が残っているチーム数
+  -- 20:00以降 (全スロット) に4人揃った空き枠が残っているチーム数
   SELECT count(DISTINCT c.team_id) INTO v_open_teams
   FROM scrim_slot_counts c
-  WHERE c.date = v_today AND c.available >= 4 AND c.slot_index >= 2
+  WHERE c.date = v_today AND c.available >= 4
     AND NOT EXISTS (
       SELECT 1 FROM scrim_matches m
       WHERE m.status = 'confirmed' AND m.date = v_today
@@ -77,10 +77,10 @@ BEGIN
         AND c.slot_index >= m.slot_start AND c.slot_index < m.slot_end
     );
 
-  -- 21:00以降が窓に入る募集中の混成ルーム (4人以上)
+  -- 募集中の混成ルーム (今日・4人以上)
   SELECT count(*) INTO v_open_rooms
   FROM scrim_mixed_rooms r
-  WHERE r.date = v_today AND r.status = 'open' AND r.slot_end > 2
+  WHERE r.date = v_today AND r.status = 'open'
     AND (SELECT count(*) FROM scrim_mixed_room_members rm WHERE rm.room_id = r.id) >= 4;
 
   v_open_teams := v_open_teams + v_open_rooms;
