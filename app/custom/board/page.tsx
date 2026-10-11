@@ -421,13 +421,17 @@ export default function ScrimBoardPage() {
     })
     return set
   }
+  // 当日かつ開始から30分以上経過した枠 (終了済み) か
+  const slotEnded = (day: number, i: number) =>
+    day === 0 && nowMins !== null && nowMins >= 1200 + 30 * (i + 1)
+
   const runs = (teamId: string, day: number) => {
     const a = countsFor(teamId, day)
     const taken = matchedSet(teamId, day)
     const out: [number, number][] = []
     let s = -1
     for (let i = 0; i <= 10; i++) {
-      const ok = i < 10 && a[i] >= 4 && !taken.has(i)
+      const ok = i < 10 && a[i] >= 4 && !taken.has(i) && !slotEnded(day, i)
       if (ok && s < 0) s = i
       if (!ok && s >= 0) { out.push([s, i - 1]); s = -1 }
     }
@@ -1311,10 +1315,14 @@ export default function ScrimBoardPage() {
                       const hatch = inRun && mode !== 'all' && !canStart
                       const lit = !!hoverRun && !!r && hoverRun === `${t.id}-${r[0]}`
                       const clickable = !!(teamInfo || myRoomForDay(viewDay)) && !isMe && !dimMode && inRun && mode !== 'all' && need > 0
+                      const ended = slotEnded(viewDay, i)
                       let bg: string, border: string, numCl: string, text: string, numSize = 15
                       if (set) {
                         bg = 'rgba(255,176,32,0.15)'; border = '1px solid rgba(255,176,32,0.55)'
                         numCl = '#ffd166'; text = '成立'; numSize = 11
+                      } else if (ended) {
+                        bg = 'rgba(6,9,20,0.9)'; border = '1px solid transparent'
+                        numCl = '#333c52'; text = '–'; numSize = 12
                       } else if (cnt >= 4) {
                         bg = hatch
                           ? 'repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,229,255,0.14) 4px 6px), rgba(0,229,255,0.06)'
@@ -1380,7 +1388,8 @@ export default function ScrimBoardPage() {
                       </div>
                     </div>
                     {SLOTS.map((_, i) => {
-                      const inWin = i >= r.slot_start && i < r.slot_end
+                      const ended = slotEnded(viewDay, i)
+                      const inWin = i >= r.slot_start && i < r.slot_end && !ended
                       const canStart = inWin && mode !== 'all' && need > 0 && i + need <= r.slot_end && i + need <= 10
                       const hatch = inWin && mode !== 'all' && !canStart
                       const lit = !!hoverRun && hoverRun === `room-${r.id}` && inWin
@@ -1399,8 +1408,8 @@ export default function ScrimBoardPage() {
                       const click = clickable ? () => {
                         if (canStart) { openModal(i); return }
                         const snap = Math.min(r.slot_end - need, 10 - need)
-                        if (snap >= r.slot_start) openModal(snap)
-                        else showToast(`この時間帯には ${currentModeLabel()} が入りません`, `時間帯が ${(r.slot_end - r.slot_start) * 30}分 しかありません`)
+                        if (snap >= r.slot_start && !slotEnded(viewDay, snap)) openModal(snap)
+                        else showToast(`この時間帯には ${currentModeLabel()} が入りません`, `残り時間が ${need * 30}分 に足りません`)
                       } : undefined
                       return (
                         <div key={`room-${r.id}-${i}`}

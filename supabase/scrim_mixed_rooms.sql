@@ -298,6 +298,12 @@ BEGIN
   IF p_date < v_today OR p_date > v_today + 13 THEN
     RAISE EXCEPTION '対象の日付が範囲外です';
   END IF;
+  -- 当日は、開始時刻を30分以上過ぎた枠 (終了済みの枠) では成立不可
+  IF p_date = v_today
+     AND (extract(hour FROM now() AT TIME ZONE 'Asia/Tokyo')::int * 60 + extract(minute FROM now() AT TIME ZONE 'Asia/Tokyo')::int)
+         >= (20 * 60 + (p_slot_start + 1) * 30) THEN
+    RAISE EXCEPTION 'この枠の開始時刻は過ぎています。現在時刻以降の枠を選んでください';
+  END IF;
 
   -- 受付モード (相手がチームの場合のみ。ルームは時間帯で意思表示済み)
   IF p_target_team_id IS NOT NULL THEN
