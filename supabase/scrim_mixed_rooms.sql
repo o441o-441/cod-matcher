@@ -426,6 +426,8 @@ declare
   v_guest_wh text;
   v_host_contact text;
   v_guest_contact text;
+  v_host_mentions text[];
+  v_guest_mentions text[];
   v_label text;
   v_when text;
   v_page text;
@@ -441,10 +443,19 @@ begin
   if v_m.host_team_id is not null then
     select discord_webhook_url into v_host_wh from team_settings where team_id = v_m.host_team_id;
     select public_contact into v_host_contact from scrim_team_prefs where team_id = v_m.host_team_id;
+    -- チームメンバーの個人メンション用 Discord ID
+    select array_agg(i.provider_id) into v_host_mentions
+    from team_members tm
+    join auth.identities i on i.user_id = tm.user_id and i.provider = 'discord'
+    where tm.team_id = v_m.host_team_id and i.provider_id ~ '^\d+$';
   end if;
   if v_m.guest_team_id is not null then
     select discord_webhook_url into v_guest_wh from team_settings where team_id = v_m.guest_team_id;
     select public_contact into v_guest_contact from scrim_team_prefs where team_id = v_m.guest_team_id;
+    select array_agg(i.provider_id) into v_guest_mentions
+    from team_members tm
+    join auth.identities i on i.user_id = tm.user_id and i.provider = 'discord'
+    where tm.team_id = v_m.guest_team_id and i.provider_id ~ '^\d+$';
   end if;
 
   v_label := _scrimboard_format_label(v_m.hp_maps, v_m.snd_maps, v_m.ovl_maps);
@@ -473,12 +484,18 @@ begin
     v_site_body := '⚠️ 交流戦がキャンセルされました: ' || v_host_name || ' vs ' || v_guest_name || '（' || v_when || '）';
   end if;
 
-  -- チーム側: Webhook
+  -- チーム側: Webhook (自チームのメンバー全員をメンション)
   if v_host_wh is not null and v_host_wh like 'https://discord.com/api/webhooks/%' then
     begin
       perform net.http_post(
         url := v_host_wh,
-        body := jsonb_build_object('username', 'ASCENT 交流戦ボード', 'content', v_content_host),
+        body := jsonb_build_object(
+          'username', 'ASCENT 交流戦ボード',
+          'content',
+            coalesce((select string_agg('<@' || x || '>', ' ') from unnest(v_host_mentions) as x) || E'\n', '')
+            || v_content_host,
+          'allowed_mentions', jsonb_build_object('parse', jsonb_build_array(), 'users', coalesce(to_jsonb(v_host_mentions), '[]'::jsonb))
+        ),
         headers := '{"Content-Type": "application/json"}'::jsonb
       );
     exception when others then null;
@@ -488,7 +505,13 @@ begin
     begin
       perform net.http_post(
         url := v_guest_wh,
-        body := jsonb_build_object('username', 'ASCENT 交流戦ボード', 'content', v_content_guest),
+        body := jsonb_build_object(
+          'username', 'ASCENT 交流戦ボード',
+          'content',
+            coalesce((select string_agg('<@' || x || '>', ' ') from unnest(v_guest_mentions) as x) || E'\n', '')
+            || v_content_guest,
+          'allowed_mentions', jsonb_build_object('parse', jsonb_build_array(), 'users', coalesce(to_jsonb(v_guest_mentions), '[]'::jsonb))
+        ),
         headers := '{"Content-Type": "application/json"}'::jsonb
       );
     exception when others then null;
