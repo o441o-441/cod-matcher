@@ -14,8 +14,15 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
+// ブラウザから直接呼ばれるため CORS 必須 (preflight の OPTIONS も処理する)
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
 const json = (status: number, body: unknown) =>
-  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...CORS } })
 
 type ParsedPlayer = {
   team: 'A' | 'B'
@@ -63,6 +70,7 @@ function normName(s: string): string {
 }
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
   if (req.method !== 'POST') return json(405, { error: 'method not allowed' })
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
   if (!apiKey) return json(500, { error: 'AI解析が未設定です (ANTHROPIC_API_KEY)' })
