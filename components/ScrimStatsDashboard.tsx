@@ -105,6 +105,50 @@ const fmtDur = (sec: number | null): string => {
 
 const kd = (k: number, d: number): number | null => (d > 0 ? k / d : k > 0 ? k : null)
 
+// ---- 色分けヘルパー (緑=良い / 赤=改善余地) ----
+
+// t: 0(悪い)〜1(良い)。0.5が中立で無色、離れるほど濃くなる
+const heatBg = (t: number | null): React.CSSProperties => {
+  if (t === null || !Number.isFinite(t)) return {}
+  const c = Math.max(0, Math.min(1, t))
+  const alpha = Math.abs(c - 0.5) * 0.52
+  if (alpha < 0.04) return {}
+  return { background: c >= 0.5 ? `rgba(34,197,94,${alpha.toFixed(2)})` : `rgba(239,68,68,${alpha.toFixed(2)})` }
+}
+
+// 列内での相対評価 (最小=0, 最大=1)。invert=true は小さいほど良い列 (デス等)
+const relT = (vals: number[], v: number | null, invert = false): number | null => {
+  if (v === null || !Number.isFinite(v) || vals.length < 2) return null
+  const min = Math.min(...vals)
+  const max = Math.max(...vals)
+  if (max - min < 1e-9) return null
+  const t = (v - min) / (max - min)
+  return invert ? 1 - t : t
+}
+
+// K/D の絶対評価 (0.65〜1.35 を 0〜1 に)
+const kdT = (v: number | null): number | null => (v === null ? null : (v - 0.65) / 0.7)
+
+const winRateOf = (wins: number, losses: number): number | null =>
+  wins + losses === 0 ? null : wins / (wins + losses)
+
+const signColor = (v: number | null): string | undefined =>
+  v === null || v === 0 ? undefined : v > 0 ? 'var(--success)' : 'var(--danger)'
+
+// 勝率バー + パーセント表示
+function WinBar({ wins, losses }: { wins: number; losses: number }) {
+  const t = winRateOf(wins, losses)
+  if (t === null) return <span className="mono">-</span>
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ width: 44, height: 6, borderRadius: 3, background: 'rgba(239,68,68,0.3)', overflow: 'hidden', display: 'inline-block' }}>
+        <span style={{ width: `${Math.round(t * 100)}%`, height: '100%', background: 'var(--success)', display: 'block' }} />
+      </span>
+      <span className="mono" style={{ fontWeight: 700, color: t >= 0.5 ? 'var(--success)' : 'var(--danger)' }}>{Math.round(t * 100)}%</span>
+    </span>
+  )
+}
+
 const thStyle: React.CSSProperties = { textAlign: 'right', fontWeight: 600, padding: '4px 8px', whiteSpace: 'nowrap' }
 const thLeft: React.CSSProperties = { ...thStyle, textAlign: 'left' }
 const tdStyle: React.CSSProperties = { textAlign: 'right', padding: '4px 8px', whiteSpace: 'nowrap' }
@@ -345,6 +389,37 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
     return { cols, rows }
   }, [players, ownStats, gameById])
 
+  // プレイヤー比較の列ごとの値一覧 (相対ヒートマップ用)
+  const pvals = useMemo(() => {
+    const defined = (xs: (number | null)[]) => xs.filter((x): x is number => x !== null && Number.isFinite(x))
+    const of = (f: (p: PlayerAgg) => number | null) => defined(players.map(f))
+    return {
+      avgK: of(p => p.k / p.games),
+      avgD: of(p => p.d / p.games),
+      avgA: of(p => p.a / p.games),
+      kdv: of(p => kd(p.k, p.d)),
+      kadv: of(p => kd(p.k + p.a, p.d)),
+      avgDmg: of(p => p.dmg / p.games),
+      objTime: of(p => (p.objTimeN ? p.objTimeSum / p.objTimeN : null)),
+      objKills: of(p => (p.objKillsN ? p.objKillsSum / p.objKillsN : null)),
+      onesided: of(p => (p.onesidedN ? p.onesidedSum / p.onesidedN : null)),
+      maxStreak: of(p => (p.maxStreak > 0 ? p.maxStreak : null)),
+      winRate: of(p => winRateOf(p.wins, p.losses)),
+    }
+  }, [players])
+
+  // ハイライト (強み・課題のサマリー)。マップ/モードは勝敗2戦以上が対象
+  const insights = useMemo(() => {
+    const recent = games.slice(0, 5)
+    const rate = (r: { wins: number; losses: number }) => winRateOf(r.wins, r.losses) ?? -1
+    const qualified = groupStats.byMap.filter(r => r.wins + r.losses >= 2)
+    const sorted = [...qualified].sort((a, b) => rate(b) - rate(a) || (b.avgDiff ?? 0) - (a.avgDiff ?? 0))
+    const bestMap = sorted[0] ?? null
+    const worstMap = sorted.length >= 2 ? sorted[sorted.length - 1] : null
+    const ace = players.filter(p => p.games >= 2).sort((a, b) => (kd(b.k, b.d) ?? 0) - (kd(a.k, a.d) ?? 0))[0] ?? null
+    return { recent, bestMap, worstMap, ace }
+  }, [games, groupStats.byMap, players])
+
   const winLoss = (wins: number, losses: number) => `${wins}-${losses}`
 
   if (loading) {
@@ -415,14 +490,59 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
           <p className="muted" style={{ fontSize: 13 }}>この条件に該当するゲームがありません。</p>
         ) : (
           <>
+            {/* ハイライト (強み・課題) */}
+            <div className="g4" style={{ marginBottom: 14 }}>
+              <div className="card" style={{ padding: '10px 12px', borderLeft: '3px solid var(--line)' }}>
+                <div className="stat-label">直近5試合 (全体)</div>
+                <div style={{ fontWeight: 800, fontSize: 15, margin: '2px 0' }}>
+                  {insights.recent.filter(g => g.result === 'w').length}勝 {insights.recent.filter(g => g.result === 'l').length}敗
+                </div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {insights.recent.map(g => (
+                    <span key={g.id} title={`${g.date} ${g.map}`} style={{
+                      width: 10, height: 10, borderRadius: '50%',
+                      background: g.result === 'w' ? 'var(--success)' : g.result === 'l' ? 'var(--danger)' : 'var(--line)',
+                    }} />
+                  ))}
+                </div>
+              </div>
+              <div className="card" style={{ padding: '10px 12px', borderLeft: '3px solid var(--success)' }}>
+                <div className="stat-label">得意マップ</div>
+                {insights.bestMap ? (
+                  <>
+                    <div style={{ fontWeight: 800, fontSize: 15, margin: '2px 0', color: 'var(--success)' }}>{insights.bestMap.key}</div>
+                    <div className="dim" style={{ fontSize: 11 }}>{insights.bestMap.wins}勝{insights.bestMap.losses}敗 · 平均 {fmtSigned(insights.bestMap.avgDiff)}</div>
+                  </>
+                ) : <div className="dim" style={{ fontSize: 12, marginTop: 4 }}>2戦以上のマップなし</div>}
+              </div>
+              <div className="card" style={{ padding: '10px 12px', borderLeft: '3px solid var(--danger)' }}>
+                <div className="stat-label">課題マップ</div>
+                {insights.worstMap ? (
+                  <>
+                    <div style={{ fontWeight: 800, fontSize: 15, margin: '2px 0', color: 'var(--danger)' }}>{insights.worstMap.key}</div>
+                    <div className="dim" style={{ fontSize: 11 }}>{insights.worstMap.wins}勝{insights.worstMap.losses}敗 · 平均 {fmtSigned(insights.worstMap.avgDiff)}</div>
+                  </>
+                ) : <div className="dim" style={{ fontSize: 12, marginTop: 4 }}>比較できるマップなし</div>}
+              </div>
+              <div className="card" style={{ padding: '10px 12px', borderLeft: '3px solid var(--accent, #6ea8fe)' }}>
+                <div className="stat-label">エース (K/D)</div>
+                {insights.ace ? (
+                  <>
+                    <div style={{ fontWeight: 800, fontSize: 15, margin: '2px 0' }}>{insights.ace.name}</div>
+                    <div className="dim" style={{ fontSize: 11 }}>K/D {fmt(kd(insights.ace.k, insights.ace.d))} · {insights.ace.games}試合</div>
+                  </>
+                ) : <div className="dim" style={{ fontSize: 12, marginTop: 4 }}>2戦以上の選手なし</div>}
+              </div>
+            </div>
+
             {/* チーム概要 */}
             <div className="g4" style={{ marginBottom: 18 }}>
               <div className="stat"><span className="stat-label">試合数</span><span className="stat-val">{overview.games}</span></div>
               <div className="stat"><span className="stat-label">戦績</span><span className="stat-val">{overview.wins}勝 {overview.losses}敗</span></div>
-              <div className="stat"><span className="stat-label">勝率</span><span className="stat-val">{fmtPct(overview.wins, overview.losses)}</span></div>
-              <div className="stat"><span className="stat-label">チーム K/D</span><span className="stat-val">{fmt(overview.kdVal)}</span></div>
-              <div className="stat"><span className="stat-label">(K+A)/D</span><span className="stat-val">{fmt(overview.kadVal)}</span></div>
-              <div className="stat"><span className="stat-label">平均得失点差</span><span className="stat-val">{fmtSigned(overview.avgDiff)}</span></div>
+              <div className="stat"><span className="stat-label">勝率</span><span className="stat-val" style={{ color: (winRateOf(overview.wins, overview.losses) ?? 0.5) >= 0.5 ? 'var(--success)' : 'var(--danger)' }}>{fmtPct(overview.wins, overview.losses)}</span></div>
+              <div className="stat"><span className="stat-label">チーム K/D</span><span className="stat-val" style={{ color: overview.kdVal === null ? undefined : overview.kdVal >= 1 ? 'var(--success)' : 'var(--danger)' }}>{fmt(overview.kdVal)}</span></div>
+              <div className="stat"><span className="stat-label">(K+A)/D</span><span className="stat-val" style={{ color: overview.kadVal === null ? undefined : overview.kadVal >= 1 ? 'var(--success)' : 'var(--danger)' }}>{fmt(overview.kadVal)}</span></div>
+              <div className="stat"><span className="stat-label">平均得失点差</span><span className="stat-val" style={{ color: signColor(overview.avgDiff) }}>{fmtSigned(overview.avgDiff)}</span></div>
               <div className="stat"><span className="stat-label">平均試合時間</span><span className="stat-val">{fmtDur(overview.avgDur)}</span></div>
             </div>
 
@@ -433,27 +553,33 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
               <th style={thStyle}>K/D</th><th style={thStyle}>(K+A)/D</th><th style={thStyle}>平均威力</th><th style={thStyle}>平均占拠</th>
               <th style={thStyle}>目標K</th><th style={thStyle}>ワンサイドK</th><th style={thStyle}>最大ST</th><th style={thStyle}>設置</th><th style={thStyle}>解除</th><th style={thStyle}>勝率</th>
             </>}>
-              {players.map(p => (
-                <tr key={p.key} style={{ borderBottom: '1px solid var(--line)' }}>
-                  <td style={{ ...tdLeft, fontWeight: 600 }}>{p.name}{p.linked ? '' : <span className="dim" title="ASCENT未紐付け"> *</span>}</td>
-                  <td style={tdStyle} className="mono">{p.games}</td>
-                  <td style={tdStyle} className="mono">{fmt(p.k / p.games, 1)}</td>
-                  <td style={tdStyle} className="mono">{fmt(p.d / p.games, 1)}</td>
-                  <td style={tdStyle} className="mono">{fmt(p.a / p.games, 1)}</td>
-                  <td style={tdStyle} className="mono">{fmt(kd(p.k, p.d))}</td>
-                  <td style={tdStyle} className="mono">{fmt(kd(p.k + p.a, p.d))}</td>
-                  <td style={tdStyle} className="mono">{fmt(p.dmg / p.games, 0)}</td>
-                  <td style={tdStyle} className="mono">{p.objTimeN ? `${Math.round(p.objTimeSum / p.objTimeN)}秒` : '-'}</td>
-                  <td style={tdStyle} className="mono">{p.objKillsN ? fmt(p.objKillsSum / p.objKillsN, 1) : '-'}</td>
-                  <td style={tdStyle} className="mono">{p.onesidedN ? fmt(p.onesidedSum / p.onesidedN, 1) : '-'}</td>
-                  <td style={tdStyle} className="mono">{p.maxStreak || '-'}</td>
-                  <td style={tdStyle} className="mono">{p.plants || '-'}</td>
-                  <td style={tdStyle} className="mono">{p.defuses || '-'}</td>
-                  <td style={tdStyle} className="mono">{fmtPct(p.wins, p.losses)}</td>
-                </tr>
-              ))}
+              {players.map(p => {
+                const objTime = p.objTimeN ? p.objTimeSum / p.objTimeN : null
+                const objKills = p.objKillsN ? p.objKillsSum / p.objKillsN : null
+                const onesided = p.onesidedN ? p.onesidedSum / p.onesidedN : null
+                return (
+                  <tr key={p.key} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={{ ...tdLeft, fontWeight: 600 }}>{p.name}{p.linked ? '' : <span className="dim" title="ASCENT未紐付け"> *</span>}</td>
+                    <td style={tdStyle} className="mono">{p.games}</td>
+                    <td style={{ ...tdStyle, ...heatBg(relT(pvals.avgK, p.k / p.games)) }} className="mono">{fmt(p.k / p.games, 1)}</td>
+                    <td style={{ ...tdStyle, ...heatBg(relT(pvals.avgD, p.d / p.games, true)) }} className="mono">{fmt(p.d / p.games, 1)}</td>
+                    <td style={{ ...tdStyle, ...heatBg(relT(pvals.avgA, p.a / p.games)) }} className="mono">{fmt(p.a / p.games, 1)}</td>
+                    <td style={{ ...tdStyle, ...heatBg(relT(pvals.kdv, kd(p.k, p.d))), fontWeight: 700 }} className="mono">{fmt(kd(p.k, p.d))}</td>
+                    <td style={{ ...tdStyle, ...heatBg(relT(pvals.kadv, kd(p.k + p.a, p.d))) }} className="mono">{fmt(kd(p.k + p.a, p.d))}</td>
+                    <td style={{ ...tdStyle, ...heatBg(relT(pvals.avgDmg, p.dmg / p.games)) }} className="mono">{fmt(p.dmg / p.games, 0)}</td>
+                    <td style={{ ...tdStyle, ...heatBg(relT(pvals.objTime, objTime)) }} className="mono">{objTime !== null ? `${Math.round(objTime)}秒` : '-'}</td>
+                    <td style={{ ...tdStyle, ...heatBg(relT(pvals.objKills, objKills)) }} className="mono">{objKills !== null ? fmt(objKills, 1) : '-'}</td>
+                    <td style={{ ...tdStyle, ...heatBg(relT(pvals.onesided, onesided)) }} className="mono">{onesided !== null ? fmt(onesided, 1) : '-'}</td>
+                    <td style={{ ...tdStyle, ...heatBg(relT(pvals.maxStreak, p.maxStreak > 0 ? p.maxStreak : null)) }} className="mono">{p.maxStreak || '-'}</td>
+                    <td style={tdStyle} className="mono">{p.plants || '-'}</td>
+                    <td style={tdStyle} className="mono">{p.defuses || '-'}</td>
+                    <td style={{ ...tdStyle, ...heatBg(relT(pvals.winRate, winRateOf(p.wins, p.losses))) }} className="mono">{fmtPct(p.wins, p.losses)}</td>
+                  </tr>
+                )
+              })}
             </StatTable>
             <p className="dim" style={{ fontSize: 10.5, marginTop: 4 }}>
+              セルの色はチーム内での相対評価 (<span style={{ color: 'var(--success)' }}>緑=優秀</span> / <span style={{ color: 'var(--danger)' }}>赤=改善余地</span>)。
               * はASCENT未紐付けのプレイヤー。平均占拠・目標K等はその列があるモードのゲームのみで平均。設置/解除はSNDの合計。
             </p>
 
@@ -473,13 +599,13 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
                     <td style={{ ...tdLeft, fontWeight: 600 }}>{r.key}</td>
                     <td style={tdStyle} className="mono">{r.n}</td>
                     <td style={tdStyle} className="mono">{winLoss(r.wins, r.losses)}</td>
-                    <td style={tdStyle} className="mono">{fmtPct(r.wins, r.losses)}</td>
-                    <td style={tdStyle} className="mono">{fmtSigned(r.avgDiff)}</td>
+                    <td style={tdStyle}><WinBar wins={r.wins} losses={r.losses} /></td>
+                    <td style={{ ...tdStyle, color: signColor(r.avgDiff), fontWeight: 700 }} className="mono">{fmtSigned(r.avgDiff)}</td>
                     <td style={tdStyle} className="mono">{r.hostGames.length}</td>
-                    <td style={tdStyle} className="mono">{fmtPct(hw, hl)}</td>
+                    <td style={{ ...tdStyle, color: (winRateOf(hw, hl) ?? 0.5) >= 0.5 ? 'var(--success)' : 'var(--danger)' }} className="mono">{fmtPct(hw, hl)}</td>
                     <td style={tdStyle} className="mono">{r.guestGames.length}</td>
-                    <td style={tdStyle} className="mono">{fmtPct(gw, gl)}</td>
-                    <td style={tdStyle} className="mono">{fmt(r.kdVal)}</td>
+                    <td style={{ ...tdStyle, color: (winRateOf(gw, gl) ?? 0.5) >= 0.5 ? 'var(--success)' : 'var(--danger)' }} className="mono">{fmtPct(gw, gl)}</td>
+                    <td style={{ ...tdStyle, ...heatBg(kdT(r.kdVal)) }} className="mono">{fmt(r.kdVal)}</td>
                   </tr>
                 )
               })}
@@ -497,7 +623,7 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
                     <tr key={r.mapName} style={{ borderBottom: '1px solid var(--line)' }}>
                       <td style={{ ...tdLeft, fontWeight: 600 }}>{r.mapName}</td>
                       {r.cells.map((v, i) => (
-                        <td key={i} style={{ ...tdStyle, color: v !== null && v >= 1 ? 'var(--success)' : undefined }} className="mono">{fmt(v)}</td>
+                        <td key={i} style={{ ...tdStyle, ...heatBg(kdT(v)) }} className="mono">{fmt(v)}</td>
                       ))}
                     </tr>
                   ))}
@@ -515,9 +641,9 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
                   <td style={{ ...tdLeft, fontWeight: 600 }}>{MODE_LABEL[r.key] ?? r.key}</td>
                   <td style={tdStyle} className="mono">{r.n}</td>
                   <td style={tdStyle} className="mono">{winLoss(r.wins, r.losses)}</td>
-                  <td style={tdStyle} className="mono">{fmtPct(r.wins, r.losses)}</td>
-                  <td style={tdStyle} className="mono">{fmtSigned(r.avgDiff)}</td>
-                  <td style={tdStyle} className="mono">{fmt(r.kdVal)}</td>
+                  <td style={tdStyle}><WinBar wins={r.wins} losses={r.losses} /></td>
+                  <td style={{ ...tdStyle, color: signColor(r.avgDiff), fontWeight: 700 }} className="mono">{fmtSigned(r.avgDiff)}</td>
+                  <td style={{ ...tdStyle, ...heatBg(kdT(r.kdVal)) }} className="mono">{fmt(r.kdVal)}</td>
                 </tr>
               ))}
             </StatTable>
@@ -532,8 +658,8 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
                   <td style={{ ...tdLeft, fontWeight: 600 }}>{r.key}</td>
                   <td style={tdStyle} className="mono">{r.n}</td>
                   <td style={tdStyle} className="mono">{winLoss(r.wins, r.losses)}</td>
-                  <td style={tdStyle} className="mono">{fmtPct(r.wins, r.losses)}</td>
-                  <td style={tdStyle} className="mono">{fmtSigned(r.avgDiff)}</td>
+                  <td style={tdStyle}><WinBar wins={r.wins} losses={r.losses} /></td>
+                  <td style={{ ...tdStyle, color: signColor(r.avgDiff), fontWeight: 700 }} className="mono">{fmtSigned(r.avgDiff)}</td>
                   <td style={tdStyle} className="mono">{r.lastDate || '-'}</td>
                 </tr>
               ))}
