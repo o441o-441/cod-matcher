@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import ScrimStatsDashboard from '@/components/ScrimStatsDashboard'
 
 type TeamRow = {
   id: string
@@ -782,6 +783,9 @@ export default function TeamDetailPage() {
             </div>
           </div>
         )}
+
+        {/* 交流戦スタッツ (スコアボード集計) */}
+        {teamId && <ScrimStatsDashboard teamId={teamId} />}
 
         {/* Recent matches */}
         <div className="section">
