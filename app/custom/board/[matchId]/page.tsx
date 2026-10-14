@@ -47,20 +47,6 @@ type GameStatRow = {
   assists: number | null; damage: number | null
 }
 type RosterEntry = { user_id: string; name: string }
-type PendingPlayer = {
-  side: 'host' | 'guest'; name: string; user_id: string | null
-  kills: number | null; deaths: number | null; assists: number | null; damage: number | null
-  stats: Record<string, unknown>
-}
-type PendingGame = {
-  key: string; image_path: string; game_no: number
-  mode: 'hp' | 'snd' | 'ovl'; map: string
-  host_score: number | null; guest_score: number | null
-  duration_seconds: number | null
-  host_slot: 'team1' | 'team2' | null // ホスト側のゲーム内陣営
-  players: PendingPlayer[]
-  rosters: { host: RosterEntry[]; guest: RosterEntry[] }
-}
 
 const SLOT_LABEL: Record<string, string> = { team1: 'チーム1', team2: 'チーム2' }
 const otherSlot = (s: 'team1' | 'team2' | null): 'team1' | 'team2' | null =>
@@ -116,9 +102,10 @@ export default function ScrimMatchPage() {
   // スコアボード提出
   const [games, setGames] = useState<GameRow[]>([])
   const [gameStats, setGameStats] = useState<Record<string, GameStatRow[]>>({})
-  const [pending, setPending] = useState<PendingGame[]>([])
   const [parsing, setParsing] = useState(false)
-  const [savingKey, setSavingKey] = useState<string | null>(null)
+  const [parseProgress, setParseProgress] = useState('')
+  const [deleteGameTarget, setDeleteGameTarget] = useState<GameRow | null>(null)
+  const [deletingGame, setDeletingGame] = useState(false)
 
   const loadGames = useCallback(async () => {
     if (!matchId) return
@@ -144,13 +131,21 @@ export default function ScrimMatchPage() {
 
   useEffect(() => { void loadGames() }, [loadGames])
 
-  // 画像を選択 → アップロード → AI解析 → 確認カードに積む
+  // 画像を選択 → アップロード → AI解析 → そのまま保存 (間違いは取り消して再提出)
   const handleScoreboardFiles = async (files: FileList | null) => {
     if (!files || files.length === 0 || parsing) return
     setParsing(true)
     try {
-      let nextNo = Math.max(0, ...games.map(g => g.game_no), ...pending.map(p => p.game_no)) + 1
-      for (const file of Array.from(files).slice(0, 8)) {
+      let nextNo = Math.max(0, ...games.map(g => g.game_no)) + 1
+      // ファイル選択ダイアログの返す順序は選択方法で変わるため、
+      // ファイル名順 (スクショは撮影時刻入りなので時系列順) に処理する
+      const sorted = Array.from(files).sort((a, b) => a.name.localeCompare(b.name, 'ja', { numeric: true }))
+      let saved = 0
+      let idx = 0
+      for (const file of sorted.slice(0, 12)) {
+        idx += 1
+        setParseProgress(`${idx}/${Math.min(sorted.length, 12)}枚目を解析中...`)
+        if (nextNo > 12) { setToast('1試合に保存できるのは12ゲームまでです'); break }
         if (file.size > 5 * 1024 * 1024) { setToast('画像が大きすぎます (5MBまで): ' + file.name); continue }
         const ext = file.name.toLowerCase().endsWith('.jpg') || file.name.toLowerCase().endsWith('.jpeg') ? 'jpg'
           : file.name.toLowerCase().endsWith('.webp') ? 'webp' : 'png'
@@ -168,70 +163,46 @@ export default function ScrimMatchPage() {
           players: { team: 'A' | 'B'; name: string; kills: number | null; deaths: number | null; assists: number | null; damage: number | null; stats: Record<string, unknown>; side: 'host' | 'guest' | null; matched_user_id: string | null }[]
           rosters: { host: RosterEntry[]; guest: RosterEntry[] }
         }
-        const aIsHost = r.a_is_host !== false // 不明時はA=ホスト扱い (入替ボタンで直せる)
-        setPending(prev => [...prev, {
-          key: path,
-          image_path: path,
-          game_no: nextNo,
-          mode: (r.mode === 'snd' || r.mode === 'ovl') ? r.mode : 'hp',
-          map: r.map ?? '',
-          host_score: aIsHost ? r.team_a_score : r.team_b_score,
-          guest_score: aIsHost ? r.team_b_score : r.team_a_score,
-          duration_seconds: r.duration_seconds,
+        const aIsHost = r.a_is_host !== false // ロスター照合で判定 (不明時はA=ホスト扱い)
+        const { error: saveErr } = await supabase.rpc('rpc_scrim_submit_game', {
+          p_match_id: matchId,
+          p_game_no: nextNo,
+          p_mode: (r.mode === 'snd' || r.mode === 'ovl') ? r.mode : 'hp',
+          p_map: r.map,
+          p_host_score: aIsHost ? r.team_a_score : r.team_b_score,
+          p_guest_score: aIsHost ? r.team_b_score : r.team_a_score,
+          p_duration_seconds: r.duration_seconds,
+          p_image_path: path,
           // スコアボードの上段(A)=チーム1、下段(B)=チーム2 で固定
-          host_slot: aIsHost ? 'team1' : 'team2',
-          players: (r.players ?? []).map(p => ({
+          p_host_slot: aIsHost ? 'team1' : 'team2',
+          p_players: (r.players ?? []).map(p => ({
             side: p.side ?? (((p.team === 'A') === aIsHost) ? 'host' : 'guest'),
-            name: p.name,
+            raw_name: p.name,
             user_id: p.matched_user_id,
             kills: p.kills, deaths: p.deaths, assists: p.assists, damage: p.damage,
             stats: p.stats ?? {},
           })),
-          rosters: r.rosters,
-        }])
+        })
+        if (saveErr) { setToast('保存に失敗しました: ' + saveErr.message); continue }
         nextNo += 1
+        saved += 1
+        await loadGames() // 保存できたものから順に表示
       }
+      if (saved > 0) setToast(`${saved}件のスコアボードを保存しました`)
     } finally {
       setParsing(false)
+      setParseProgress('')
     }
   }
 
-  const swapPendingSides = (key: string) => {
-    setPending(prev => prev.map(p => p.key !== key ? p : {
-      ...p,
-      host_score: p.guest_score, guest_score: p.host_score,
-      host_slot: otherSlot(p.host_slot),
-      players: p.players.map(pl => ({ ...pl, side: pl.side === 'host' ? 'guest' : 'host', user_id: null })),
-    }))
-  }
-
-  const updatePendingPlayer = (key: string, idx: number, patch: Partial<PendingPlayer>) => {
-    setPending(prev => prev.map(p => p.key !== key ? p : {
-      ...p, players: p.players.map((pl, i) => i === idx ? { ...pl, ...patch } : pl),
-    }))
-  }
-
-  const savePending = async (p: PendingGame) => {
-    setSavingKey(p.key)
-    const { error } = await supabase.rpc('rpc_scrim_submit_game', {
-      p_match_id: matchId,
-      p_game_no: p.game_no,
-      p_mode: p.mode,
-      p_map: p.map || null,
-      p_host_score: p.host_score,
-      p_guest_score: p.guest_score,
-      p_duration_seconds: p.duration_seconds,
-      p_image_path: p.image_path,
-      p_host_slot: p.host_slot,
-      p_players: p.players.map(pl => ({
-        side: pl.side, raw_name: pl.name, user_id: pl.user_id,
-        kills: pl.kills, deaths: pl.deaths, assists: pl.assists, damage: pl.damage, stats: pl.stats,
-      })),
-    })
-    setSavingKey(null)
+  const handleDeleteGame = async () => {
+    if (!deleteGameTarget) return
+    setDeletingGame(true)
+    const { error } = await supabase.rpc('rpc_scrim_delete_game', { p_game_id: deleteGameTarget.id })
+    setDeletingGame(false)
+    setDeleteGameTarget(null)
     if (error) { setToast(error.message); return }
-    setPending(prev => prev.filter(x => x.key !== p.key))
-    setToast('スコアボードを保存しました')
+    setToast('スコアボードを取り消しました')
     void loadGames()
   }
 
@@ -476,7 +447,7 @@ export default function ScrimMatchPage() {
             <div className="sec-title" style={{ margin: 0 }}>試合結果・スコアボード</div>
             {isMember && !isCancelled && (
               <label className="btn-primary btn-sm" style={{ cursor: parsing ? 'wait' : 'pointer' }}>
-                {parsing ? 'AI解析中...' : '📷 スコアボードを提出'}
+                {parsing ? `AI解析中... ${parseProgress}` : '📷 スコアボードを提出'}
                 <input type="file" accept="image/png,image/jpeg,image/webp" multiple style={{ display: 'none' }}
                   disabled={parsing}
                   onChange={e => { void handleScoreboardFiles(e.target.files); e.target.value = '' }} />
@@ -484,85 +455,11 @@ export default function ScrimMatchPage() {
             )}
           </div>
           <p className="muted" style={{ fontSize: 11.5, marginTop: 0, marginBottom: 12 }}>
-            配信・録画のスコアボード画像(観戦視点)をそのまま提出してください。AIが自動で読み取り、確認して保存するだけです(日本語・英語・韓国語の画面に対応)。
+            配信・録画のスコアボード画像(観戦視点)を試合順にまとめて提出してください。AIが自動で読み取ってそのまま保存します(日本語・英語・韓国語の画面に対応)。間違っていた場合は「取り消す」で削除して再提出できます。
           </p>
 
-          {/* 確認カード (解析済み・未保存) */}
-          {pending.map(p => (
-            <div key={p.key} className="card" style={{ padding: 14, marginBottom: 12, borderColor: 'rgba(255,176,32,0.4)' }}>
-              <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-                <span className="badge amber">確認して保存</span>
-                <span className="muted" style={{ fontSize: 11 }}>GAME</span>
-                <input type="number" min={1} max={12} value={p.game_no}
-                  onChange={e => setPending(prev => prev.map(x => x.key === p.key ? { ...x, game_no: Number(e.target.value) } : x))}
-                  style={{ width: 56 }} />
-                <select value={p.mode}
-                  onChange={e => setPending(prev => prev.map(x => x.key === p.key ? { ...x, mode: e.target.value as 'hp' | 'snd' | 'ovl' } : x))}
-                  style={{ width: 150 }}>
-                  <option value="hp">ハードポイント</option>
-                  <option value="snd">サーチ&デストロイ</option>
-                  <option value="ovl">オーバーロード</option>
-                </select>
-                <input value={p.map} placeholder="マップ"
-                  onChange={e => setPending(prev => prev.map(x => x.key === p.key ? { ...x, map: e.target.value } : x))}
-                  style={{ width: 140 }} />
-                <span className="mono" style={{ fontSize: 13 }}>
-                  {hostName} <input type="number" value={p.host_score ?? ''} style={{ width: 70 }}
-                    onChange={e => setPending(prev => prev.map(x => x.key === p.key ? { ...x, host_score: e.target.value ? Number(e.target.value) : null } : x))} />
-                  {' - '}
-                  <input type="number" value={p.guest_score ?? ''} style={{ width: 70 }}
-                    onChange={e => setPending(prev => prev.map(x => x.key === p.key ? { ...x, guest_score: e.target.value ? Number(e.target.value) : null } : x))} /> {guestName}
-                </span>
-                <button type="button" className="btn-ghost btn-sm" onClick={() => swapPendingSides(p.key)}>⇄ サイド入替</button>
-                <span className="muted" style={{ fontSize: 11 }}>{hostName}の陣営</span>
-                <select value={p.host_slot ?? ''} style={{ width: 110 }}
-                  onChange={e => setPending(prev => prev.map(x => x.key === p.key ? { ...x, host_slot: (e.target.value || null) as 'team1' | 'team2' | null } : x))}>
-                  <option value="">不明</option>
-                  <option value="team1">チーム1</option>
-                  <option value="team2">チーム2</option>
-                </select>
-              </div>
-
-              {(['host', 'guest'] as const).map(side => (
-                <div key={side} style={{ marginBottom: 8 }}>
-                  <div className="stat-label" style={{ marginBottom: 4 }}>
-                    {side === 'host' ? hostName : guestName}
-                    {p.host_slot && <span className="dim"> ({SLOT_LABEL[side === 'host' ? p.host_slot : otherSlot(p.host_slot)!]})</span>}
-                  </div>
-                  {p.players.map((pl, idx) => pl.side !== side ? null : (
-                    <div key={idx} className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 4, fontSize: 12 }}>
-                      <span className="mono" style={{ width: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pl.name}</span>
-                      <select value={pl.user_id ?? ''} onChange={e => updatePendingPlayer(p.key, idx, { user_id: e.target.value || null })} style={{ width: 160, fontSize: 12 }}>
-                        <option value="">紐付けなし（助っ人等）</option>
-                        {p.rosters[side].map(r => <option key={r.user_id} value={r.user_id}>{r.name}</option>)}
-                      </select>
-                      <input type="number" value={pl.kills ?? ''} placeholder="K" title="キル" style={{ width: 56 }}
-                        onChange={e => updatePendingPlayer(p.key, idx, { kills: e.target.value ? Number(e.target.value) : null })} />
-                      <input type="number" value={pl.deaths ?? ''} placeholder="D" title="デス" style={{ width: 56 }}
-                        onChange={e => updatePendingPlayer(p.key, idx, { deaths: e.target.value ? Number(e.target.value) : null })} />
-                      <input type="number" value={pl.assists ?? ''} placeholder="A" title="アシスト" style={{ width: 56 }}
-                        onChange={e => updatePendingPlayer(p.key, idx, { assists: e.target.value ? Number(e.target.value) : null })} />
-                      <input type="number" value={pl.damage ?? ''} placeholder="DMG" title="ダメージ" style={{ width: 76 }}
-                        onChange={e => updatePendingPlayer(p.key, idx, { damage: e.target.value ? Number(e.target.value) : null })} />
-                    </div>
-                  ))}
-                </div>
-              ))}
-
-              <div className="row" style={{ justifyContent: 'space-between', marginTop: 8 }}>
-                <a href={imageUrl(p.image_path)} target="_blank" rel="noopener noreferrer" className="muted" style={{ fontSize: 11.5, textDecoration: 'underline' }}>元画像を確認</a>
-                <div className="row" style={{ gap: 8 }}>
-                  <button type="button" className="btn-ghost btn-sm" onClick={() => setPending(prev => prev.filter(x => x.key !== p.key))}>破棄</button>
-                  <button type="button" className="btn-primary btn-sm" disabled={savingKey === p.key} onClick={() => void savePending(p)}>
-                    {savingKey === p.key ? '保存中...' : 'この内容で保存'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-
           {/* 保存済みゲーム */}
-          {games.length === 0 && pending.length === 0 ? (
+          {games.length === 0 ? (
             <p className="dim" style={{ fontSize: 12, margin: 0 }}>まだ結果が提出されていません</p>
           ) : (
             games.map(g => {
@@ -578,6 +475,10 @@ export default function ScrimMatchPage() {
                       <span style={{ color: (g.guest_score ?? 0) > (g.host_score ?? 0) ? 'var(--success)' : 'var(--text)' }}>{g.guest_score ?? '-'}</span> {guestName}
                     </span>
                     <a href={imageUrl(g.image_path)} target="_blank" rel="noopener noreferrer" className="muted" style={{ fontSize: 11.5, textDecoration: 'underline', marginLeft: 'auto' }}>📷 画像</a>
+                    {isMember && !isCancelled && (
+                      <button type="button" className="btn-ghost btn-sm" style={{ fontSize: 11 }}
+                        onClick={() => setDeleteGameTarget(g)}>取り消す</button>
+                    )}
                   </div>
                   <div className="grid-2" style={{ gap: 10 }}>
                     {(['host', 'guest'] as const).map(side => (
@@ -703,6 +604,16 @@ export default function ScrimMatchPage() {
         cancelText="戻る"
         onConfirm={doCancel}
         onCancel={() => { if (!cancelling) setCancelOpen(false) }}
+      />
+
+      <ConfirmDialog
+        open={!!deleteGameTarget}
+        title="スコアボードを取り消しますか？"
+        message={deleteGameTarget ? `GAME ${deleteGameTarget.game_no}${deleteGameTarget.map ? ` (${deleteGameTarget.map})` : ''} の結果とスタッツを削除します。削除後に画像を再提出できます。` : ''}
+        confirmText={deletingGame ? '取り消し中...' : '取り消す'}
+        cancelText="戻る"
+        onConfirm={handleDeleteGame}
+        onCancel={() => { if (!deletingGame) setDeleteGameTarget(null) }}
       />
 
       {toast && (

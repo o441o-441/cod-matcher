@@ -145,3 +145,40 @@ BEGIN
   RETURN json_build_object('ok', true, 'game_id', v_gid, 'players', v_count);
 END;
 $$;
+
+-- ------------------------------------------------------------
+-- 取り消しRPC (試合参加メンバーのみ。スタッツはFKカスケード)
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.rpc_scrim_delete_game(p_game_id uuid)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_m record;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'ログインが必要です'; END IF;
+
+  SELECT m.* INTO v_m
+  FROM scrim_match_games g JOIN scrim_matches m ON m.id = g.match_id
+  WHERE g.id = p_game_id;
+  IF v_m IS NULL THEN RAISE EXCEPTION 'ゲームが見つかりません'; END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM team_members tm
+    WHERE tm.user_id = v_uid AND tm.team_id IN (v_m.host_team_id, v_m.guest_team_id)
+  ) AND NOT EXISTS (
+    SELECT 1 FROM scrim_mixed_room_members rm
+    WHERE rm.user_id = v_uid AND rm.room_id IN (v_m.host_room_id, v_m.guest_room_id)
+  ) THEN
+    RAISE EXCEPTION 'この試合の参加メンバーのみ取り消しできます';
+  END IF;
+
+  DELETE FROM scrim_match_games WHERE id = p_game_id;
+  RETURN json_build_object('ok', true);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.rpc_scrim_delete_game TO authenticated;
