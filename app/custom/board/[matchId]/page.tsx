@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import MatchPlayerCompare from '@/components/MatchPlayerCompare'
 
 // ============================================================
 // 交流戦の試合ページ — 成立した対戦の連絡用チャット。
@@ -45,6 +46,7 @@ type GameStatRow = {
   game_id: string; side: 'host' | 'guest'; raw_name: string
   user_id: string | null; kills: number | null; deaths: number | null
   assists: number | null; damage: number | null
+  stats: Record<string, unknown> | null
 }
 type RosterEntry = { user_id: string; name: string }
 
@@ -116,7 +118,7 @@ export default function ScrimMatchPage() {
     setGames(rows)
     if (rows.length > 0) {
       const { data: st } = await supabase.from('scrim_game_player_stats')
-        .select('game_id, side, raw_name, user_id, kills, deaths, assists, damage')
+        .select('game_id, side, raw_name, user_id, kills, deaths, assists, damage, stats')
         .in('game_id', rows.map(r => r.id))
       const map: Record<string, GameStatRow[]> = {}
       for (const s of (st ?? []) as GameStatRow[]) {
@@ -509,6 +511,16 @@ export default function ScrimMatchPage() {
                 </div>
               )
             })
+          )}
+
+          {/* プレイヤー比較 (この交流戦の累計) */}
+          {games.length > 0 && (
+            <MatchPlayerCompare
+              games={games}
+              stats={Object.values(gameStats).flat()}
+              hostName={hostName}
+              guestName={guestName}
+            />
           )}
         </div>
       </div>
