@@ -186,6 +186,8 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
     let cancelled = false
     const load = async () => {
       setLoading(true)
+      // このチームが「チーム枠」で参加した試合をすべて集計対象にする。
+      // 相手が混成ルームの試合も含む (混成側はチームではないのでどこにも累計されない)
       const { data: matchData } = await supabase
         .from('scrim_matches')
         .select('id, date, host_team_id, guest_team_id, host_room_id, guest_room_id')
@@ -208,9 +210,9 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
       const oppTeamIds = new Set<string>()
       const oppRoomIds = new Set<string>()
       for (const m of matches) {
-        const side = m.host_team_id === teamId ? 'host' : 'guest'
-        const oppTeam = side === 'host' ? m.guest_team_id : m.host_team_id
-        const oppRoom = side === 'host' ? m.guest_room_id : m.host_room_id
+        const isHost = m.host_team_id === teamId
+        const oppTeam = isHost ? m.guest_team_id : m.host_team_id
+        const oppRoom = isHost ? m.guest_room_id : m.host_room_id
         if (oppTeam) oppTeamIds.add(oppTeam)
         else if (oppRoom) oppRoomIds.add(oppRoom)
       }
@@ -306,15 +308,17 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
     }
   }, [filtered, ownStats])
 
+  // プレイヤー集計はASCENTユーザーに紐付いた行のみ (ゲームID不一致・助っ人は対象外)
   const players = useMemo(() => {
     const map = new Map<string, PlayerAgg>()
     for (const s of ownStats) {
+      if (!s.user_id) continue
       const g = gameById.get(s.game_id)!
-      const key = s.user_id ?? `raw:${s.raw_name.toLowerCase().replace(/\s+/g, '')}`
+      const key = s.user_id
       let p = map.get(key)
       if (!p) {
         p = {
-          key, name: s.user_id ? (nameMap[s.user_id] ?? s.raw_name) : s.raw_name, linked: !!s.user_id,
+          key, name: nameMap[s.user_id] ?? s.raw_name, linked: true,
           games: 0, wins: 0, losses: 0, k: 0, d: 0, a: 0, dmg: 0,
           objTimeSum: 0, objTimeN: 0, objKillsSum: 0, objKillsN: 0, onesidedSum: 0, onesidedN: 0,
           maxStreak: 0, plants: 0, defuses: 0, firstBloods: 0,
@@ -381,8 +385,9 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
     const cols = players.slice(0, 8)
     const acc = new Map<string, Map<string, { k: number; d: number }>>()
     for (const s of ownStats) {
+      if (!s.user_id) continue
       const g = gameById.get(s.game_id)!
-      const pkey = s.user_id ?? `raw:${s.raw_name.toLowerCase().replace(/\s+/g, '')}`
+      const pkey = s.user_id
       if (!acc.has(g.map)) acc.set(g.map, new Map())
       const row = acc.get(g.map)!
       if (!row.has(pkey)) row.set(pkey, { k: 0, d: 0 })
@@ -462,7 +467,7 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
           <span className="muted" style={{ fontSize: 11 }}>記録 {games.length}ゲーム</span>
         </div>
         <p className="muted" style={{ fontSize: 11.5, marginTop: 0 }}>
-          提出されたスコアボードからの自動集計です。K/D・(K+A)/D は合計キル÷合計デス。
+          提出されたスコアボードからの自動集計です (このチームがチーム枠で参加した試合が対象)。K/D・(K+A)/D は合計キル÷合計デス。
         </p>
 
         {/* フィルター */}
@@ -565,7 +570,7 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
                 const onesided = p.onesidedN ? p.onesidedSum / p.onesidedN : null
                 return (
                   <tr key={p.key} style={{ borderBottom: '1px solid var(--line)' }}>
-                    <td style={{ ...tdLeft, fontWeight: 600 }}>{p.name}{p.linked ? '' : <span className="dim" title="ASCENT未紐付け"> *</span>}</td>
+                    <td style={{ ...tdLeft, fontWeight: 600 }}>{p.name}</td>
                     <td style={tdStyle} className="mono">{p.games}</td>
                     <td style={{ ...tdStyle, ...heatBg(relT(pvals.avgK, p.k / p.games)) }} className="mono">{fmt(p.k / p.games, 1)}</td>
                     <td style={{ ...tdStyle, ...heatBg(relT(pvals.avgD, p.d / p.games, true)) }} className="mono">{fmt(p.d / p.games, 1)}</td>
@@ -586,7 +591,7 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
             </StatTable>
             <p className="dim" style={{ fontSize: 10.5, marginTop: 4 }}>
               セルの色はチーム内での相対評価 (<span style={{ color: 'var(--success)' }}>緑=優秀</span> / <span style={{ color: 'var(--danger)' }}>赤=改善余地</span>)。
-              * はASCENT未紐付けのプレイヤー。平均占拠・目標K等はその列があるモードのゲームのみで平均。設置/解除はSNDの合計。
+              ゲームIDがASCENTユーザーと一致しないプレイヤー(助っ人等)は集計対象外。平均占拠・目標K等はその列があるモードのゲームのみで平均。設置/解除はSNDの合計。
             </p>
 
             {/* マップ別成績 */}
