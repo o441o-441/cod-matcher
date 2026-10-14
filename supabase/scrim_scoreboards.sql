@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS public.scrim_match_games (
   host_score integer,
   guest_score integer,
   duration_seconds integer,
+  host_slot text CHECK (host_slot IN ('team1', 'team2')), -- ホスト側のゲーム内陣営 (チーム1/チーム2)
   image_path text NOT NULL,
   submitted_by uuid REFERENCES public.profiles(id),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -77,7 +78,8 @@ CREATE OR REPLACE FUNCTION public.rpc_scrim_submit_game(
   p_guest_score integer,
   p_duration_seconds integer,
   p_image_path text,
-  p_players jsonb
+  p_players jsonb,
+  p_host_slot text DEFAULT NULL
 )
 RETURNS json
 LANGUAGE plpgsql
@@ -94,6 +96,9 @@ BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'ログインが必要です'; END IF;
   IF p_mode NOT IN ('hp', 'snd', 'ovl') THEN RAISE EXCEPTION 'モードが不正です'; END IF;
   IF p_game_no NOT BETWEEN 1 AND 12 THEN RAISE EXCEPTION 'ゲーム番号が不正です'; END IF;
+  IF p_host_slot IS NOT NULL AND p_host_slot NOT IN ('team1', 'team2') THEN
+    RAISE EXCEPTION '陣営が不正です';
+  END IF;
   IF jsonb_typeof(p_players) <> 'array' OR jsonb_array_length(p_players) > 12 THEN
     RAISE EXCEPTION 'プレイヤーデータが不正です';
   END IF;
@@ -115,8 +120,8 @@ BEGIN
   -- 同じゲーム番号は上書き (古いスタッツごと差し替え)
   DELETE FROM scrim_match_games WHERE match_id = p_match_id AND game_no = p_game_no;
 
-  INSERT INTO scrim_match_games (match_id, game_no, mode, map, host_score, guest_score, duration_seconds, image_path, submitted_by)
-  VALUES (p_match_id, p_game_no, p_mode, nullif(trim(coalesce(p_map, '')), ''), p_host_score, p_guest_score, p_duration_seconds, p_image_path, v_uid)
+  INSERT INTO scrim_match_games (match_id, game_no, mode, map, host_score, guest_score, duration_seconds, image_path, submitted_by, host_slot)
+  VALUES (p_match_id, p_game_no, p_mode, nullif(trim(coalesce(p_map, '')), ''), p_host_score, p_guest_score, p_duration_seconds, p_image_path, v_uid, p_host_slot)
   RETURNING id INTO v_gid;
 
   FOR v_p IN SELECT * FROM jsonb_array_elements(p_players) LOOP

@@ -28,8 +28,11 @@ type GameRow = {
   host_score: number | null
   guest_score: number | null
   duration_seconds: number | null
+  host_slot: 'team1' | 'team2' | null
   created_at: string
 }
+
+const SLOT_LABEL: Record<string, string> = { team1: 'チーム1', team2: 'チーム2' }
 
 type StatRow = {
   game_id: string
@@ -52,6 +55,7 @@ type Game = {
   mode: string
   map: string
   side: 'host' | 'guest'
+  slot: 'team1' | 'team2' | null // ゲーム内の陣営 (チーム1/チーム2)
   opponent: string
   ownScore: number | null
   oppScore: number | null
@@ -195,7 +199,7 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
 
       const { data: gameData } = await supabase
         .from('scrim_match_games')
-        .select('id, match_id, game_no, mode, map, host_score, guest_score, duration_seconds, created_at')
+        .select('id, match_id, game_no, mode, map, host_score, guest_score, duration_seconds, host_slot, created_at')
         .in('match_id', matches.map(m => m.id))
       const gameRows = (gameData ?? []) as GameRow[]
       if (gameRows.length === 0) { if (!cancelled) { setGames([]); setStatRows([]); setLoading(false) } return }
@@ -233,9 +237,11 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
         const oppScore = side === 'host' ? g.guest_score : g.host_score
         const result = ownScore === null || oppScore === null ? null
           : ownScore > oppScore ? 'w' : ownScore < oppScore ? 'l' : 'd'
+        const slot = side === 'host' ? g.host_slot
+          : g.host_slot === 'team1' ? 'team2' : g.host_slot === 'team2' ? 'team1' : null
         return {
           id: g.id, matchId: g.match_id, date: m.date, createdAt: g.created_at,
-          mode: g.mode, map: g.map ?? '不明', side, opponent,
+          mode: g.mode, map: g.map ?? '不明', side, slot, opponent,
           ownScore, oppScore, result,
           diff: ownScore !== null && oppScore !== null ? ownScore - oppScore : null,
           duration: g.duration_seconds,
@@ -270,7 +276,7 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
   const filtered = useMemo(() => {
     let list = games.filter(g =>
       (fOpp === 'all' || g.opponent === fOpp) &&
-      (fSide === 'all' || g.side === fSide) &&
+      (fSide === 'all' || g.slot === fSide) &&
       (fMode === 'all' || g.mode === fMode) &&
       (fMap === 'all' || g.map === fMap)
     )
@@ -357,8 +363,8 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
           key, n: e.games.length, wins, losses,
           avgDiff: diffs.length ? diffs.reduce((x, y) => x + y, 0) / diffs.length : null,
           kdVal: kd(e.k, e.d),
-          hostGames: e.games.filter(g => g.side === 'host'),
-          guestGames: e.games.filter(g => g.side === 'guest'),
+          team1Games: e.games.filter(g => g.slot === 'team1'),
+          team2Games: e.games.filter(g => g.slot === 'team2'),
           lastDate: e.games.reduce((x, g) => (g.date > x ? g.date : x), ''),
         }
       }).sort((a, b) => b.n - a.n || a.key.localeCompare(b.key))
@@ -473,8 +479,8 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
           </select>
           <select style={selStyle} value={fSide} onChange={e => setFSide(e.target.value)} aria-label="サイド">
             <option value="all">サイド: 全て</option>
-            <option value="host">ホスト</option>
-            <option value="guest">ゲスト</option>
+            <option value="team1">チーム1</option>
+            <option value="team2">チーム2</option>
           </select>
           <select style={selStyle} value={fMode} onChange={e => setFMode(e.target.value)} aria-label="モード">
             <option value="all">モード: 全て</option>
@@ -587,13 +593,13 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
             <div className="stat-label" style={{ margin: '16px 0 6px' }}>マップ別成績</div>
             <StatTable minWidth={700} head={<>
               <th style={thLeft}>マップ</th><th style={thStyle}>試合</th><th style={thStyle}>戦績</th><th style={thStyle}>勝率</th><th style={thStyle}>平均得失点差</th>
-              <th style={thStyle}>ホスト</th><th style={thStyle}>ホスト勝率</th><th style={thStyle}>ゲスト</th><th style={thStyle}>ゲスト勝率</th><th style={thStyle}>チームK/D</th>
+              <th style={thStyle}>チーム1</th><th style={thStyle}>チーム1勝率</th><th style={thStyle}>チーム2</th><th style={thStyle}>チーム2勝率</th><th style={thStyle}>チームK/D</th>
             </>}>
               {groupStats.byMap.map(r => {
-                const hw = r.hostGames.filter(g => g.result === 'w').length
-                const hl = r.hostGames.filter(g => g.result === 'l').length
-                const gw = r.guestGames.filter(g => g.result === 'w').length
-                const gl = r.guestGames.filter(g => g.result === 'l').length
+                const hw = r.team1Games.filter(g => g.result === 'w').length
+                const hl = r.team1Games.filter(g => g.result === 'l').length
+                const gw = r.team2Games.filter(g => g.result === 'w').length
+                const gl = r.team2Games.filter(g => g.result === 'l').length
                 return (
                   <tr key={r.key} style={{ borderBottom: '1px solid var(--line)' }}>
                     <td style={{ ...tdLeft, fontWeight: 600 }}>{r.key}</td>
@@ -601,9 +607,9 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
                     <td style={tdStyle} className="mono">{winLoss(r.wins, r.losses)}</td>
                     <td style={tdStyle}><WinBar wins={r.wins} losses={r.losses} /></td>
                     <td style={{ ...tdStyle, color: signColor(r.avgDiff), fontWeight: 700 }} className="mono">{fmtSigned(r.avgDiff)}</td>
-                    <td style={tdStyle} className="mono">{r.hostGames.length}</td>
+                    <td style={tdStyle} className="mono">{r.team1Games.length}</td>
                     <td style={{ ...tdStyle, color: (winRateOf(hw, hl) ?? 0.5) >= 0.5 ? 'var(--success)' : 'var(--danger)' }} className="mono">{fmtPct(hw, hl)}</td>
-                    <td style={tdStyle} className="mono">{r.guestGames.length}</td>
+                    <td style={tdStyle} className="mono">{r.team2Games.length}</td>
                     <td style={{ ...tdStyle, color: (winRateOf(gw, gl) ?? 0.5) >= 0.5 ? 'var(--success)' : 'var(--danger)' }} className="mono">{fmtPct(gw, gl)}</td>
                     <td style={{ ...tdStyle, ...heatBg(kdT(r.kdVal)) }} className="mono">{fmt(r.kdVal)}</td>
                   </tr>
@@ -677,7 +683,7 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
                   <td style={tdLeft} className="mono">{g.date}</td>
                   <td style={tdLeft}>{MODE_SHORT[g.mode] ?? g.mode}</td>
                   <td style={tdLeft}>{g.map}</td>
-                  <td style={tdLeft}>{g.side === 'host' ? 'ホスト' : 'ゲスト'}</td>
+                  <td style={tdLeft}>{g.slot ? SLOT_LABEL[g.slot] : '-'}</td>
                   <td style={tdLeft}>{g.opponent}</td>
                   <td style={tdStyle} className="mono">{g.ownScore ?? '-'} - {g.oppScore ?? '-'}</td>
                   <td style={{ ...tdStyle, fontWeight: 700, color: g.result === 'w' ? 'var(--success)' : g.result === 'l' ? 'var(--danger)' : undefined }}>

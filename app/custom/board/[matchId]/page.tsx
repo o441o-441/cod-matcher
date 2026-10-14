@@ -39,6 +39,7 @@ type GameRow = {
   id: string; game_no: number; mode: string; map: string | null
   host_score: number | null; guest_score: number | null
   duration_seconds: number | null; image_path: string
+  host_slot: 'team1' | 'team2' | null
 }
 type GameStatRow = {
   game_id: string; side: 'host' | 'guest'; raw_name: string
@@ -56,9 +57,14 @@ type PendingGame = {
   mode: 'hp' | 'snd' | 'ovl'; map: string
   host_score: number | null; guest_score: number | null
   duration_seconds: number | null
+  host_slot: 'team1' | 'team2' | null // ホスト側のゲーム内陣営
   players: PendingPlayer[]
   rosters: { host: RosterEntry[]; guest: RosterEntry[] }
 }
+
+const SLOT_LABEL: Record<string, string> = { team1: 'チーム1', team2: 'チーム2' }
+const otherSlot = (s: 'team1' | 'team2' | null): 'team1' | 'team2' | null =>
+  s === 'team1' ? 'team2' : s === 'team2' ? 'team1' : null
 
 const GAME_MODE_LABEL: Record<string, string> = { hp: 'ハードポイント', snd: 'サーチ&デストロイ', ovl: 'オーバーロード' }
 
@@ -117,7 +123,7 @@ export default function ScrimMatchPage() {
   const loadGames = useCallback(async () => {
     if (!matchId) return
     const { data: g } = await supabase.from('scrim_match_games')
-      .select('id, game_no, mode, map, host_score, guest_score, duration_seconds, image_path')
+      .select('id, game_no, mode, map, host_score, guest_score, duration_seconds, image_path, host_slot')
       .eq('match_id', matchId).order('game_no')
     const rows = (g ?? []) as GameRow[]
     setGames(rows)
@@ -172,6 +178,8 @@ export default function ScrimMatchPage() {
           host_score: aIsHost ? r.team_a_score : r.team_b_score,
           guest_score: aIsHost ? r.team_b_score : r.team_a_score,
           duration_seconds: r.duration_seconds,
+          // スコアボードの上段(A)=チーム1、下段(B)=チーム2 で固定
+          host_slot: aIsHost ? 'team1' : 'team2',
           players: (r.players ?? []).map(p => ({
             side: p.side ?? (((p.team === 'A') === aIsHost) ? 'host' : 'guest'),
             name: p.name,
@@ -192,6 +200,7 @@ export default function ScrimMatchPage() {
     setPending(prev => prev.map(p => p.key !== key ? p : {
       ...p,
       host_score: p.guest_score, guest_score: p.host_score,
+      host_slot: otherSlot(p.host_slot),
       players: p.players.map(pl => ({ ...pl, side: pl.side === 'host' ? 'guest' : 'host', user_id: null })),
     }))
   }
@@ -213,6 +222,7 @@ export default function ScrimMatchPage() {
       p_guest_score: p.guest_score,
       p_duration_seconds: p.duration_seconds,
       p_image_path: p.image_path,
+      p_host_slot: p.host_slot,
       p_players: p.players.map(pl => ({
         side: pl.side, raw_name: pl.name, user_id: pl.user_id,
         kills: pl.kills, deaths: pl.deaths, assists: pl.assists, damage: pl.damage, stats: pl.stats,
@@ -504,11 +514,21 @@ export default function ScrimMatchPage() {
                     onChange={e => setPending(prev => prev.map(x => x.key === p.key ? { ...x, guest_score: e.target.value ? Number(e.target.value) : null } : x))} /> {guestName}
                 </span>
                 <button type="button" className="btn-ghost btn-sm" onClick={() => swapPendingSides(p.key)}>⇄ サイド入替</button>
+                <span className="muted" style={{ fontSize: 11 }}>{hostName}の陣営</span>
+                <select value={p.host_slot ?? ''} style={{ width: 110 }}
+                  onChange={e => setPending(prev => prev.map(x => x.key === p.key ? { ...x, host_slot: (e.target.value || null) as 'team1' | 'team2' | null } : x))}>
+                  <option value="">不明</option>
+                  <option value="team1">チーム1</option>
+                  <option value="team2">チーム2</option>
+                </select>
               </div>
 
               {(['host', 'guest'] as const).map(side => (
                 <div key={side} style={{ marginBottom: 8 }}>
-                  <div className="stat-label" style={{ marginBottom: 4 }}>{side === 'host' ? hostName : guestName}</div>
+                  <div className="stat-label" style={{ marginBottom: 4 }}>
+                    {side === 'host' ? hostName : guestName}
+                    {p.host_slot && <span className="dim"> ({SLOT_LABEL[side === 'host' ? p.host_slot : otherSlot(p.host_slot)!]})</span>}
+                  </div>
                   {p.players.map((pl, idx) => pl.side !== side ? null : (
                     <div key={idx} className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 4, fontSize: 12 }}>
                       <span className="mono" style={{ width: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pl.name}</span>
@@ -562,7 +582,10 @@ export default function ScrimMatchPage() {
                   <div className="grid-2" style={{ gap: 10 }}>
                     {(['host', 'guest'] as const).map(side => (
                       <div key={side}>
-                        <div className="stat-label" style={{ marginBottom: 4 }}>{side === 'host' ? hostName : guestName}</div>
+                        <div className="stat-label" style={{ marginBottom: 4 }}>
+                          {side === 'host' ? hostName : guestName}
+                          {g.host_slot && <span className="dim"> ({SLOT_LABEL[side === 'host' ? g.host_slot : otherSlot(g.host_slot)!]})</span>}
+                        </div>
                         <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
                           <thead><tr className="muted" style={{ fontSize: 10, textAlign: 'right' }}>
                             <th style={{ textAlign: 'left', fontWeight: 600 }}>プレイヤー</th><th>K</th><th>D</th><th>A</th><th>DMG</th>
