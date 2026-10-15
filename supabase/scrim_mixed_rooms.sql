@@ -412,6 +412,7 @@ $$;
 -- ------------------------------------------------------------
 -- 6) 通知 v2: チーム側は Webhook、ルーム側はメンバーへサイト内通知
 -- ------------------------------------------------------------
+-- ※ 最新定義は scrim_match_reminder.sql ('reminder' イベント + チームメンバーへのサイト内通知を追加)
 CREATE OR REPLACE FUNCTION public._scrimboard_notify(p_match_id uuid, p_event text)
 RETURNS void
 LANGUAGE plpgsql
