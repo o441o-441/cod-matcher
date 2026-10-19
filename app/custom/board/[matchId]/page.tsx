@@ -8,10 +8,6 @@ import MatchPlayerCompare from '@/components/MatchPlayerCompare'
 import HpVideoAnalyzer from '@/components/HpVideoAnalyzer'
 import HpTimelinePanel from '@/components/HpTimelinePanel'
 
-// LK動画解析 (ヒル保持推移) の機能フラグ。問題が出たら false にすれば
-// 既存のスコアボード提出だけの表示に即戻せる
-const ENABLE_HP_TIMELINE = true
-
 // ============================================================
 // 交流戦の試合ページ — 成立した対戦の連絡用チャット。
 // 両チームのメンバーだけが読める。個人の Discord ID は使わず、
@@ -54,8 +50,6 @@ type GameStatRow = {
   assists: number | null; damage: number | null
   stats: Record<string, unknown> | null
 }
-type RosterEntry = { user_id: string; name: string }
-
 const SLOT_LABEL: Record<string, string> = { team1: 'チーム1', team2: 'チーム2' }
 const otherSlot = (s: 'team1' | 'team2' | null): 'team1' | 'team2' | null =>
   s === 'team1' ? 'team2' : s === 'team2' ? 'team1' : null
@@ -107,11 +101,9 @@ export default function ScrimMatchPage() {
   const chatBoxRef = useRef<HTMLDivElement | null>(null)
   const chatPrevCountRef = useRef(0)
 
-  // スコアボード提出
+  // 試合結果 (LK動画解析で提出)
   const [games, setGames] = useState<GameRow[]>([])
   const [gameStats, setGameStats] = useState<Record<string, GameStatRow[]>>({})
-  const [parsing, setParsing] = useState(false)
-  const [parseProgress, setParseProgress] = useState('')
   const [deleteGameTarget, setDeleteGameTarget] = useState<GameRow | null>(null)
   const [deletingGame, setDeletingGame] = useState(false)
 
@@ -142,70 +134,6 @@ export default function ScrimMatchPage() {
   }, [matchId])
 
   useEffect(() => { void loadGames() }, [loadGames])
-
-  // 画像を選択 → アップロード → AI解析 → そのまま保存 (間違いは取り消して再提出)
-  const handleScoreboardFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0 || parsing) return
-    setParsing(true)
-    try {
-      let nextNo = Math.max(0, ...games.map(g => g.game_no)) + 1
-      // ファイル選択ダイアログの返す順序は選択方法で変わるため、
-      // ファイル名順 (スクショは撮影時刻入りなので時系列順) に処理する
-      const sorted = Array.from(files).sort((a, b) => a.name.localeCompare(b.name, 'ja', { numeric: true }))
-      let saved = 0
-      let idx = 0
-      for (const file of sorted.slice(0, 12)) {
-        idx += 1
-        setParseProgress(`${idx}/${Math.min(sorted.length, 12)}枚目を解析中...`)
-        if (nextNo > 12) { setToast('1試合に保存できるのは12ゲームまでです'); break }
-        if (file.size > 5 * 1024 * 1024) { setToast('画像が大きすぎます (5MBまで): ' + file.name); continue }
-        const ext = file.name.toLowerCase().endsWith('.jpg') || file.name.toLowerCase().endsWith('.jpeg') ? 'jpg'
-          : file.name.toLowerCase().endsWith('.webp') ? 'webp' : 'png'
-        const path = `${matchId}/${crypto.randomUUID()}.${ext}`
-        const { error: upErr } = await supabase.storage.from('scoreboards').upload(path, file, { contentType: file.type || 'image/png' })
-        if (upErr) { setToast('アップロードに失敗しました: ' + upErr.message); continue }
-
-        const { data, error } = await supabase.functions.invoke('scoreboard-parse', {
-          body: { image_path: path, match_id: matchId },
-        })
-        if (error) { setToast('AI解析に失敗しました。もう一度試すか、別の画像でお試しください'); continue }
-        const r = data as {
-          ok: boolean; mode: string | null; map: string | null; duration_seconds: number | null
-          team_a_score: number | null; team_b_score: number | null; a_is_host: boolean | null
-          players: { team: 'A' | 'B'; name: string; kills: number | null; deaths: number | null; assists: number | null; damage: number | null; stats: Record<string, unknown>; side: 'host' | 'guest' | null; matched_user_id: string | null }[]
-          rosters: { host: RosterEntry[]; guest: RosterEntry[] }
-        }
-        const aIsHost = r.a_is_host !== false // ロスター照合で判定 (不明時はA=ホスト扱い)
-        const { error: saveErr } = await supabase.rpc('rpc_scrim_submit_game', {
-          p_match_id: matchId,
-          p_game_no: nextNo,
-          p_mode: (r.mode === 'snd' || r.mode === 'ovl') ? r.mode : 'hp',
-          p_map: r.map,
-          p_host_score: aIsHost ? r.team_a_score : r.team_b_score,
-          p_guest_score: aIsHost ? r.team_b_score : r.team_a_score,
-          p_duration_seconds: r.duration_seconds,
-          p_image_path: path,
-          // スコアボードの上段(A)=チーム1、下段(B)=チーム2 で固定
-          p_host_slot: aIsHost ? 'team1' : 'team2',
-          p_players: (r.players ?? []).map(p => ({
-            side: p.side ?? (((p.team === 'A') === aIsHost) ? 'host' : 'guest'),
-            raw_name: p.name,
-            user_id: p.matched_user_id,
-            kills: p.kills, deaths: p.deaths, assists: p.assists, damage: p.damage,
-            stats: p.stats ?? {},
-          })),
-        })
-        if (saveErr) { setToast('保存に失敗しました: ' + saveErr.message); continue }
-        nextNo += 1
-        saved += 1
-        await loadGames() // 保存できたものから順に表示
-      }
-      if (saved > 0) setToast(`${saved}件のスコアボードを保存しました`)
-    } finally {
-      setParsing(false)
-      setParseProgress('')
-    }
-  }
 
   const handleDeleteGame = async () => {
     if (!deleteGameTarget) return
@@ -458,26 +386,16 @@ export default function ScrimMatchPage() {
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div className="sec-title" style={{ margin: 0 }}>試合結果・スコアボード</div>
             {isMember && !isCancelled && (
-              <span className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                {ENABLE_HP_TIMELINE && (
-                  <button type="button" className="btn-ghost btn-sm" onClick={() => setVideoOpen(v => !v)}>
-                    🎬 LK動画から解析
-                  </button>
-                )}
-                <label className="btn-primary btn-sm" style={{ cursor: parsing ? 'wait' : 'pointer' }}>
-                  {parsing ? `AI解析中... ${parseProgress}` : '📷 スコアボードを提出'}
-                  <input type="file" accept="image/png,image/jpeg,image/webp" multiple style={{ display: 'none' }}
-                    disabled={parsing}
-                    onChange={e => { void handleScoreboardFiles(e.target.files); e.target.value = '' }} />
-                </label>
-              </span>
+              <button type="button" className="btn-primary btn-sm" onClick={() => setVideoOpen(v => !v)}>
+                🎬 LK動画から解析
+              </button>
             )}
           </div>
           <p className="muted" style={{ fontSize: 11.5, marginTop: 0, marginBottom: 12 }}>
-            配信・録画のスコアボード画像(観戦視点)を試合順にまとめて提出してください。AIが自動で読み取ってそのまま保存します。間違っていた場合は「取り消す」で削除して再提出できます。
+            LK動画(観戦/配信視点の録画)を読み込んで、各ゲームのスコアボード画面を登録すると、AIがスタッツを読み取って保存します。ハードポイントは地点保持の推移も記録されます。間違っていた場合は「取り消す」で削除して再解析できます。
           </p>
 
-          {ENABLE_HP_TIMELINE && videoOpen && isMember && !isCancelled && (
+          {videoOpen && isMember && !isCancelled && (
             <HpVideoAnalyzer
               matchId={matchId}
               games={games}
@@ -542,7 +460,7 @@ export default function ScrimMatchPage() {
           )}
 
           {/* ハードポイント地点保持の推移 (LK動画解析。データが無ければ非表示) */}
-          {ENABLE_HP_TIMELINE && games.length > 0 && (
+          {games.length > 0 && (
             <HpTimelinePanel
               games={games}
               hostName={hostName}
@@ -662,7 +580,7 @@ export default function ScrimMatchPage() {
       <ConfirmDialog
         open={!!deleteGameTarget}
         title="スコアボードを取り消しますか？"
-        message={deleteGameTarget ? `GAME ${deleteGameTarget.game_no}${deleteGameTarget.map ? ` (${deleteGameTarget.map})` : ''} の結果とスタッツを削除します。削除後に画像を再提出できます。` : ''}
+        message={deleteGameTarget ? `GAME ${deleteGameTarget.game_no}${deleteGameTarget.map ? ` (${deleteGameTarget.map})` : ''} の結果とスタッツを削除します。削除後にLK動画から再解析できます。` : ''}
         confirmText={deletingGame ? '取り消し中...' : '取り消す'}
         cancelText="戻る"
         onConfirm={handleDeleteGame}
