@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import ConfirmDialog from '@/components/ConfirmDialog'
-import { cleanMonotonic, hillNoOf, segmentsFromSamples, swapRotations, swapSamples, type Rotation, type TimelineSample } from '@/lib/hpTimeline'
+import { cleanMonotonic, DEFAULT_HILL_CYCLE, hillCycleForMap, hillNoOf, segmentsFromSamples, type Rotation, type TimelineSample } from '@/lib/hpTimeline'
 import { StatTable, thStyle, thLeft, tdStyle, tdLeft, heatBg, relT, fmtDur } from '@/components/scrimStatsUtils'
 
 // ============================================================
@@ -148,21 +148,20 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
   const myName = mySide === 'guest' ? guestName : hostName
   const oppName = mySide === 'guest' ? hostName : guestName
 
-  // ポイント (ヒル番号) ごとの集計 (全HPゲーム横断)。
-  // ヒルはマップごとの数でループするため、通算5本目はP1として畳み込む
+  // ポイントごとの集計 (全HPゲーム横断)。畳み込まず、通算の本数ごとに
+  // 「1周目 P1」「2周目 P3」のように全ポイントを行として並べる
   const agg = useMemo(() => {
     const m = new Map<number, { n: number; host: number; guest: number; wins: number }>()
     for (const g of withData) {
       for (const r of rows[g.id].rotations) {
-        const hill = hillNoOf(r.no, g.map)
-        const a = m.get(hill) ?? { n: 0, host: 0, guest: 0, wins: 0 }
+        const a = m.get(r.no) ?? { n: 0, host: 0, guest: 0, wins: 0 }
         a.n += 1
         a.host += r.host_sec
         a.guest += r.guest_sec
         const my = mySide === 'guest' ? r.guest_sec : r.host_sec
         const opp = mySide === 'guest' ? r.host_sec : r.guest_sec
         if (my > opp) a.wins += 1
-        m.set(hill, a)
+        m.set(r.no, a)
       }
     }
     return [...m.entries()].sort((a, b) => a[0] - b[0]).map(([no, a]) => {
@@ -182,21 +181,10 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
   const byDiff = [...agg].sort((a, b) => a.diff - b.diff)
   const worst = byDiff.find(a => a.n >= 2) ?? byDiff[0]
 
-  const swap = async (g: PanelGame) => {
-    const row = rows[g.id]
-    if (!row || busy) return
-    setBusy(true); setErr(null)
-    const { error } = await supabase.rpc('rpc_scrim_submit_hp_timeline', {
-      p_game_id: g.id,
-      p_sample_interval: row.sample_interval,
-      p_rotation_method: row.rotation_method,
-      p_samples: swapSamples(row.samples),
-      p_rotations: swapRotations(row.rotations),
-    })
-    setBusy(false)
-    if (error) { setErr(error.message); return }
-    onChanged() // refresh の更新で再読込される
-  }
+  // 行ラベル「n周目 Pm」用のヒル数 (マップ混在で異なる場合は標準の4)
+  const cycleSet = new Set(withData.map(g => hillCycleForMap(g.map)))
+  const cycle = cycleSet.size === 1 ? [...cycleSet][0] : DEFAULT_HILL_CYCLE
+  const rotLabel = (no: number) => `${Math.floor((no - 1) / cycle) + 1}周目 P${((no - 1) % cycle) + 1}`
 
   const del = async () => {
     if (!deleteTarget || busy) return
@@ -231,7 +219,6 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
               <span className="dim" style={{ fontSize: 10 }}>ポイント区切り: {METHOD_LABEL[row.rotation_method]}</span>
               {canEdit && (
                 <span className="row" style={{ gap: 6, marginLeft: 'auto' }}>
-                  <button type="button" className="btn-ghost btn-sm" style={{ fontSize: 10 }} disabled={busy} onClick={() => void swap(g)}>左右入れ替え</button>
                   <button type="button" className="btn-ghost btn-sm" style={{ fontSize: 10 }} disabled={busy} onClick={() => setDeleteTarget(g)}>推移を削除</button>
                 </span>
               )}
@@ -263,14 +250,14 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
       <StatTable minWidth={460} head={
         <>
           <th style={thLeft}>ポイント</th>
-          <th style={thStyle}>{hostName} 平均保持</th>
-          <th style={thStyle}>{guestName} 平均保持</th>
+          <th style={thStyle}>{hostName} 保持</th>
+          <th style={thStyle}>{guestName} 保持</th>
           <th style={thStyle}>差 ({myName}視点)</th>
         </>
       }>
         {agg.map(a => (
           <tr key={a.no} style={{ borderBottom: '1px solid var(--line)' }}>
-            <td style={tdLeft}>P{a.no}</td>
+            <td style={tdLeft}>{rotLabel(a.no)}</td>
             <td style={{ ...tdStyle, ...heatBg(relT(hostAvgs, a.avgHost)) }} className="mono">{fmtDur(a.avgHost)}</td>
             <td style={{ ...tdStyle, ...heatBg(relT(guestAvgs, a.avgGuest)) }} className="mono">{fmtDur(a.avgGuest)}</td>
             <td style={{ ...tdStyle, ...heatBg(relT(diffs, a.diff)) }} className="mono">
@@ -281,12 +268,12 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
       </StatTable>
       {worst && (worst.diff < 0 ? (
         <p style={{ fontSize: 12, margin: '8px 0 0' }}>
-          💡 改善候補: <strong>P{worst.no}</strong> — {myName} は {oppName} に平均 <strong style={{ color: 'var(--danger)' }}>{Math.abs(Math.round(worst.diff))}秒</strong> 下回っています。
+          💡 改善候補: <strong>{rotLabel(worst.no)}</strong> — {myName} は {oppName} に平均 <strong style={{ color: 'var(--danger)' }}>{Math.abs(Math.round(worst.diff))}秒</strong> 下回っています。
           このポイントへの寄り方・リスポーン管理を見直すとスコアが伸びやすくなります。
         </p>
       ) : (
         <p style={{ fontSize: 12, margin: '8px 0 0' }}>
-          💡 すべてのポイントで {myName} が保持時間で上回っています。最も差が小さいのは <strong>P{worst.no}</strong> (平均 +{Math.round(worst.diff)}秒) です。
+          💡 すべてのポイントで {myName} が保持時間で上回っています。最も差が小さいのは <strong>{rotLabel(worst.no)}</strong> (平均 +{Math.round(worst.diff)}秒) です。
         </p>
       ))}
       {err && <p style={{ color: 'var(--danger)', fontSize: 12, margin: '8px 0 0' }}>{err}</p>}

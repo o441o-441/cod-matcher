@@ -403,7 +403,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
         </div>
       )}
       <p className="dim" style={{ fontSize: 10.5, margin: '10px 0 0' }}>
-        {hostName} / {guestName} の割り当ては保存済みスコアとの照合で自動判定されます。逆になっていた場合は推移表示の「左右入れ替え」で修正できます。
+        {hostName} / {guestName} の割り当てはスコアボードの最終スコアとの照合で自動判定されます。
       </p>
     </div>
   )
