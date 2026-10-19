@@ -84,3 +84,68 @@ export function base64ToJpegBlob(b64: string): Blob {
   for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i)
   return new Blob([u8], { type: 'image/jpeg' })
 }
+
+// ---- YouTube対応 ----
+// googlevideo.com はCORS非対応のため、Edge Function `yt-fetch` が
+// ストリームURLの解決と中継を行い、ブラウザは一度Blobとして
+// ダウンロードしてからローカルのフレーム抽出に乗せる。
+
+// watch?v= / youtu.be / shorts / live / embed のURLから動画IDを取り出す
+export function parseYouTubeId(input: string): string | null {
+  const s = input.trim()
+  if (/^[\w-]{11}$/.test(s)) return s
+  let u: URL
+  try { u = new URL(s) } catch { return null }
+  const host = u.hostname.replace(/^www\.|^m\./, '')
+  if (host === 'youtu.be') {
+    const id = u.pathname.split('/')[1] ?? ''
+    return /^[\w-]{11}$/.test(id) ? id : null
+  }
+  if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    const v = u.searchParams.get('v')
+    if (v && /^[\w-]{11}$/.test(v)) return v
+    const m = u.pathname.match(/^\/(?:shorts|live|embed)\/([\w-]{11})/)
+    return m ? m[1] : null
+  }
+  return null
+}
+
+export async function fetchYouTubeVideo(
+  videoId: string,
+  accessToken: string,
+  onProgress?: (loadedBytes: number, totalBytes: number | null) => void
+): Promise<{ blob: Blob; title: string | null }> {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const res = await fetch(`${base}/functions/v1/yt-fetch?v=${encodeURIComponent(videoId)}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    },
+  })
+  if (!res.ok) {
+    let msg = `動画の取得に失敗しました (${res.status})`
+    try {
+      const body = await res.json() as { error?: string }
+      if (body?.error) msg = body.error
+    } catch { /* JSONでなければ既定メッセージ */ }
+    throw new Error(msg)
+  }
+  const titleHeader = res.headers.get('x-video-title')
+  const title = titleHeader ? decodeURIComponent(titleHeader) : null
+  const total = Number(res.headers.get('content-length')) || null
+  if (!res.body) throw new Error('動画ストリームを取得できませんでした')
+  const reader = res.body.getReader()
+  const chunks: Uint8Array[] = []
+  let loaded = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (value) {
+      chunks.push(value)
+      loaded += value.byteLength
+      onProgress?.(loaded, total)
+    }
+  }
+  if (loaded === 0) throw new Error('動画データが空でした')
+  return { blob: new Blob(chunks as BlobPart[], { type: 'video/mp4' }), title }
+}

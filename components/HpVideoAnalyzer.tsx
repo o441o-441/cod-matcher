@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { base64ToJpegBlob, captureJpeg, sampleHudFrames, seekTo } from '@/lib/hpVideo'
+import { base64ToJpegBlob, captureJpeg, fetchYouTubeVideo, parseYouTubeId, sampleHudFrames, seekTo } from '@/lib/hpVideo'
 import { deriveOriented, type RawFrameReading } from '@/lib/hpTimeline'
 
 // ============================================================
@@ -59,6 +59,9 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
   const [stage, setStage] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [doneMsg, setDoneMsg] = useState<string | null>(null)
+  const [ytUrl, setYtUrl] = useState('')
+  const [ytLoading, setYtLoading] = useState(false)
+  const [ytProgress, setYtProgress] = useState('')
 
   useEffect(() => () => { if (url) URL.revokeObjectURL(url) }, [url])
 
@@ -72,6 +75,31 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     setError(null); setDoneMsg(null)
     setFileName(f.name)
     setUrl(URL.createObjectURL(f))
+  }
+
+  // YouTube動画をEdge Function経由で一度ダウンロードし、ローカル動画と同じフローに乗せる
+  const loadYouTube = async () => {
+    if (ytLoading || running) return
+    const videoId = parseYouTubeId(ytUrl)
+    if (!videoId) { setError('YouTubeのURLを認識できませんでした (例: https://youtube.com/watch?v=...)'); return }
+    setYtLoading(true); setError(null); setDoneMsg(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('ログインが必要です')
+      setYtProgress('動画を取得中...')
+      const { blob, title } = await fetchYouTubeVideo(videoId, session.access_token, (loaded, total) => {
+        const mb = (loaded / 1024 / 1024).toFixed(0)
+        setYtProgress(total ? `動画を取得中... ${mb}MB / ${(total / 1024 / 1024).toFixed(0)}MB` : `動画を取得中... ${mb}MB`)
+      })
+      if (url) URL.revokeObjectURL(url)
+      setFileName(title ?? `YouTube (${videoId})`)
+      setUrl(URL.createObjectURL(blob))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'YouTube動画の取得に失敗しました')
+    } finally {
+      setYtLoading(false)
+      setYtProgress('')
+    }
   }
 
   const onMeta = () => {
@@ -205,15 +233,33 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
         <button className="btn-ghost btn-sm" onClick={onClose} disabled={running}>閉じる</button>
       </div>
       <p className="muted" style={{ fontSize: 11.5, marginTop: 0, marginBottom: 10 }}>
-        1ゲームぶんの録画 (観戦/配信視点) を選択してください。動画はアップロードされず、ブラウザ内でフレームだけを切り出してAIが読み取ります。
+        1ゲームぶんの録画 (観戦/配信視点) を、ファイルまたはYouTubeのURLから読み込んでください。動画はサーバーに保存されず、ブラウザ内でフレームだけを切り出してAIが読み取ります。
         ハードポイントでは「どのチームが地点に乗れていたか」の推移も保存されます。
       </p>
 
-      <label className="btn-ghost btn-sm" style={{ cursor: running ? 'wait' : 'pointer', display: 'inline-block' }}>
-        📁 動画を選択{fileName ? `: ${fileName}` : ''}
-        <input type="file" accept="video/*" style={{ display: 'none' }} disabled={running}
-          onChange={e => { handleFile(e.target.files); e.target.value = '' }} />
-      </label>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <label className="btn-ghost btn-sm" style={{ cursor: running ? 'wait' : 'pointer', display: 'inline-block' }}>
+          📁 動画ファイルを選択
+          <input type="file" accept="video/*" style={{ display: 'none' }} disabled={running || ytLoading}
+            onChange={e => { handleFile(e.target.files); e.target.value = '' }} />
+        </label>
+        <span className="dim" style={{ fontSize: 11 }}>または</span>
+        <input
+          value={ytUrl}
+          onChange={e => setYtUrl(e.target.value)}
+          placeholder="https://youtube.com/watch?v=..."
+          disabled={running || ytLoading}
+          style={{ width: 260, fontSize: 12 }}
+        />
+        <button type="button" className="btn-ghost btn-sm" disabled={running || ytLoading || !ytUrl.trim()}
+          onClick={() => void loadYouTube()}>
+          {ytLoading ? (ytProgress || '取得中...') : '▶ YouTubeから読み込む'}
+        </button>
+      </div>
+      <p className="dim" style={{ fontSize: 10.5, margin: '4px 0 0' }}>
+        ※ YouTube側の制限で直接取得できないことがあります。その場合は動画をダウンロードして「動画ファイルを選択」からお試しください。
+      </p>
+      {fileName && <p className="dim" style={{ fontSize: 11, margin: '6px 0 0' }}>読み込み済み: {fileName}</p>}
 
       {url && (
         <div style={{ marginTop: 10 }}>
