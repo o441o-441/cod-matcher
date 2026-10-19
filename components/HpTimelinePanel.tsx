@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import ConfirmDialog from '@/components/ConfirmDialog'
-import { cleanMonotonic, DEFAULT_HILL_CYCLE, hillCycleForMap, hillNoOf, segmentsFromSamples, type Rotation, type TimelineSample } from '@/lib/hpTimeline'
+import { cleanMonotonic, hillCycleForMap, segmentsFromSamples, type Rotation, type TimelineSample } from '@/lib/hpTimeline'
 import { StatTable, thStyle, thLeft, tdStyle, tdLeft, heatBg, relT, fmtDur } from '@/components/scrimStatsUtils'
 
 // ============================================================
@@ -146,45 +146,8 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
 
   const withData = hpGames.filter(g => rows[g.id]?.rotations?.length)
   const myName = mySide === 'guest' ? guestName : hostName
-  const oppName = mySide === 'guest' ? hostName : guestName
-
-  // ポイントごとの集計 (全HPゲーム横断)。畳み込まず、通算の本数ごとに
-  // 「1周目 P1」「2周目 P3」のように全ポイントを行として並べる
-  const agg = useMemo(() => {
-    const m = new Map<number, { n: number; host: number; guest: number; wins: number }>()
-    for (const g of withData) {
-      for (const r of rows[g.id].rotations) {
-        const a = m.get(r.no) ?? { n: 0, host: 0, guest: 0, wins: 0 }
-        a.n += 1
-        a.host += r.host_sec
-        a.guest += r.guest_sec
-        const my = mySide === 'guest' ? r.guest_sec : r.host_sec
-        const opp = mySide === 'guest' ? r.host_sec : r.guest_sec
-        if (my > opp) a.wins += 1
-        m.set(r.no, a)
-      }
-    }
-    return [...m.entries()].sort((a, b) => a[0] - b[0]).map(([no, a]) => {
-      const avgHost = a.host / a.n
-      const avgGuest = a.guest / a.n
-      const my = mySide === 'guest' ? avgGuest : avgHost
-      const opp = mySide === 'guest' ? avgHost : avgGuest
-      return { no, n: a.n, avgHost, avgGuest, diff: my - opp, wins: a.wins }
-    })
-  }, [withData, rows, mySide])
 
   if (withData.length === 0) return null
-
-  const diffs = agg.map(a => a.diff)
-  const hostAvgs = agg.map(a => a.avgHost)
-  const guestAvgs = agg.map(a => a.avgGuest)
-  const byDiff = [...agg].sort((a, b) => a.diff - b.diff)
-  const worst = byDiff.find(a => a.n >= 2) ?? byDiff[0]
-
-  // 行ラベル「n周目 Pm」用のヒル数 (マップ混在で異なる場合は標準の4)
-  const cycleSet = new Set(withData.map(g => hillCycleForMap(g.map)))
-  const cycle = cycleSet.size === 1 ? [...cycleSet][0] : DEFAULT_HILL_CYCLE
-  const rotLabel = (no: number) => `${Math.floor((no - 1) / cycle) + 1}周目 P${((no - 1) % cycle) + 1}`
 
   const del = async () => {
     if (!deleteTarget || busy) return
@@ -210,7 +173,16 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
 
       {withData.map(g => {
         const row = rows[g.id]
-        const total = row.rotations[row.rotations.length - 1].end_t - row.rotations[0].start_t
+        const rots = row.rotations
+        const cyc = hillCycleForMap(g.map)
+        const rotLabel = (no: number) => `${Math.floor((no - 1) / cyc) + 1}周目 P${((no - 1) % cyc) + 1}`
+        const myOf = (r: Rotation) => (mySide === 'guest' ? r.guest_sec : r.host_sec)
+        const oppOf = (r: Rotation) => (mySide === 'guest' ? r.host_sec : r.guest_sec)
+        const hostVals = rots.map(r => r.host_sec)
+        const guestVals = rots.map(r => r.guest_sec)
+        const diffVals = rots.map(r => myOf(r) - oppOf(r))
+        const worst = [...rots].sort((a, b) => (myOf(a) - oppOf(a)) - (myOf(b) - oppOf(b)))[0]
+        const worstDiff = worst ? myOf(worst) - oppOf(worst) : 0
         return (
           <div key={g.id} style={{ marginBottom: 14 }}>
             <div className="row" style={{ gap: 8, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
@@ -225,57 +197,37 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
             </div>
             <TimelineBar row={row} />
             <ScoreLineChart row={row} />
-            <div style={{ display: 'flex', marginTop: 2 }}>
-              {row.rotations.map(r => {
-                const w = ((r.end_t - r.start_t) / Math.max(1, total)) * 100
-                const lead = r.host_sec - r.guest_sec
-                const hill = hillNoOf(r.no, g.map)
-                return (
-                  <div key={r.no} title={`P${hill} (通算${r.no}本目): ${hostName} ${Math.round(r.host_sec)}秒 / ${guestName} ${Math.round(r.guest_sec)}秒`}
-                    style={{ width: `${w}%`, minWidth: 0, textAlign: 'center', fontSize: 9.5, padding: '2px 0', borderRight: '1px solid var(--line)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                    <span className="dim">P{hill}</span>{' '}
-                    <span className="mono" style={{ color: lead > 3 ? HOST_C : lead < -3 ? GUEST_C : undefined }}>
-                      {Math.round(r.host_sec)}-{Math.round(r.guest_sec)}
-                    </span>
-                  </div>
-                )
-              })}
+            {/* このゲームのポイント別の保持時間 */}
+            <div style={{ marginTop: 6 }}>
+              <StatTable minWidth={380} head={
+                <>
+                  <th style={thLeft}>ポイント</th>
+                  <th style={thStyle}>{hostName} 保持</th>
+                  <th style={thStyle}>{guestName} 保持</th>
+                  <th style={thStyle}>差 ({myName}視点)</th>
+                </>
+              }>
+                {rots.map((r, i) => (
+                  <tr key={r.no} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={tdLeft}>{rotLabel(r.no)}</td>
+                    <td style={{ ...tdStyle, ...heatBg(relT(hostVals, r.host_sec)) }} className="mono">{fmtDur(r.host_sec)}</td>
+                    <td style={{ ...tdStyle, ...heatBg(relT(guestVals, r.guest_sec)) }} className="mono">{fmtDur(r.guest_sec)}</td>
+                    <td style={{ ...tdStyle, ...heatBg(relT(diffVals, diffVals[i])) }} className="mono">
+                      {diffVals[i] > 0 ? '+' : ''}{Math.round(diffVals[i])}秒
+                    </td>
+                  </tr>
+                ))}
+              </StatTable>
+              {worst && worstDiff < 0 && (
+                <p style={{ fontSize: 11.5, margin: '4px 0 0' }}>
+                  💡 このゲームの改善候補: <strong>{rotLabel(worst.no)}</strong> — {myName}視点で <span style={{ color: 'var(--danger)', fontWeight: 700 }}>{Math.round(worstDiff)}秒</span>
+                </p>
+              )}
             </div>
           </div>
         )
       })}
 
-      {/* 何ポイント目ごとの集計 */}
-      <div className="stat-label" style={{ margin: '14px 0 6px' }}>何ポイント目で差がついているか (この交流戦のHP {withData.length}ゲーム)</div>
-      <StatTable minWidth={460} head={
-        <>
-          <th style={thLeft}>ポイント</th>
-          <th style={thStyle}>{hostName} 保持</th>
-          <th style={thStyle}>{guestName} 保持</th>
-          <th style={thStyle}>差 ({myName}視点)</th>
-        </>
-      }>
-        {agg.map(a => (
-          <tr key={a.no} style={{ borderBottom: '1px solid var(--line)' }}>
-            <td style={tdLeft}>{rotLabel(a.no)}</td>
-            <td style={{ ...tdStyle, ...heatBg(relT(hostAvgs, a.avgHost)) }} className="mono">{fmtDur(a.avgHost)}</td>
-            <td style={{ ...tdStyle, ...heatBg(relT(guestAvgs, a.avgGuest)) }} className="mono">{fmtDur(a.avgGuest)}</td>
-            <td style={{ ...tdStyle, ...heatBg(relT(diffs, a.diff)) }} className="mono">
-              {a.diff > 0 ? '+' : ''}{Math.round(a.diff)}秒
-            </td>
-          </tr>
-        ))}
-      </StatTable>
-      {worst && (worst.diff < 0 ? (
-        <p style={{ fontSize: 12, margin: '8px 0 0' }}>
-          💡 改善候補: <strong>{rotLabel(worst.no)}</strong> — {myName} は {oppName} に平均 <strong style={{ color: 'var(--danger)' }}>{Math.abs(Math.round(worst.diff))}秒</strong> 下回っています。
-          このポイントへの寄り方・リスポーン管理を見直すとスコアが伸びやすくなります。
-        </p>
-      ) : (
-        <p style={{ fontSize: 12, margin: '8px 0 0' }}>
-          💡 すべてのポイントで {myName} が保持時間で上回っています。最も差が小さいのは <strong>{rotLabel(worst.no)}</strong> (平均 +{Math.round(worst.diff)}秒) です。
-        </p>
-      ))}
       {err && <p style={{ color: 'var(--danger)', fontSize: 12, margin: '8px 0 0' }}>{err}</p>}
 
       <ConfirmDialog
