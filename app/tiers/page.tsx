@@ -105,7 +105,12 @@ export default function TiersPage() {
           <div className="card">
             <div className="stat-label">レート変動</div>
             <div className="stat-val" style={{ color: 'var(--cyan)' }}>ELO</div>
-            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>勝敗とレート差に基づいて変動します。格上に勝つと大きく上がります。</p>
+            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>勝敗とレート差に基づいて変動します（互角の相手で±24前後）。格上に勝つと大きく上がります。通算10試合までは変動が大きく、早く適正レートに到達します。</p>
+          </div>
+          <div className="card">
+            <div className="stat-label">デイリー保護</div>
+            <div className="stat-val" style={{ color: 'var(--success)' }}>敗北半減</div>
+            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>レート1800未満のプレイヤーは、その日最初の敗北によるレート減少が半分になります。気軽に1戦から参加しましょう。</p>
           </div>
           <div className="card">
             <div className="stat-label">ピークレート</div>
