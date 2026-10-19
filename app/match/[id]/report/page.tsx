@@ -29,7 +29,7 @@ import { triggerWinStreak } from "@/components/WinStreakCelebration";
 const REPORT_TUTORIAL = [
   { title: "試合結果報告", body: "試合が終わったら、勝者チームのボタンを押して結果を報告します。" },
   { title: "承認と却下", body: "相手チームがあなたの報告を確認します。正しければ「承認」、間違いなら「却下」を押します。" },
-  { title: "自動承認", body: "報告から1時間以内（全員がこの画面を見ている場合は5分以内）に相手が操作しない場合、自動で承認されます。" },
+  { title: "自動承認", body: "報告から20分以内（相手チームの誰かがこの画面を開いた場合は5分以内）に相手が操作しない場合、自動で承認されます。報告時には相手チームへ通知が届きます。" },
   { title: "無効試合", body: "2回連続で却下されると無効試合となり、レート変動はありません。虚偽の報告や不当な却下をするプレイヤーは通報してください。" },
 ];
 
@@ -131,6 +131,7 @@ const MESSAGE_JA: Record<string, string> = {
   "report auto-approved after timeout": "承認期限を超過したため自動承認されました。レートが更新されました。",
   "match created": "マッチが成立しました。バンピックを開始してください。",
   "all players on report page, deadline shortened to 5 min": "全員が結果報告画面を開きました。承認期限が5分に短縮されました。",
+  "opponent on report page, deadline shortened to 5 min": "相手チームが結果報告画面を開きました。承認期限が5分に短縮されました。",
   "trophy timeout: both teams failed, match voided, -10 rating": "トロフィー選択の制限時間に達しました。両チームとも未選択のため無効試合となり、全プレイヤーのレートが-10されました。",
   "trophy timeout: team forfeited for not selecting": "トロフィー選択の制限時間に達しました。未選択のチームの敗北として処理されました。",
 };
@@ -170,7 +171,7 @@ export default function ReportPage() {
   const [reportGames, setReportGames] = useState<MatchReportGameRow[]>([]);
   const [messages, setMessages] = useState<MatchMessageRow[]>([]);
   const [priorRejectCount, setPriorRejectCount] = useState(0);
-  const [visitInfo, setVisitInfo] = useState<{ all_visited: boolean; total: number; visited: number } | null>(null);
+  const [visitInfo, setVisitInfo] = useState<{ all_visited: boolean; total: number; visited: number; opp_visited?: boolean } | null>(null);
 
   const [winnerMatchTeamId, setWinnerMatchTeamId] = useState("");
   const [scoreSummary, setScoreSummary] = useState("2-0");
@@ -391,7 +392,7 @@ export default function ReportPage() {
     void (async () => {
       try {
         const { data } = await supabase.rpc("rpc_mark_report_visited", { p_match_id: matchId });
-        if (data) setVisitInfo(data as { all_visited: boolean; total: number; visited: number });
+        if (data) setVisitInfo(data as { all_visited: boolean; total: number; visited: number; opp_visited?: boolean });
       } catch (e) {
         console.error("mark visit error:", e);
       }
@@ -436,7 +437,7 @@ export default function ReportPage() {
     const interval = setInterval(() => {
       void loadAll({ silent: true });
       void supabase.rpc("rpc_mark_report_visited", { p_match_id: matchId }).then(({ data }) => {
-        if (data) setVisitInfo(data as { all_visited: boolean; total: number; visited: number });
+        if (data) setVisitInfo(data as { all_visited: boolean; total: number; visited: number; opp_visited?: boolean });
       });
     }, 10000);
     return () => clearInterval(interval);
@@ -873,9 +874,9 @@ export default function ReportPage() {
                   <p style={{ color: 'var(--amber)', fontSize: 13 }}>相手チームの承認待ちです。</p>
                   {visitInfo && (
                     <p className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-                      {visitInfo.all_visited
-                        ? `全員がこの画面を開いています（${visitInfo.visited}/${visitInfo.total}人）— 制限時間5分`
-                        : `まだ全員が画面を開いていません（${visitInfo.visited}/${visitInfo.total}人）— 制限時間1時間`}
+                      {visitInfo.opp_visited
+                        ? `相手チームがこの画面を開きました — 制限時間5分`
+                        : `相手チームはまだこの画面を開いていません（閲覧 ${visitInfo.visited}/${visitInfo.total}人）— 20分で自動確定`}
                     </p>
                   )}
                   {isAdmin && (
@@ -1110,9 +1111,9 @@ export default function ReportPage() {
               )}
               {visitInfo && (
                 <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-                  {visitInfo.all_visited
-                    ? `全員閲覧中（${visitInfo.visited}/${visitInfo.total}人）— 5分`
-                    : `${visitInfo.visited}/${visitInfo.total}人が閲覧中 — 1時間`}
+                  {visitInfo.opp_visited
+                    ? `相手チーム閲覧済み — 5分`
+                    : `${visitInfo.visited}/${visitInfo.total}人が閲覧中 — 20分`}
                 </p>
               )}
             </div>
