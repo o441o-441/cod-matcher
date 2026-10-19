@@ -5,6 +5,12 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import MatchPlayerCompare from '@/components/MatchPlayerCompare'
+import HpVideoAnalyzer from '@/components/HpVideoAnalyzer'
+import HpTimelinePanel from '@/components/HpTimelinePanel'
+
+// LK動画解析 (ヒル保持推移) の機能フラグ。問題が出たら false にすれば
+// 既存のスコアボード提出だけの表示に即戻せる
+const ENABLE_HP_TIMELINE = true
 
 // ============================================================
 // 交流戦の試合ページ — 成立した対戦の連絡用チャット。
@@ -108,6 +114,10 @@ export default function ScrimMatchPage() {
   const [parseProgress, setParseProgress] = useState('')
   const [deleteGameTarget, setDeleteGameTarget] = useState<GameRow | null>(null)
   const [deletingGame, setDeletingGame] = useState(false)
+
+  // LK動画解析 (ヒル保持推移)
+  const [videoOpen, setVideoOpen] = useState(false)
+  const [tlRefresh, setTlRefresh] = useState(0)
 
   const loadGames = useCallback(async () => {
     if (!matchId) return
@@ -448,17 +458,35 @@ export default function ScrimMatchPage() {
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div className="sec-title" style={{ margin: 0 }}>試合結果・スコアボード</div>
             {isMember && !isCancelled && (
-              <label className="btn-primary btn-sm" style={{ cursor: parsing ? 'wait' : 'pointer' }}>
-                {parsing ? `AI解析中... ${parseProgress}` : '📷 スコアボードを提出'}
-                <input type="file" accept="image/png,image/jpeg,image/webp" multiple style={{ display: 'none' }}
-                  disabled={parsing}
-                  onChange={e => { void handleScoreboardFiles(e.target.files); e.target.value = '' }} />
-              </label>
+              <span className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                {ENABLE_HP_TIMELINE && (
+                  <button type="button" className="btn-ghost btn-sm" onClick={() => setVideoOpen(v => !v)}>
+                    🎬 LK動画から解析
+                  </button>
+                )}
+                <label className="btn-primary btn-sm" style={{ cursor: parsing ? 'wait' : 'pointer' }}>
+                  {parsing ? `AI解析中... ${parseProgress}` : '📷 スコアボードを提出'}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" multiple style={{ display: 'none' }}
+                    disabled={parsing}
+                    onChange={e => { void handleScoreboardFiles(e.target.files); e.target.value = '' }} />
+                </label>
+              </span>
             )}
           </div>
           <p className="muted" style={{ fontSize: 11.5, marginTop: 0, marginBottom: 12 }}>
             配信・録画のスコアボード画像(観戦視点)を試合順にまとめて提出してください。AIが自動で読み取ってそのまま保存します。間違っていた場合は「取り消す」で削除して再提出できます。
           </p>
+
+          {ENABLE_HP_TIMELINE && videoOpen && isMember && !isCancelled && (
+            <HpVideoAnalyzer
+              matchId={matchId}
+              games={games}
+              hostName={hostName}
+              guestName={guestName}
+              onSaved={() => { void loadGames(); setTlRefresh(x => x + 1) }}
+              onClose={() => setVideoOpen(false)}
+            />
+          )}
 
           {/* 保存済みゲーム */}
           {games.length === 0 ? (
@@ -511,6 +539,19 @@ export default function ScrimMatchPage() {
                 </div>
               )
             })
+          )}
+
+          {/* ハードポイント地点保持の推移 (LK動画解析。データが無ければ非表示) */}
+          {ENABLE_HP_TIMELINE && games.length > 0 && (
+            <HpTimelinePanel
+              games={games}
+              hostName={hostName}
+              guestName={guestName}
+              mySide={mySide}
+              canEdit={isMember && !isCancelled}
+              refresh={tlRefresh}
+              onChanged={() => setTlRefresh(x => x + 1)}
+            />
           )}
 
           {/* プレイヤー比較 (この交流戦の累計) */}
