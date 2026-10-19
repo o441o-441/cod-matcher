@@ -26,9 +26,9 @@ const MAX_FRAMES = 10
 const MAX_FRAME_B64 = 600_000 // 約450KB/枚
 
 type Frame = { i: number; data: string }
-type Reading = { i: number; left: number | null; right: number | null; clock: number | null; hill: number | null }
+type Reading = { i: number; left: number | null; right: number | null; clock: number | null; hill: number | null; phase?: string }
 
-const PROMPT = `これはCall of Duty (Black Ops 7) ハードポイントの試合映像(観戦/配信視点)から切り出した「画面上部」の連続フレームです。各フレームの直前に「フレーム N」とラベルを付けています。HUDから以下を読み取り、JSON配列だけを出力してください(説明文・コードフェンス不要):
+const PROMPT_HUD = `これはCall of Duty (Black Ops 7) ハードポイントの試合映像(観戦/配信視点)から切り出した「画面上部」の連続フレームです。各フレームの直前に「フレーム N」とラベルを付けています。HUDから以下を読み取り、JSON配列だけを出力してください(説明文・コードフェンス不要):
 
 [
   {
@@ -42,6 +42,24 @@ const PROMPT = `これはCall of Duty (Black Ops 7) ハードポイントの試�
 
 注意: スコアは0〜300程度の整数。確信が持てない値は null にしてください。試合中でないフレーム(リザルト画面・キルカメラ・ロード画面・リプレイ)はすべて null で構いません。必ず渡したフレームと同じ数の要素を、同じ "i" で返してください。`
 
+// 自動ゲーム検出用: 縮小フル画面フレームの分類
+const PROMPT_SCAN = `これはCall of Duty (Black Ops 7) の交流戦の録画(観戦/配信視点)から等間隔で切り出した縮小フレームです。1本の動画に複数ゲームが収録されています。各フレームの直前に「フレーム N」とラベルを付けています。各フレームを分類し、JSON配列だけを出力してください(説明文・コードフェンス不要):
+
+[
+  {
+    "i": 0,                       // フレームのラベル番号
+    "phase": "game" | "result" | "other",
+      // game   = 試合中 (画面上部に両チームのスコアバーや試合時間のHUDが見える)
+      // result = 試合終了後のスコアボード/リザルト画面 (プレイヤーごとのK/D表が見える)
+      // other  = それ以外 (ロビー、マップ投票、ロード画面、勝敗演出、配信の待機画面など)
+    "left": number | null,        // phase=game のとき: 画面上部スコアバーの左チームのスコア。読めなければ null
+    "right": number | null,
+    "clock": number | null        // phase=game のとき: 試合時間 "mm:ss" を秒に換算
+  }
+]
+
+注意: K/D表が見えない勝敗演出 (VICTORY/DEFEAT のみの画面) は "other"。確信が持てない値は null。必ず渡したフレームと同じ数の要素を、同じ "i" で返してください。`
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
   if (req.method !== 'POST') return json(405, { error: 'method not allowed' })
@@ -50,7 +68,8 @@ Deno.serve(async (req) => {
 
   try {
     // JWT必須 (verify_jwt=true でデプロイ)
-    const body = await req.json().catch(() => null) as { frames?: Frame[] } | null
+    const body = await req.json().catch(() => null) as { frames?: Frame[]; kind?: string } | null
+    const kind = body?.kind === 'scan' ? 'scan' : 'hud'
     const frames = body?.frames
     if (!Array.isArray(frames) || frames.length === 0) return json(400, { error: 'frames が必要です' })
     if (frames.length > MAX_FRAMES) return json(400, { error: `フレームは一度に${MAX_FRAMES}枚までです` })
@@ -66,7 +85,7 @@ Deno.serve(async (req) => {
       content.push({ type: 'text', text: `フレーム ${f.i}` })
       content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: f.data } })
     }
-    content.push({ type: 'text', text: PROMPT })
+    content.push({ type: 'text', text: kind === 'scan' ? PROMPT_SCAN : PROMPT_HUD })
 
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -103,6 +122,9 @@ Deno.serve(async (req) => {
       right: num(r?.right),
       clock: num(r?.clock),
       hill: num(r?.hill),
+      ...(kind === 'scan'
+        ? { phase: r?.phase === 'game' || r?.phase === 'result' ? r.phase : 'other' }
+        : {}),
     })).filter(r => r.i >= 0)
 
     return json(200, { ok: true, readings })

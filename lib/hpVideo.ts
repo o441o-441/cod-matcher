@@ -78,6 +78,28 @@ export async function sampleHudFrames(
   return frames
 }
 
+// 動画全体を粗い間隔でサンプリング (自動ゲーム検出用の縮小フル画面)
+export async function sampleScanFrames(
+  video: HTMLVideoElement,
+  params: { interval: number; onProgress?: (done: number, total: number) => void }
+): Promise<VideoFrame[]> {
+  const { interval, onProgress } = params
+  const endT = Math.max(0, video.duration - 0.5)
+  const times: number[] = []
+  for (let t = 0; t <= endT; t += interval) times.push(Math.round(t * 10) / 10)
+  const frames: VideoFrame[] = []
+  for (let i = 0; i < times.length; i++) {
+    try {
+      await seekTo(video, times[i])
+      frames.push({ i, t: times[i], data: captureJpeg(video, { cropTopRatio: 1, width: 640, quality: 0.6 }) })
+    } catch {
+      // シーク失敗したフレームは飛ばす
+    }
+    onProgress?.(i + 1, times.length)
+  }
+  return frames
+}
+
 export function base64ToJpegBlob(b64: string): Blob {
   const bin = atob(b64)
   const u8 = new Uint8Array(bin.length)
