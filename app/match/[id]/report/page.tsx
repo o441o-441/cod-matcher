@@ -452,19 +452,21 @@ export default function ReportPage() {
     const ratingBefore = myMember.rating_before;
     if (ratingBefore == null) return;
 
-    setOldRating(ratingBefore);
-
     void (async () => {
       try {
+        // 必ずこのマッチの履歴だけを見る (最新行だと別マッチの値を表示してしまう)。
+        // レート変動なしで確定したマッチ (管理者承認等) は履歴が無いので何も表示しない
         const { data } = await supabase
           .from("rating_history")
           .select("rating_after")
           .eq("user_id", myUserId)
+          .eq("match_id", matchId)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle<{ rating_after: number }>();
 
         if (data?.rating_after != null) {
+          setOldRating(ratingBefore);
           setNewRating(data.rating_after);
         }
       } catch (e) {
