@@ -162,7 +162,10 @@ function hillBoundaries(readings: RawFrameReading[]): number[] {
   return out
 }
 
-export function derive(readings: RawFrameReading[], hostIsLeft: boolean): Derived {
+// opts.anchorT: 試合開始位置 (動画秒)。指定された場合はそこを1ポイント目の
+// 開始とし、以降60秒ごとに次のポイントとする固定ルールで区切る
+// (HUDのヒル残時間・試合時間からの推定は行わない)
+export function derive(readings: RawFrameReading[], hostIsLeft: boolean, opts?: { anchorT?: number }): Derived {
   const sortedR = [...readings].sort((a, b) => a.t - b.t)
   const samples: TimelineSample[] = sortedR.map(r => ({
     t: Math.round(r.t * 10) / 10,
@@ -188,26 +191,35 @@ export function derive(readings: RawFrameReading[], hostIsLeft: boolean): Derive
   const firstScoreT = Math.min(...allIv.map(iv => iv.t0))
   const lastScoreT = Math.max(...allIv.map(iv => iv.t1))
 
-  // ヒル境界の推定 (hill → clock → assumed の順でフォールバック)
   let method: RotationMethod = 'assumed'
-  let startT = Math.max(sortedR[0].t, firstScoreT - HILL_DURATION_SEC / 2)
-  let boundaries: number[] = []
+  let startT: number
+  const boundaries: number[] = []
 
-  const ck = clockBoundaries(sortedR, startT, lastScoreT)
-  if (ck && ck.start !== null && ck.start > sortedR[0].t - 90 && ck.start < firstScoreT + 10) {
-    startT = Math.max(sortedR[0].t, ck.start)
-  }
-
-  const hb = hillBoundaries(sortedR).filter(t => t > startT + 5 && t < lastScoreT - 1)
-  if (hb.length >= 2) {
-    method = 'hill'
-    boundaries = hb
-  } else if (ck && ck.boundaries.length >= 1) {
-    method = 'clock'
-    boundaries = ck.boundaries.filter(t => t > startT + 5 && t < lastScoreT - 1)
-  } else {
+  if (opts?.anchorT !== undefined) {
+    // 固定ルール: 指定された試合開始位置から60秒ごと
+    startT = opts.anchorT
     method = 'assumed'
     for (let t = startT + HILL_DURATION_SEC; t < lastScoreT - 1; t += HILL_DURATION_SEC) boundaries.push(t)
+  } else {
+    // ヒル境界の推定 (hill → clock → assumed の順でフォールバック)
+    startT = Math.max(sortedR[0].t, firstScoreT - HILL_DURATION_SEC / 2)
+
+    const ck = clockBoundaries(sortedR, startT, lastScoreT)
+    if (ck && ck.start !== null && ck.start > sortedR[0].t - 90 && ck.start < firstScoreT + 10) {
+      startT = Math.max(sortedR[0].t, ck.start)
+    }
+
+    const hb = hillBoundaries(sortedR).filter(t => t > startT + 5 && t < lastScoreT - 1)
+    if (hb.length >= 2) {
+      method = 'hill'
+      boundaries.push(...hb)
+    } else if (ck && ck.boundaries.length >= 1) {
+      method = 'clock'
+      boundaries.push(...ck.boundaries.filter(t => t > startT + 5 && t < lastScoreT - 1))
+    } else {
+      method = 'assumed'
+      for (let t = startT + HILL_DURATION_SEC; t < lastScoreT - 1; t += HILL_DURATION_SEC) boundaries.push(t)
+    }
   }
 
   const edges = [startT, ...boundaries, lastScoreT].sort((a, b) => a - b)
@@ -235,12 +247,13 @@ export function derive(readings: RawFrameReading[], hostIsLeft: boolean): Derive
 // 判定できなければ host_slot (チーム1=HUD左と仮定) にフォールバック。
 export function deriveOriented(
   readings: RawFrameReading[],
-  game: { host_score: number | null; guest_score: number | null; host_slot: 'team1' | 'team2' | null }
+  game: { host_score: number | null; guest_score: number | null; host_slot: 'team1' | 'team2' | null },
+  opts?: { anchorT?: number }
 ): Derived {
   const prefer = game.host_slot !== 'team2'
-  const a = derive(readings, prefer)
+  const a = derive(readings, prefer, opts)
   if (game.host_score === null || game.guest_score === null) return a
-  const b = derive(readings, !prefer)
+  const b = derive(readings, !prefer, opts)
   const fit = (d: Derived): number => {
     let s = 0
     if (d.finalHost !== null && game.host_score !== null) s -= Math.abs(d.finalHost - game.host_score)

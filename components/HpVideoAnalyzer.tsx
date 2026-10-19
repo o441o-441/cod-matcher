@@ -3,25 +3,25 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
-  base64ToJpegBlob, captureFramesAt, captureJpeg, fetchYouTubeVideo, parseYouTubeId,
+  base64ToJpegBlob, captureJpeg, fetchYouTubeVideo, parseYouTubeId,
   sampleHudFrames, seekTo, type VideoFrame,
 } from '@/lib/hpVideo'
 import { deriveOriented, type RawFrameReading } from '@/lib/hpTimeline'
-import { detectGames } from '@/lib/lkScan'
 
 // ============================================================
 // LK動画 (試合録画) の解析フロー
 //
-// LK動画には複数ゲームが連続で収録されているため、既定は全自動:
-//   1. 動画全体を粗くスキャンしてAIがフレームを分類
-//      (試合中 / リザルト画面 / その他)
-//   2. ゲーム区間とスコアボード画面の位置を自動検出 (lib/lkScan.ts)
-//   3. 各ゲームについて、リザルト画面を既存の scoreboard-parse で
-//      解析してスタッツを保存し、HPなら区間内のHUDを精査して
-//      ヒル保持の推移も保存する
-// 検出がうまくいかない動画向けに、1ゲームずつ範囲を指定する
-// 手動モードも折りたたみで残している。
+// 1ゲームずつ、動画をシークして
+//   - 試合開始位置 (= 1ポイント目の開始。以降60秒ごとに次のポイント)
+//   - スコアボード (リザルト) 画面の位置
+// を指定して解析する。
+//   A) 新規提出: スコアボード画面を既存の scoreboard-parse で解析して
+//      スタッツを保存し、HPなら区間内のHUDを精査してヒル推移も保存
+//   B) 既存ゲームに追加: 提出済みのHPゲームにヒル推移だけを後付け
 // 動画そのものはアップロードしない (ブラウザ内でフレーム抽出のみ)。
+//
+// ※ 全ゲーム自動検出 (フレーム分類スキャン) は精度が出なかったため
+//   廃止した。検出ロジックは lib/lkScan.ts に残している。
 // ============================================================
 
 export type AnalyzerGame = {
@@ -49,15 +49,11 @@ type ParseResponse = {
   players: { team: 'A' | 'B'; name: string; kills: number | null; deaths: number | null; assists: number | null; damage: number | null; stats: Record<string, unknown>; side: 'host' | 'guest' | null; matched_user_id: string | null }[]
 }
 
-type HudReading = { i: number; left: number | null; right: number | null; clock: number | null; hill: number | null; phase?: string }
-type FrameReading = RawFrameReading & { phase?: 'game' | 'result' | 'other' }
+type HudReading = { i: number; left: number | null; right: number | null; clock: number | null; hill: number | null }
 
 const fmtT = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 const FRAMES_PER_REQUEST = 8
 const MAX_FRAMES = 360 // 1ゲームのHUD精査の上限
-const SCAN_MIN_INTERVAL = 3 // 自動検出スキャンの間隔 (秒)
-const SCAN_MAX_FRAMES = 2400 // 2時間 (上限) の動画でも3秒間隔を維持できる枚数
-const SCAN_CHUNK = 160 // メモリ節約のため、抽出→分類をこの枚数ずつ交互に行う
 const MAX_VIDEO_SEC = 2 * 3600 // これを超える動画はエラー
 
 // YouTube URL入力の表示フラグ。YouTubeがデータセンターIP (Supabase) からの
@@ -78,8 +74,6 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
   const [ytLoading, setYtLoading] = useState(false)
   const [ytProgress, setYtProgress] = useState('')
 
-  // 手動モード (フォールバック)
-  const [manualOpen, setManualOpen] = useState(false)
   const [target, setTarget] = useState<string>('new') // 'new' | 既存HPゲームのid
   const [startT, setStartT] = useState(0)
   const [endT, setEndT] = useState(0)
@@ -137,30 +131,27 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     setEndT(Math.max(0, v.duration - 0.5))
   }
 
-  // ---- 共通: フレームのバッチ送信 (8枚ずつ・並列2) ----
+  // ---- フレームのバッチ送信 (8枚ずつ・並列2) ----
   const invokeFrames = async (
     frames: VideoFrame[],
-    kind: 'hud' | 'scan',
     onBatch?: (done: number, total: number) => void
-  ): Promise<FrameReading[]> => {
+  ): Promise<RawFrameReading[]> => {
     const batches: VideoFrame[][] = []
     for (let i = 0; i < frames.length; i += FRAMES_PER_REQUEST) batches.push(frames.slice(i, i + FRAMES_PER_REQUEST))
     const total = batches.length
     let done = 0
-    const out: FrameReading[] = []
+    const out: RawFrameReading[] = []
     const worker = async () => {
       for (;;) {
         const batch = batches.shift()
         if (!batch) return
         const { data, error: fnErr } = await supabase.functions.invoke('hp-video-parse', {
-          body: { kind, frames: batch.map(f => ({ i: f.i, data: f.data })) },
+          body: { frames: batch.map(f => ({ i: f.i, data: f.data })) },
         })
         if (fnErr) throw new Error('AIの読み取りに失敗しました。もう一度お試しください')
         for (const r of ((data as { readings?: HudReading[] })?.readings ?? [])) {
           const f = batch.find(x => x.i === r.i)
-          if (!f) continue
-          const phase = r.phase === 'game' || r.phase === 'result' ? r.phase : r.phase === 'other' ? 'other' : undefined
-          out.push({ t: f.t, left: r.left, right: r.right, clock: r.clock, hill: r.hill, phase })
+          if (f) out.push({ t: f.t, left: r.left, right: r.right, clock: r.clock, hill: r.hill })
         }
         done += 1
         onBatch?.(done, total)
@@ -170,7 +161,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     return out
   }
 
-  // ---- 共通: 指定時刻の画面をスコアボードとして解析・保存 (既存経路) ----
+  // ---- 指定時刻の画面をスコアボードとして解析・保存 (既存経路) ----
   const submitScoreboardAt = async (vid: HTMLVideoElement, t: number, gameNo: number): Promise<AnalyzerGame> => {
     await seekTo(vid, t)
     const sb = captureJpeg(vid, { width: 1600, quality: 0.85 })
@@ -178,7 +169,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     const { error: upErr } = await supabase.storage.from('scoreboards').upload(path, base64ToJpegBlob(sb), { contentType: 'image/jpeg' })
     if (upErr) throw new Error('スコアボード画像のアップロードに失敗しました: ' + upErr.message)
     const { data, error: fnErr } = await supabase.functions.invoke('scoreboard-parse', { body: { image_path: path, match_id: matchId } })
-    if (fnErr) throw new Error('スコアボードのAI解析に失敗しました')
+    if (fnErr) throw new Error('スコアボードのAI解析に失敗しました。「終了」をリザルト画面に合わせてください')
     const r = data as ParseResponse
     const aIsHost = r.a_is_host !== false
     const hostScore = aIsHost ? r.team_a_score : r.team_b_score
@@ -208,26 +199,27 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     return { id: gameId, game_no: gameNo, mode, map: r.map, host_score: hostScore, guest_score: guestScore, host_slot: aIsHost ? 'team1' : 'team2' }
   }
 
-  // ---- 共通: 区間のHUDを精査してヒル保持の推移を保存 ----
+  // ---- 区間のHUDを精査してヒル保持の推移を保存 ----
+  // anchorT (試合開始位置) を1ポイント目の開始とし、60秒ごとに区切る
   const runTimelineFor = async (
     vid: HTMLVideoElement,
     game: AnalyzerGame,
-    segStart: number,
+    anchorT: number,
     segEnd: number,
     onStage: (text: string) => void
   ): Promise<number> => {
-    const interval = Math.max(2.5, (Math.max(0, segEnd - segStart)) / MAX_FRAMES)
+    const interval = Math.max(2.5, (Math.max(0, segEnd - anchorT)) / MAX_FRAMES)
     onStage('フレームを抽出中... 0%')
     const frames = await sampleHudFrames(vid, {
-      startT: segStart, endT: segEnd, interval,
+      startT: anchorT, endT: segEnd, interval,
       onProgress: (d, tot) => onStage(`フレームを抽出中... ${Math.round((d / tot) * 100)}%`),
     })
     if (frames.length < 10) throw new Error('フレームを十分に抽出できませんでした')
-    const readings = await invokeFrames(frames, 'hud', (d, tot) => onStage(`AIがHUDを読み取り中... ${d}/${tot}`))
+    const readings = await invokeFrames(frames, (d, tot) => onStage(`AIがHUDを読み取り中... ${d}/${tot}`))
     onStage('ヒル保持の推移を計算中...')
-    const derived = deriveOriented(readings, game)
+    const derived = deriveOriented(readings, game, { anchorT })
     if (derived.rotations.length === 0) {
-      throw new Error('スコアの推移を読み取れませんでした')
+      throw new Error('スコアの推移を読み取れませんでした。「開始」が試合開始の画面に合っているか確認してください')
     }
     const { error: tlErr } = await supabase.rpc('rpc_scrim_submit_hp_timeline', {
       p_game_id: game.id,
@@ -240,91 +232,8 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     return derived.rotations.length
   }
 
-  // ---- 自動モード: 動画内の全ゲームを検出して順に保存 ----
-  const runAuto = async () => {
-    const vid = videoRef.current
-    if (!vid || running) return
-    setRunning(true); setError(null); setResults([])
-    vid.pause()
-    try {
-      const dur = vid.duration
-      if (dur > MAX_VIDEO_SEC) throw new Error('動画が長すぎます (2時間まで)。分割してからお試しください')
-      const scanInterval = Math.max(SCAN_MIN_INTERVAL, dur / SCAN_MAX_FRAMES)
-      const scanEnd = Math.max(0, dur - 0.5)
-      const allTimes: number[] = []
-      for (let t = 0; t <= scanEnd; t += scanInterval) allTimes.push(Math.round(t * 10) / 10)
-      // 長時間動画でもメモリを使いすぎないよう、抽出とAI分類をチャンクごとに交互に行う
-      const chunks: number[][] = []
-      for (let off = 0; off < allTimes.length; off += SCAN_CHUNK) chunks.push(allTimes.slice(off, off + SCAN_CHUNK))
-      const totalBatches = chunks.reduce((s, c) => s + Math.ceil(c.length / FRAMES_PER_REQUEST), 0)
-      const scans: FrameReading[] = []
-      let extractedDone = 0
-      let classifiedDone = 0
-      setStage('動画全体をスキャン中... 0%')
-      for (const chunkTimes of chunks) {
-        const frames = await captureFramesAt(vid, chunkTimes, { cropTopRatio: 1, width: 640, quality: 0.6 },
-          d => setStage(`動画全体をスキャン中 (フレーム抽出)... ${Math.round(((extractedDone + d) / allTimes.length) * 100)}%`))
-        extractedDone += chunkTimes.length
-        if (frames.length === 0) continue
-        const readings = await invokeFrames(frames, 'scan',
-          d => setStage(`AIがフレームを分類中... ${classifiedDone + d}/${totalBatches}`))
-        classifiedDone += Math.ceil(frames.length / FRAMES_PER_REQUEST)
-        scans.push(...readings)
-      }
-      if (scans.length < 10) throw new Error('フレームを抽出できませんでした')
-      const detected = detectGames(
-        scans.map(s => ({ t: s.t, phase: s.phase ?? 'other', left: s.left, right: s.right, clock: s.clock })),
-        scanInterval
-      )
-      if (detected.length === 0) {
-        throw new Error('試合を検出できませんでした。下の「手動で範囲を指定」をお試しください')
-      }
-
-      const msgs: string[] = [
-        `${detected.length}ゲームを検出: ` + detected.map((g, i) => `#${i + 1} ${fmtT(g.startT)}〜${fmtT(g.endT)}`).join(' / '),
-      ]
-      setResults([...msgs])
-
-      let gameNo = Math.max(0, ...games.map(g => g.game_no)) + 1
-      for (let idx = 0; idx < detected.length; idx++) {
-        const seg = detected[idx]
-        const label = `ゲーム${idx + 1}/${detected.length}`
-        if (gameNo > 12) { msgs.push('1試合12ゲームの上限に達したため残りをスキップしました'); break }
-        try {
-          setStage(`${label}: スコアボードを解析中...`)
-          // リザルト画面が見つからなかったゲームは試合終了直後の画面で代用を試みる
-          const sbT = seg.scoreboardT ?? Math.min(seg.endT + 8, dur - 0.5)
-          const info = await submitScoreboardAt(vid, sbT, gameNo)
-          gameNo += 1
-          onSaved()
-          if (info.mode === 'hp') {
-            try {
-              const n = await runTimelineFor(vid, info, seg.startT, seg.endT, p => setStage(`${label}: ${p}`))
-              msgs.push(`✓ GAME ${info.game_no}${info.map ? ` (${info.map})` : ''}: スタッツ + ヒル推移 (${n}ポイント) を保存`)
-              onSaved()
-            } catch (e2) {
-              msgs.push(`△ GAME ${info.game_no}: スタッツは保存、ヒル推移は失敗 — ${e2 instanceof Error ? e2.message : 'エラー'}`)
-            }
-          } else {
-            msgs.push(`✓ GAME ${info.game_no}${info.map ? ` (${info.map})` : ''}: スタッツを保存 (ハードポイント以外のため推移なし)`)
-          }
-        } catch (e) {
-          msgs.push(`✗ ${label} (${fmtT(seg.startT)}〜): スコアボード解析に失敗 — ${e instanceof Error ? e.message : 'エラー'}`)
-        }
-        setResults([...msgs])
-      }
-      msgs.push('完了しました。間違いがあれば各ゲームの「取り消す」で削除して再提出できます')
-      setResults([...msgs])
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '解析中にエラーが発生しました')
-    } finally {
-      setRunning(false)
-      setStage('')
-    }
-  }
-
-  // ---- 手動モード: 1ゲームぶんの範囲を指定して保存 ----
-  const runManual = async () => {
+  // ---- 1ゲームぶんの範囲を指定して保存 ----
+  const run = async () => {
     const vid = videoRef.current
     if (!vid || running) return
     if (endT - startT < 60) { setError('解析範囲が短すぎます (開始位置と終了位置を確認してください)'); return }
@@ -366,7 +275,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
         <button className="btn-ghost btn-sm" onClick={onClose} disabled={running}>閉じる</button>
       </div>
       <p className="muted" style={{ fontSize: 11.5, marginTop: 0, marginBottom: 10 }}>
-        LK動画 (観戦/配信視点の録画) の動画ファイルを選択してください。複数ゲームが入ったままで大丈夫です。
+        LK動画 (観戦/配信視点の録画・2時間まで) を読み込み、1ゲームずつ「試合開始」と「スコアボード画面」の位置を指定して解析します。
         YouTubeにある動画は一度ダウンロードしてから読み込んでください。
         動画はサーバーに保存されず、ブラウザ内でフレームだけを切り出してAIが読み取ります。
       </p>
@@ -402,54 +311,39 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
             onLoadedMetadata={onMeta}
             style={{ width: '100%', maxHeight: 360, borderRadius: 8, border: '1px solid var(--line)', background: '#000' }} />
 
-          <div className="row" style={{ gap: 10, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="btn-primary btn-sm" onClick={() => void runAuto()} disabled={running}>
-              {running ? '解析中...' : '🤖 全ゲームを自動で解析して保存'}
+          <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <select value={target} onChange={e => setTarget(e.target.value)} disabled={running} style={{ fontSize: 12 }}>
+              <option value="new">新規ゲームとして提出 (スタッツ + ヒル推移)</option>
+              {hpGames.map(g => (
+                <option key={g.id} value={g.id}>GAME {g.game_no}{g.map ? ` (${g.map})` : ''} にヒル推移だけ追加</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: 11.5 }}>
+            <button className="btn-ghost btn-sm" disabled={running}
+              onClick={() => { const v = videoRef.current; if (v) setStartT(Math.min(v.currentTime, endT)) }}>
+              現在位置を試合開始に設定
             </button>
-            {duration > 0 && <span className="dim" style={{ fontSize: 11 }}>動画 {fmtT(duration)}</span>}
+            <span className="mono">開始 {fmtT(startT)}</span>
+            <button className="btn-ghost btn-sm" disabled={running}
+              onClick={() => { const v = videoRef.current; if (v) setEndT(Math.max(v.currentTime, startT)) }}>
+              {target === 'new' ? '現在位置をスコアボード画面に設定' : '現在位置を試合終了に設定'}
+            </button>
+            <span className="mono">終了 {fmtT(endT)}</span>
+            {duration > 0 && <span className="dim">(動画 {fmtT(duration)})</span>}
           </div>
           <p className="dim" style={{ fontSize: 11, margin: '6px 0 0' }}>
-            動画内の全ゲームとスコアボード画面を自動検出し、順にスタッツとヒル保持推移を保存します。長い動画では10分以上かかることがあります。
+            「開始」は試合が始まる瞬間に合わせてください。そこを1ポイント目の開始として、60秒ごとに次のポイントと数えます。
+            {target === 'new' && ' 「終了」はリザルト (スコアボード) が表示されている画面に合わせてください。その画面からスタッツを読み取ります。'}
           </p>
-          {running && stage && <p style={{ fontSize: 12, margin: '8px 0 0', color: 'var(--amber)' }}>{stage}</p>}
 
-          {/* 手動モード (自動検出がうまくいかない動画向け) */}
-          <button type="button" className="btn-ghost btn-sm" style={{ fontSize: 11, marginTop: 12 }} disabled={running}
-            onClick={() => setManualOpen(v => !v)}>
-            {manualOpen ? '▲ 手動指定を閉じる' : '▼ 手動で範囲を指定する (1ゲームずつ)'}
-          </button>
-          {manualOpen && (
-            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--line)' }}>
-              <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                <select value={target} onChange={e => setTarget(e.target.value)} disabled={running} style={{ fontSize: 12 }}>
-                  <option value="new">新規ゲームとして提出 (スタッツ + ヒル推移)</option>
-                  {hpGames.map(g => (
-                    <option key={g.id} value={g.id}>GAME {g.game_no}{g.map ? ` (${g.map})` : ''} にヒル推移だけ追加</option>
-                  ))}
-                </select>
-              </div>
-              <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: 11.5 }}>
-                <button className="btn-ghost btn-sm" disabled={running}
-                  onClick={() => { const v = videoRef.current; if (v) setStartT(Math.min(v.currentTime, endT)) }}>
-                  現在位置を試合開始に設定
-                </button>
-                <span className="mono">開始 {fmtT(startT)}</span>
-                <button className="btn-ghost btn-sm" disabled={running}
-                  onClick={() => { const v = videoRef.current; if (v) setEndT(Math.max(v.currentTime, startT)) }}>
-                  {target === 'new' ? '現在位置をスコアボード画面に設定' : '現在位置を試合終了に設定'}
-                </button>
-                <span className="mono">終了 {fmtT(endT)}</span>
-              </div>
-              {target === 'new' && (
-                <p className="dim" style={{ fontSize: 11, margin: '6px 0 0' }}>
-                  「終了」はリザルト (スコアボード) が表示されている画面に合わせてください。その画面からスタッツを読み取ります。
-                </p>
-              )}
-              <button className="btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={() => void runManual()} disabled={running}>
-                この範囲を解析して保存
-              </button>
-            </div>
-          )}
+          <div className="row" style={{ gap: 10, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="btn-primary btn-sm" onClick={() => void run()} disabled={running}>
+              {running ? (stage || '解析中...') : '解析して保存'}
+            </button>
+            {running && <span className="muted" style={{ fontSize: 11 }}>解析には数分かかることがあります。このままお待ちください</span>}
+          </div>
         </div>
       )}
 

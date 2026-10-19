@@ -43,7 +43,7 @@ const NONE_C = 'rgba(255,255,255,0.10)'
 const METHOD_LABEL: Record<TimelineRow['rotation_method'], string> = {
   hill: 'ヒル残時間から判定',
   clock: '試合時間から判定',
-  assumed: '60秒間隔で推定',
+  assumed: '開始位置から60秒区切り',
 }
 
 function TimelineBar({ row }: { row: TimelineRow }) {
