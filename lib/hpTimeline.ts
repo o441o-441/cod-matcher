@@ -258,6 +258,19 @@ export function derive(readings: RawFrameReading[], hostIsLeft: boolean, opts?: 
   return { samples, rotations, method, finalHost, finalGuest }
 }
 
+// ゲーム残り時間の読み取りから試合開始位置を推定する。
+// HPの残り時間は5:00から始まり、4:59 (=299秒) になった瞬間が試合開始。
+// 各サンプルの「開始位置候補 = t + clock - 299」の中央値を取るため、
+// 一部のフレームでOCRが誤読・欠損しても安定して求まる
+export function detectAnchorFromClock(readings: RawFrameReading[], clockStart = 299): number | null {
+  const cands = readings
+    .filter(r => r.clock !== null && r.clock >= 30 && r.clock <= clockStart)
+    .map(r => r.t + (r.clock as number) - clockStart)
+  if (cands.length < 5) return null
+  const s = [...cands].sort((a, b) => a - b)
+  return Math.max(0, s[Math.floor(s.length / 2)])
+}
+
 // 左右どちらがホストかを、確定済みの最終スコアと照合して自動判定する。
 // 判定できなければ host_slot (チーム1=HUD左と仮定) にフォールバック。
 export function deriveOriented(

@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import {
   base64ToJpegBlob, captureJpeg, fetchYouTubeVideo, parseYouTubeId, seekTo,
 } from '@/lib/hpVideo'
-import { deriveOriented, type RawFrameReading } from '@/lib/hpTimeline'
+import { deriveOriented, detectAnchorFromClock, type RawFrameReading } from '@/lib/hpTimeline'
 import { loadCalib, readHudScores, saveCalib, warmupOcr, type HudCalib } from '@/lib/hpOcr'
 
 // ============================================================
@@ -51,7 +51,8 @@ type ParseResponse = {
 
 const fmtT = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 const MAX_VIDEO_SEC = 2 * 3600 // これを超える動画はエラー
-const OCR_MAX_FRAMES = 600 // 1ゲームのOCRサンプリング上限 (2秒間隔基準)
+const OCR_INTERVAL_SEC = 1 // OCRのサンプリング間隔 (秒)
+const OCR_MAX_FRAMES = 1200 // 1ゲームのOCRサンプリング上限 (超える長さは間隔が広がる)
 
 // YouTube URL入力の表示フラグ。YouTubeがデータセンターIP (Supabase) からの
 // 取得をbot判定で拒否しているため現状はほぼ確実に失敗する。裏側 (yt-fetch) は
@@ -141,8 +142,8 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     setTesting(true); setTestResult(null)
     try {
       await warmupOcr()
-      const { left, right } = await readHudScores(vid, calib)
-      setTestResult(`読み取り結果 — 左: ${left ?? '×'} / 右: ${right ?? '×'}`)
+      const { left, right, clock } = await readHudScores(vid, calib)
+      setTestResult(`読み取り結果 — 左: ${left ?? '×'} / 右: ${right ?? '×'} / 残り時間: ${clock !== null ? fmtT(clock) : '×'}`)
     } catch (e) {
       setTestResult('読み取りに失敗しました: ' + (e instanceof Error ? e.message : 'エラー'))
     } finally {
@@ -188,48 +189,51 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     return { id: gameId, game_no: gameNo, mode, map: r.map, host_score: hostScore, guest_score: guestScore, host_slot: aIsHost ? 'team1' : 'team2' }
   }
 
-  // ---- 区間のHUDを精査してヒル保持の推移を保存 ----
-  // anchorT (試合開始位置) を1ポイント目の開始とし、60秒ごとに区切る
+  // ---- 区間のHUDをOCRで精査してヒル保持の推移を保存 ----
+  // 試合開始位置はゲーム残り時間 (4:59になった瞬間) から自動判定し、
+  // それを1ポイント目の開始として60秒ごとに区切る。
+  // 残り時間が読めなかった場合は「開始」マーカー位置にフォールバック
   const runTimelineFor = async (
     vid: HTMLVideoElement,
     game: AnalyzerGame,
-    anchorT: number,
+    rangeStart: number,
     segEnd: number,
     onStage: (text: string) => void
-  ): Promise<number> => {
-    // ブラウザOCR (無料): 左右スコアの枠だけ切り出してローカルで読む
+  ): Promise<{ n: number; anchorAt: number; auto: boolean }> => {
     onStage('OCRエンジンを準備中...')
     await warmupOcr()
-    const interval = Math.max(2, (Math.max(0, segEnd - anchorT)) / OCR_MAX_FRAMES)
+    const interval = Math.max(OCR_INTERVAL_SEC, (Math.max(0, segEnd - rangeStart)) / OCR_MAX_FRAMES)
     const times: number[] = []
-    for (let t = anchorT; t <= segEnd; t += interval) times.push(Math.round(t * 10) / 10)
+    for (let t = rangeStart; t <= segEnd; t += interval) times.push(Math.round(t * 10) / 10)
     const readings: RawFrameReading[] = []
     for (let i = 0; i < times.length; i++) {
       try {
         await seekTo(vid, times[i])
-        const { left, right } = await readHudScores(vid, calib)
-        readings.push({ t: times[i], left, right, clock: null, hill: null })
+        const { left, right, clock } = await readHudScores(vid, calib)
+        readings.push({ t: times[i], left, right, clock, hill: null })
       } catch { /* シーク失敗したフレームは飛ばす */ }
-      onStage(`OCRでスコアを読み取り中... ${i + 1}/${times.length}`)
+      onStage(`OCRで読み取り中... ${i + 1}/${times.length}`)
     }
     const okCount = readings.filter(r => r.left !== null || r.right !== null).length
     if (readings.length === 0 || okCount / readings.length < 0.3) {
       throw new Error('OCRでスコアをほとんど読み取れませんでした。「テスト読み取り」で枠の位置を調整してください')
     }
     onStage('ヒル保持の推移を計算中...')
+    const clockAnchor = detectAnchorFromClock(readings)
+    const anchorT = clockAnchor ?? rangeStart
     const derived = deriveOriented(readings, game, { anchorT })
     if (derived.rotations.length === 0) {
-      throw new Error('スコアの推移を読み取れませんでした。「開始」が試合開始の画面に合っているか確認してください')
+      throw new Error('スコアの推移を読み取れませんでした。解析範囲が試合中の映像を含んでいるか確認してください')
     }
     const { error: tlErr } = await supabase.rpc('rpc_scrim_submit_hp_timeline', {
       p_game_id: game.id,
       p_sample_interval: interval,
-      p_rotation_method: derived.method,
+      p_rotation_method: clockAnchor !== null ? 'clock' : 'assumed',
       p_samples: derived.samples,
       p_rotations: derived.rotations,
     })
     if (tlErr) throw new Error('推移の保存に失敗しました: ' + tlErr.message)
-    return derived.rotations.length
+    return { n: derived.rotations.length, anchorAt: anchorT, auto: clockAnchor !== null }
   }
 
   // ---- 1ゲームぶんの範囲を指定して保存 ----
@@ -257,8 +261,10 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
         game = g
       }
       const segEnd = target === 'new' ? Math.max(startT, endT - 3) : endT
-      const n = await runTimelineFor(vid, game, startT, segEnd, p => setStage(p))
-      setResults([`✓ GAME ${game.game_no} のヒル保持推移を保存しました (${n}ポイント)`])
+      const res = await runTimelineFor(vid, game, startT, segEnd, p => setStage(p))
+      setResults([
+        `✓ GAME ${game.game_no} のヒル保持推移を保存しました (${res.n}ポイント、試合開始 ${fmtT(res.anchorAt)}${res.auto ? ' = 残り時間4:59から自動判定' : ' = 開始マーカー位置 (残り時間を読めませんでした)'})`,
+      ])
       onSaved()
     } catch (e) {
       setError(e instanceof Error ? e.message : '解析中にエラーが発生しました')
@@ -311,7 +317,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
             <video ref={videoRef} src={url} controls muted playsInline preload="metadata"
               onLoadedMetadata={onMeta}
               style={{ width: '100%', height: 'auto', borderRadius: 8, border: '1px solid var(--line)', background: '#000', display: 'block' }} />
-            {/* OCRの読み取り枠プレビュー */}
+            {/* OCRの読み取り枠プレビュー (左右スコア + 中央の残り時間) */}
             {([-1, 1] as const).map(side => (
               <div key={side} aria-hidden style={{
                 position: 'absolute',
@@ -325,6 +331,17 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
                 boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
               }} />
             ))}
+            <div aria-hidden style={{
+              position: 'absolute',
+              left: `${(0.5 - calib.clockW / 2) * 100}%`,
+              top: `${calib.clockY * 100}%`,
+              width: `${calib.clockW * 100}%`,
+              height: `${calib.clockH * 100}%`,
+              border: '1.5px solid #f59e0b',
+              borderRadius: 3,
+              pointerEvents: 'none',
+              boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
+            }} />
           </div>
 
           <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -350,21 +367,39 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
             {duration > 0 && <span className="dim">(動画 {fmtT(duration)})</span>}
           </div>
           <p className="dim" style={{ fontSize: 11, margin: '6px 0 0' }}>
-            「開始」は試合が始まる瞬間に合わせてください。そこを1ポイント目の開始として、60秒ごとに次のポイントと数えます。
+            「開始」は試合が始まる少し前 (カウントダウン中など) に合わせれば十分です。実際の試合開始は残り時間が4:59になった瞬間として自動判定され、そこを1ポイント目の開始として60秒ごとに数えます。
             {target === 'new' && ' 「終了」はリザルト (スコアボード) が表示されている画面に合わせてください。その画面からスタッツを読み取ります。'}
           </p>
 
           <div className="card" style={{ padding: 10, marginTop: 8 }}>
               <p className="muted" style={{ fontSize: 11, margin: '0 0 8px' }}>
-                動画の上に表示されている<span style={{ color: '#00e5ff' }}>水色</span>/<span style={{ color: '#ff2bd6' }}>ピンク</span>の枠が、
-                左右チームのスコアを読む範囲です。試合中の画面に合わせてから、枠がスコアの数字をぴったり囲むようスライダーで調整し、「テスト読み取り」で確認してください。
+                動画の上の<span style={{ color: '#00e5ff' }}>水色</span>/<span style={{ color: '#ff2bd6' }}>ピンク</span>の枠が左右チームのスコア、
+                <span style={{ color: '#f59e0b' }}>オレンジ</span>の枠が画面中央最上部のゲーム残り時間を読む範囲です。
+                試合中の画面に合わせてから、各枠が数字をぴったり囲むようスライダーで調整し、「テスト読み取り」で確認してください。
+                試合開始位置は残り時間が4:59になった瞬間として自動判定されます。
               </p>
-              <div className="row" style={{ gap: 14, flexWrap: 'wrap', fontSize: 11 }}>
+              <div className="row" style={{ gap: 14, flexWrap: 'wrap', fontSize: 11, alignItems: 'center' }}>
+                <span className="stat-label" style={{ margin: 0 }}>スコア枠</span>
                 {([
                   ['横位置', 'cx', 0.02, 0.25],
                   ['縦位置', 'y', 0, 0.2],
                   ['幅', 'w', 0.02, 0.15],
                   ['高さ', 'h', 0.02, 0.12],
+                ] as const).map(([label, key, min, max]) => (
+                  <label key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {label}
+                    <input type="range" min={min} max={max} step={0.002} value={calib[key]} disabled={running}
+                      onChange={e => setCalib(c => ({ ...c, [key]: Number(e.target.value) }))}
+                      style={{ width: 110 }} />
+                  </label>
+                ))}
+              </div>
+              <div className="row" style={{ gap: 14, flexWrap: 'wrap', fontSize: 11, alignItems: 'center', marginTop: 6 }}>
+                <span className="stat-label" style={{ margin: 0 }}>残り時間枠</span>
+                {([
+                  ['縦位置', 'clockY', 0, 0.15],
+                  ['幅', 'clockW', 0.03, 0.15],
+                  ['高さ', 'clockH', 0.02, 0.1],
                 ] as const).map(([label, key, min, max]) => (
                   <label key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     {label}

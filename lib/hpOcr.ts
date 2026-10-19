@@ -17,13 +17,19 @@ import type { Worker as TesseractWorker } from 'tesseract.js'
 
 export type HudCalib = {
   cx: number // スコア枠中心の、画面中央からの横オフセット (画面幅比)
-  y: number // 枠の上端位置 (画面高さ比)
-  w: number // 枠の幅 (画面幅比)
-  h: number // 枠の高さ (画面高さ比)
+  y: number // スコア枠の上端位置 (画面高さ比)
+  w: number // スコア枠の幅 (画面幅比)
+  h: number // スコア枠の高さ (画面高さ比)
+  clockY: number // 残り時間枠の上端位置 (画面高さ比。横は画面中央固定)
+  clockW: number // 残り時間枠の幅 (画面幅比)
+  clockH: number // 残り時間枠の高さ (画面高さ比)
 }
 
 // 1080p観戦HUDのだいたいの初期値。UIのスライダーで調整できる
-export const DEFAULT_CALIB: HudCalib = { cx: 0.075, y: 0.03, w: 0.06, h: 0.05 }
+export const DEFAULT_CALIB: HudCalib = {
+  cx: 0.075, y: 0.03, w: 0.06, h: 0.05,
+  clockY: 0.015, clockW: 0.065, clockH: 0.04,
+}
 
 const CALIB_STORAGE_KEY = 'hp_ocr_calib_v1'
 
@@ -32,8 +38,9 @@ export function loadCalib(): HudCalib {
     const raw = localStorage.getItem(CALIB_STORAGE_KEY)
     if (!raw) return DEFAULT_CALIB
     const c = JSON.parse(raw) as Partial<HudCalib>
-    if ([c.cx, c.y, c.w, c.h].every(v => typeof v === 'number' && Number.isFinite(v))) {
-      return { cx: c.cx!, y: c.y!, w: c.w!, h: c.h! }
+    const merged = { ...DEFAULT_CALIB, ...c } // 旧バージョンの保存値には残り時間枠が無い
+    if (Object.values(merged).every(v => typeof v === 'number' && Number.isFinite(v))) {
+      return merged
     }
   } catch { /* 壊れていたら初期値 */ }
   return DEFAULT_CALIB
@@ -51,7 +58,7 @@ async function getWorker(): Promise<TesseractWorker> {
       const mod = await import('tesseract.js')
       const w = await mod.createWorker('eng')
       await w.setParameters({
-        tessedit_char_whitelist: '0123456789',
+        tessedit_char_whitelist: '0123456789:.', // 残り時間 "4:59" の区切りも読む
         tessedit_pageseg_mode: mod.PSM.SINGLE_LINE,
       })
       return w
@@ -100,11 +107,23 @@ function parseScore(text: string): number | null {
   return Number.isFinite(n) && n >= 0 && n <= 400 ? n : null
 }
 
-// 現在表示中のフレームから左右チームのスコアをOCRで読み取る
+// 残り時間 "4:59" を秒に。コロンの誤読 (ピリオド/欠落) にも耐える
+function parseClock(text: string): number | null {
+  const t = text.replace(/\s+/g, '')
+  let m = t.match(/(\d{1,2})[:.](\d{2})/)
+  if (!m) m = t.match(/^(\d)(\d{2})$/) // コロンが読めず "459" になったケース
+  if (!m) return null
+  const sec = parseInt(m[2], 10)
+  if (sec >= 60) return null
+  const v = parseInt(m[1], 10) * 60 + sec
+  return v >= 0 && v <= 600 ? v : null
+}
+
+// 現在表示中のフレームから左右チームのスコアとゲーム残り時間をOCRで読み取る
 export async function readHudScores(
   video: HTMLVideoElement,
   calib: HudCalib
-): Promise<{ left: number | null; right: number | null }> {
+): Promise<{ left: number | null; right: number | null; clock: number | null }> {
   const worker = await getWorker()
   const boxFor = (side: -1 | 1) => ({
     x: 0.5 + side * calib.cx - calib.w / 2,
@@ -112,8 +131,13 @@ export async function readHudScores(
     w: calib.w,
     h: calib.h,
   })
-  const leftCanvas = cropForOcr(video, boxFor(-1))
-  const rightCanvas = cropForOcr(video, boxFor(1))
-  const [l, r] = [await worker.recognize(leftCanvas), await worker.recognize(rightCanvas)]
-  return { left: parseScore(l.data.text ?? ''), right: parseScore(r.data.text ?? '') }
+  const clockBox = { x: 0.5 - calib.clockW / 2, y: calib.clockY, w: calib.clockW, h: calib.clockH }
+  const l = await worker.recognize(cropForOcr(video, boxFor(-1)))
+  const r = await worker.recognize(cropForOcr(video, boxFor(1)))
+  const c = await worker.recognize(cropForOcr(video, clockBox))
+  return {
+    left: parseScore(l.data.text ?? ''),
+    right: parseScore(r.data.text ?? ''),
+    clock: parseClock(c.data.text ?? ''),
+  }
 }
