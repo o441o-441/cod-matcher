@@ -105,7 +105,7 @@ export default function TiersPage() {
           <div className="card">
             <div className="stat-label">レート変動</div>
             <div className="stat-val" style={{ color: 'var(--cyan)' }}>ELO</div>
-            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>勝敗とレート差に基づいて変動します（互角の相手で±20前後）。格上に勝つと大きく上がります。通算10試合までは変動が大きく、早く適正レートに到達します。</p>
+            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>勝敗とレート差に基づいて変動します（互角の相手で±16前後）。格上に勝つと大きく上がります。通算10試合までは変動が大きく、早く適正レートに到達します。</p>
           </div>
           <div className="card">
             <div className="stat-label">デイリー保護</div>
