@@ -47,6 +47,11 @@ const fmtT = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec %
 const FRAMES_PER_REQUEST = 8
 const MAX_FRAMES = 360
 
+// YouTube URL入力の表示フラグ。YouTubeがデータセンターIP (Supabase) からの
+// 取得をbot判定で拒否しているため現状はほぼ確実に失敗する。裏側 (yt-fetch) は
+// 残してあるので、YouTube側の制限が緩和されたら true に戻すだけで復活する
+const ENABLE_YOUTUBE_INPUT: boolean = false
+
 export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, onSaved, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [url, setUrl] = useState<string | null>(null)
@@ -233,7 +238,8 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
         <button className="btn-ghost btn-sm" onClick={onClose} disabled={running}>閉じる</button>
       </div>
       <p className="muted" style={{ fontSize: 11.5, marginTop: 0, marginBottom: 10 }}>
-        1ゲームぶんの録画 (観戦/配信視点) を、ファイルまたはYouTubeのURLから読み込んでください。動画はサーバーに保存されず、ブラウザ内でフレームだけを切り出してAIが読み取ります。
+        1ゲームぶんの録画 (観戦/配信視点) の動画ファイルを選択してください。YouTubeにある動画は一度ダウンロードしてから読み込んでください。
+        動画はサーバーに保存されず、ブラウザ内でフレームだけを切り出してAIが読み取ります。
         ハードポイントでは「どのチームが地点に乗れていたか」の推移も保存されます。
       </p>
 
@@ -243,22 +249,28 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
           <input type="file" accept="video/*" style={{ display: 'none' }} disabled={running || ytLoading}
             onChange={e => { handleFile(e.target.files); e.target.value = '' }} />
         </label>
-        <span className="dim" style={{ fontSize: 11 }}>または</span>
-        <input
-          value={ytUrl}
-          onChange={e => setYtUrl(e.target.value)}
-          placeholder="https://youtube.com/watch?v=..."
-          disabled={running || ytLoading}
-          style={{ width: 260, fontSize: 12 }}
-        />
-        <button type="button" className="btn-ghost btn-sm" disabled={running || ytLoading || !ytUrl.trim()}
-          onClick={() => void loadYouTube()}>
-          {ytLoading ? (ytProgress || '取得中...') : '▶ YouTubeから読み込む'}
-        </button>
+        {ENABLE_YOUTUBE_INPUT && (
+          <>
+            <span className="dim" style={{ fontSize: 11 }}>または</span>
+            <input
+              value={ytUrl}
+              onChange={e => setYtUrl(e.target.value)}
+              placeholder="https://youtube.com/watch?v=..."
+              disabled={running || ytLoading}
+              style={{ width: 260, fontSize: 12 }}
+            />
+            <button type="button" className="btn-ghost btn-sm" disabled={running || ytLoading || !ytUrl.trim()}
+              onClick={() => void loadYouTube()}>
+              {ytLoading ? (ytProgress || '取得中...') : '▶ YouTubeから読み込む'}
+            </button>
+          </>
+        )}
       </div>
-      <p className="dim" style={{ fontSize: 10.5, margin: '4px 0 0' }}>
-        ※ YouTube側の制限で直接取得できないことがあります。その場合は動画をダウンロードして「動画ファイルを選択」からお試しください。
-      </p>
+      {ENABLE_YOUTUBE_INPUT && (
+        <p className="dim" style={{ fontSize: 10.5, margin: '4px 0 0' }}>
+          ※ YouTube側の制限で直接取得できないことがあります。その場合は動画をダウンロードして「動画ファイルを選択」からお試しください。
+        </p>
+      )}
       {fileName && <p className="dim" style={{ fontSize: 11, margin: '6px 0 0' }}>読み込み済み: {fileName}</p>}
 
       {url && (
