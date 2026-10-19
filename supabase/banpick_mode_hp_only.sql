@@ -59,3 +59,70 @@ begin
   );
 end;
 $function$;
+
+-- ------------------------------------------------------------
+-- 管理者のバンピックスキップもハードポイント固定にする
+-- (旧: この関数内に独自の重み付き抽選 67/22/11 と古いマッププールが残っていた)
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.rpc_admin_skip_banpick(p_match_id uuid)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_uid uuid := auth.uid();
+  v_match record;
+  v_alpha_id uuid;
+  v_bravo_id uuid;
+  v_mode text := 'hp'; -- ランクマッチはハードポイント固定
+  v_hp_maps text[] := ARRAY['酒','コロッサス','デン','スカー','グリッドロック','ハシエンダ'];
+  v_map text;
+  v_selected jsonb;
+  v_existing_session_id uuid;
+BEGIN
+  IF v_uid IS NULL THEN RAISE EXCEPTION 'not authenticated'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = v_uid AND is_admin = true) THEN
+    RAISE EXCEPTION '管理者のみ実行可能です';
+  END IF;
+
+  SELECT * INTO v_match FROM matches WHERE id = p_match_id;
+  IF v_match IS NULL THEN RAISE EXCEPTION 'マッチが見つかりません'; END IF;
+  IF v_match.status <> 'banpick' THEN RAISE EXCEPTION 'バンピック中ではありません'; END IF;
+
+  SELECT id INTO v_alpha_id FROM match_teams WHERE match_id = p_match_id AND side = 'alpha';
+  SELECT id INTO v_bravo_id FROM match_teams WHERE match_id = p_match_id AND side = 'bravo';
+
+  -- HPプールからランダムにマップを選ぶ
+  v_map := v_hp_maps[1 + floor(random() * array_length(v_hp_maps, 1))::int];
+
+  v_selected := jsonb_build_object(
+    'team_a', v_alpha_id, 'team_b', v_bravo_id,
+    'selected_mode', v_mode,
+    v_mode, jsonb_build_object('bans', '[]'::jsonb, 'map', v_map, 'side', CASE WHEN random() < 0.5 THEN 'JSOC' ELSE 'ギルド' END)
+  );
+
+  SELECT id INTO v_existing_session_id FROM banpick_sessions WHERE match_id = p_match_id LIMIT 1;
+
+  IF v_existing_session_id IS NOT NULL THEN
+    UPDATE banpick_sessions
+    SET status = 'completed', phase = 'completed', selected_maps = v_selected,
+        completed_at = now(), deadline_at = NULL, last_action_at = now()
+    WHERE id = v_existing_session_id;
+  ELSE
+    INSERT INTO banpick_sessions (match_id, status, phase, selected_maps, completed_at, last_action_at,
+      current_turn_match_team_id, current_action_type, turn_number)
+    VALUES (p_match_id, 'completed', 'completed', v_selected, now(), now(), NULL, NULL, 0);
+  END IF;
+
+  -- Auto-assign roles
+  PERFORM _auto_assign_roles(p_match_id, v_mode);
+
+  UPDATE matches SET status = 'ready', started_at = now() WHERE id = p_match_id;
+
+  INSERT INTO match_messages (match_id, sender_user_id, message_type, body)
+  VALUES (p_match_id, NULL, 'system', 'banpick skipped by admin (' || upper(v_mode) || ' / ' || v_map || ')');
+
+  RETURN json_build_object('ok', true, 'mode', v_mode, 'map', v_map);
+END;
+$function$;
