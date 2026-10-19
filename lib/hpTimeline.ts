@@ -19,7 +19,7 @@ export const HILL_DURATION_SEC = 60
 // 例外のマップが見つかったらここに追記する
 export const DEFAULT_HILL_CYCLE = 4
 export const MAP_HILL_CYCLES: Record<string, number> = {
-  // 例: 'マップ名': 5,
+  '酒': 5,
 }
 
 export const hillCycleForMap = (map: string | null | undefined): number =>
