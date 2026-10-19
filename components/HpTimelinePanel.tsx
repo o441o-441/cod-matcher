@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import ConfirmDialog from '@/components/ConfirmDialog'
-import { segmentsFromSamples, swapRotations, swapSamples, type Rotation, type TimelineSample } from '@/lib/hpTimeline'
+import { cleanMonotonic, segmentsFromSamples, swapRotations, swapSamples, type Rotation, type TimelineSample } from '@/lib/hpTimeline'
 import { StatTable, thStyle, thLeft, tdStyle, tdLeft, heatBg, relT, fmtDur } from '@/components/scrimStatsUtils'
 
 // ============================================================
@@ -63,6 +63,43 @@ function TimelineBar({ row }: { row: TimelineRow }) {
       {rots.slice(1).map(r => (
         <line key={r.no} x1={x(r.start_t)} x2={x(r.start_t)} y1={0} y2={30} stroke="rgba(255,255,255,0.55)" strokeWidth={1.5} strokeDasharray="2,2" />
       ))}
+    </svg>
+  )
+}
+
+// 累計スコア (= 累計保持秒数) の折れ線。差が開いた瞬間・追い上げたポイントが読める
+function ScoreLineChart({ row }: { row: TimelineRow }) {
+  const rots = row.rotations
+  if (rots.length === 0) return null
+  const t0 = rots[0].start_t
+  const t1 = rots[rots.length - 1].end_t
+  const span = Math.max(1, t1 - t0)
+  const inRange = (p: { t: number }) => p.t >= t0 - 0.01 && p.t <= t1 + 0.01
+  const hostPts = cleanMonotonic(row.samples.filter(s => s.h !== null).map(s => ({ t: s.t, v: s.h as number }))).filter(inRange)
+  const guestPts = cleanMonotonic(row.samples.filter(s => s.g !== null).map(s => ({ t: s.t, v: s.g as number }))).filter(inRange)
+  if (hostPts.length < 2 && guestPts.length < 2) return null
+  const maxV = Math.max(50, ...hostPts.map(p => p.v), ...guestPts.map(p => p.v))
+  const W = 1000
+  const H = 180
+  const PAD_T = 8
+  const PAD_B = 6
+  const x = (t: number) => ((Math.max(t0, Math.min(t1, t)) - t0) / span) * W
+  const y = (v: number) => PAD_T + (1 - v / maxV) * (H - PAD_T - PAD_B)
+  const path = (pts: { t: number; v: number }[]) =>
+    pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ')
+  const gridVals: number[] = []
+  for (let v = 50; v < maxV; v += 50) gridVals.push(v)
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+      style={{ width: '100%', height: 110, display: 'block', borderRadius: 4, background: 'rgba(0,0,0,0.25)', marginTop: 4 }}>
+      {gridVals.map(v => (
+        <line key={v} x1={0} x2={W} y1={y(v)} y2={y(v)} stroke="rgba(255,255,255,0.08)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+      ))}
+      {rots.slice(1).map(r => (
+        <line key={r.no} x1={x(r.start_t)} x2={x(r.start_t)} y1={0} y2={H} stroke="rgba(255,255,255,0.35)" strokeWidth={1} strokeDasharray="2,3" vectorEffect="non-scaling-stroke" />
+      ))}
+      {hostPts.length >= 2 && <path d={path(hostPts)} fill="none" stroke={HOST_C} strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+      {guestPts.length >= 2 && <path d={path(guestPts)} fill="none" stroke={GUEST_C} strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
     </svg>
   )
 }
@@ -160,6 +197,7 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: GUEST_C, borderRadius: 2, marginRight: 4, verticalAlign: -1 }} />{guestName}</span>
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: BOTH_C, borderRadius: 2, marginRight: 4, verticalAlign: -1 }} />競り合い</span>
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: NONE_C, borderRadius: 2, marginRight: 4, verticalAlign: -1 }} />どちらも不在</span>
+        <span className="dim">折れ線 = 累計スコアの推移 · 縦の点線 = ポイントの切り替わり (横罫線は50点ごと)</span>
       </div>
 
       {withData.map(g => {
@@ -179,6 +217,7 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
               )}
             </div>
             <TimelineBar row={row} />
+            <ScoreLineChart row={row} />
             <div style={{ display: 'flex', marginTop: 2 }}>
               {row.rotations.map(r => {
                 const w = ((r.end_t - r.start_t) / Math.max(1, total)) * 100

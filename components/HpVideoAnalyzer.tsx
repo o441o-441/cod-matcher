@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
-  base64ToJpegBlob, captureJpeg, fetchYouTubeVideo, parseYouTubeId,
-  sampleHudFrames, seekTo, type VideoFrame,
+  base64ToJpegBlob, captureJpeg, fetchYouTubeVideo, parseYouTubeId, seekTo,
 } from '@/lib/hpVideo'
 import { deriveOriented, type RawFrameReading } from '@/lib/hpTimeline'
 import { loadCalib, readHudScores, saveCalib, warmupOcr, type HudCalib } from '@/lib/hpOcr'
@@ -50,12 +49,9 @@ type ParseResponse = {
   players: { team: 'A' | 'B'; name: string; kills: number | null; deaths: number | null; assists: number | null; damage: number | null; stats: Record<string, unknown>; side: 'host' | 'guest' | null; matched_user_id: string | null }[]
 }
 
-type HudReading = { i: number; left: number | null; right: number | null; clock: number | null; hill: number | null }
-
 const fmtT = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
-const FRAMES_PER_REQUEST = 8
-const MAX_FRAMES = 360 // 1ゲームのHUD精査の上限
 const MAX_VIDEO_SEC = 2 * 3600 // これを超える動画はエラー
+const OCR_MAX_FRAMES = 600 // 1ゲームのOCRサンプリング上限 (2秒間隔基準)
 
 // YouTube URL入力の表示フラグ。YouTubeがデータセンターIP (Supabase) からの
 // 取得をbot判定で拒否しているため現状はほぼ確実に失敗する。裏側 (yt-fetch) は
@@ -79,8 +75,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
   const [startT, setStartT] = useState(0)
   const [endT, setEndT] = useState(0)
 
-  // ヒル推移の読み取り方式。既定はブラウザOCR (無料・通信なし)
-  const [readMode, setReadMode] = useState<'ocr' | 'ai'>('ocr')
+  // ヒル推移の読み取りはブラウザOCR (無料・通信なし) のみ
   const [calib, setCalib] = useState<HudCalib>(() => loadCalib())
   const [testResult, setTestResult] = useState<string | null>(null)
   const [testing, setTesting] = useState(false)
@@ -155,36 +150,6 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     }
   }
 
-  // ---- フレームのバッチ送信 (8枚ずつ・並列2) ----
-  const invokeFrames = async (
-    frames: VideoFrame[],
-    onBatch?: (done: number, total: number) => void
-  ): Promise<RawFrameReading[]> => {
-    const batches: VideoFrame[][] = []
-    for (let i = 0; i < frames.length; i += FRAMES_PER_REQUEST) batches.push(frames.slice(i, i + FRAMES_PER_REQUEST))
-    const total = batches.length
-    let done = 0
-    const out: RawFrameReading[] = []
-    const worker = async () => {
-      for (;;) {
-        const batch = batches.shift()
-        if (!batch) return
-        const { data, error: fnErr } = await supabase.functions.invoke('hp-video-parse', {
-          body: { frames: batch.map(f => ({ i: f.i, data: f.data })) },
-        })
-        if (fnErr) throw new Error('AIの読み取りに失敗しました。もう一度お試しください')
-        for (const r of ((data as { readings?: HudReading[] })?.readings ?? [])) {
-          const f = batch.find(x => x.i === r.i)
-          if (f) out.push({ t: f.t, left: r.left, right: r.right, clock: r.clock, hill: r.hill })
-        }
-        done += 1
-        onBatch?.(done, total)
-      }
-    }
-    await Promise.all([worker(), worker()])
-    return out
-  }
-
   // ---- 指定時刻の画面をスコアボードとして解析・保存 (既存経路) ----
   const submitScoreboardAt = async (vid: HTMLVideoElement, t: number, gameNo: number): Promise<AnalyzerGame> => {
     await seekTo(vid, t)
@@ -232,38 +197,24 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     segEnd: number,
     onStage: (text: string) => void
   ): Promise<number> => {
-    let readings: RawFrameReading[]
-    let interval: number
-    if (readMode === 'ocr') {
-      // ブラウザOCR (無料): 左右スコアの枠だけ切り出してローカルで読む
-      onStage('OCRエンジンを準備中...')
-      await warmupOcr()
-      interval = Math.max(2, (Math.max(0, segEnd - anchorT)) / 600)
-      const times: number[] = []
-      for (let t = anchorT; t <= segEnd; t += interval) times.push(Math.round(t * 10) / 10)
-      readings = []
-      for (let i = 0; i < times.length; i++) {
-        try {
-          await seekTo(vid, times[i])
-          const { left, right } = await readHudScores(vid, calib)
-          readings.push({ t: times[i], left, right, clock: null, hill: null })
-        } catch { /* シーク失敗したフレームは飛ばす */ }
-        onStage(`OCRでスコアを読み取り中... ${i + 1}/${times.length}`)
-      }
-      const okCount = readings.filter(r => r.left !== null || r.right !== null).length
-      if (readings.length === 0 || okCount / readings.length < 0.3) {
-        throw new Error('OCRでスコアをほとんど読み取れませんでした。「テスト読み取り」で枠の位置を調整するか、AI方式に切り替えてください')
-      }
-    } else {
-      // AI (クレジット消費): 画面上部クロップをEdge Function経由で読む
-      interval = Math.max(2.5, (Math.max(0, segEnd - anchorT)) / MAX_FRAMES)
-      onStage('フレームを抽出中... 0%')
-      const frames = await sampleHudFrames(vid, {
-        startT: anchorT, endT: segEnd, interval,
-        onProgress: (d, tot) => onStage(`フレームを抽出中... ${Math.round((d / tot) * 100)}%`),
-      })
-      if (frames.length < 10) throw new Error('フレームを十分に抽出できませんでした')
-      readings = await invokeFrames(frames, (d, tot) => onStage(`AIがHUDを読み取り中... ${d}/${tot}`))
+    // ブラウザOCR (無料): 左右スコアの枠だけ切り出してローカルで読む
+    onStage('OCRエンジンを準備中...')
+    await warmupOcr()
+    const interval = Math.max(2, (Math.max(0, segEnd - anchorT)) / OCR_MAX_FRAMES)
+    const times: number[] = []
+    for (let t = anchorT; t <= segEnd; t += interval) times.push(Math.round(t * 10) / 10)
+    const readings: RawFrameReading[] = []
+    for (let i = 0; i < times.length; i++) {
+      try {
+        await seekTo(vid, times[i])
+        const { left, right } = await readHudScores(vid, calib)
+        readings.push({ t: times[i], left, right, clock: null, hill: null })
+      } catch { /* シーク失敗したフレームは飛ばす */ }
+      onStage(`OCRでスコアを読み取り中... ${i + 1}/${times.length}`)
+    }
+    const okCount = readings.filter(r => r.left !== null || r.right !== null).length
+    if (readings.length === 0 || okCount / readings.length < 0.3) {
+      throw new Error('OCRでスコアをほとんど読み取れませんでした。「テスト読み取り」で枠の位置を調整してください')
     }
     onStage('ヒル保持の推移を計算中...')
     const derived = deriveOriented(readings, game, { anchorT })
@@ -361,7 +312,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
               onLoadedMetadata={onMeta}
               style={{ width: '100%', height: 'auto', borderRadius: 8, border: '1px solid var(--line)', background: '#000', display: 'block' }} />
             {/* OCRの読み取り枠プレビュー */}
-            {readMode === 'ocr' && ([-1, 1] as const).map(side => (
+            {([-1, 1] as const).map(side => (
               <div key={side} aria-hidden style={{
                 position: 'absolute',
                 left: `${(0.5 + side * calib.cx - calib.w / 2) * 100}%`,
@@ -403,21 +354,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
             {target === 'new' && ' 「終了」はリザルト (スコアボード) が表示されている画面に合わせてください。その画面からスタッツを読み取ります。'}
           </p>
 
-          {/* ヒル推移の読み取り方式 */}
-          <div className="row" style={{ gap: 12, marginTop: 10, flexWrap: 'wrap', alignItems: 'center', fontSize: 12 }}>
-            <span className="stat-label" style={{ margin: 0 }}>スコアの読み取り方式</span>
-            <label style={{ cursor: 'pointer' }}>
-              <input type="radio" name="readMode" checked={readMode === 'ocr'} disabled={running}
-                onChange={() => setReadMode('ocr')} /> ブラウザOCR (無料)
-            </label>
-            <label style={{ cursor: 'pointer' }}>
-              <input type="radio" name="readMode" checked={readMode === 'ai'} disabled={running}
-                onChange={() => setReadMode('ai')} /> AI (高精度・クレジット消費)
-            </label>
-          </div>
-
-          {readMode === 'ocr' && (
-            <div className="card" style={{ padding: 10, marginTop: 8 }}>
+          <div className="card" style={{ padding: 10, marginTop: 8 }}>
               <p className="muted" style={{ fontSize: 11, margin: '0 0 8px' }}>
                 動画の上に表示されている<span style={{ color: '#00e5ff' }}>水色</span>/<span style={{ color: '#ff2bd6' }}>ピンク</span>の枠が、
                 左右チームのスコアを読む範囲です。試合中の画面に合わせてから、枠がスコアの数字をぴったり囲むようスライダーで調整し、「テスト読み取り」で確認してください。
@@ -446,8 +383,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
               <p className="dim" style={{ fontSize: 10.5, margin: '6px 0 0' }}>
                 初回はOCRエンジン (数MB) のダウンロードに少し時間がかかります。読み取りはすべてブラウザ内で行われ、クレジットは消費しません。
               </p>
-            </div>
-          )}
+          </div>
 
           <div className="row" style={{ gap: 10, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <button className="btn-primary btn-sm" onClick={() => void run()} disabled={running}>
