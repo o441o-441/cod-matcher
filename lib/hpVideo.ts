@@ -57,19 +57,18 @@ export function captureJpeg(video: HTMLVideoElement, opts: CaptureOpts = {}): st
   return dataUrl.slice(dataUrl.indexOf(',') + 1)
 }
 
-// [startT, endT] を interval 秒間隔でサンプリングしてHUDフレームを抽出
-export async function sampleHudFrames(
+// 指定した時刻リストのフレームを順に抽出する
+export async function captureFramesAt(
   video: HTMLVideoElement,
-  params: { startT: number; endT: number; interval: number; onProgress?: (done: number, total: number) => void }
+  times: number[],
+  opts: CaptureOpts,
+  onProgress?: (done: number, total: number) => void
 ): Promise<VideoFrame[]> {
-  const { startT, endT, interval, onProgress } = params
-  const times: number[] = []
-  for (let t = startT; t <= endT; t += interval) times.push(Math.round(t * 10) / 10)
   const frames: VideoFrame[] = []
   for (let i = 0; i < times.length; i++) {
     try {
       await seekTo(video, times[i])
-      frames.push({ i, t: times[i], data: captureJpeg(video, { cropTopRatio: 0.38, width: 960, quality: 0.72 }) })
+      frames.push({ i, t: times[i], data: captureJpeg(video, opts) })
     } catch {
       // シーク失敗したフレームは飛ばす (読み取り欠損として扱われる)
     }
@@ -78,26 +77,15 @@ export async function sampleHudFrames(
   return frames
 }
 
-// 動画全体を粗い間隔でサンプリング (自動ゲーム検出用の縮小フル画面)
-export async function sampleScanFrames(
+// [startT, endT] を interval 秒間隔でサンプリングしてHUDフレームを抽出
+export async function sampleHudFrames(
   video: HTMLVideoElement,
-  params: { interval: number; onProgress?: (done: number, total: number) => void }
+  params: { startT: number; endT: number; interval: number; onProgress?: (done: number, total: number) => void }
 ): Promise<VideoFrame[]> {
-  const { interval, onProgress } = params
-  const endT = Math.max(0, video.duration - 0.5)
+  const { startT, endT, interval, onProgress } = params
   const times: number[] = []
-  for (let t = 0; t <= endT; t += interval) times.push(Math.round(t * 10) / 10)
-  const frames: VideoFrame[] = []
-  for (let i = 0; i < times.length; i++) {
-    try {
-      await seekTo(video, times[i])
-      frames.push({ i, t: times[i], data: captureJpeg(video, { cropTopRatio: 1, width: 640, quality: 0.6 }) })
-    } catch {
-      // シーク失敗したフレームは飛ばす
-    }
-    onProgress?.(i + 1, times.length)
-  }
-  return frames
+  for (let t = startT; t <= endT; t += interval) times.push(Math.round(t * 10) / 10)
+  return captureFramesAt(video, times, { cropTopRatio: 0.38, width: 960, quality: 0.72 }, onProgress)
 }
 
 export function base64ToJpegBlob(b64: string): Blob {

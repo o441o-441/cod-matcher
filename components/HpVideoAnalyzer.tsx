@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
-  base64ToJpegBlob, captureJpeg, fetchYouTubeVideo, parseYouTubeId,
-  sampleHudFrames, sampleScanFrames, seekTo, type VideoFrame,
+  base64ToJpegBlob, captureFramesAt, captureJpeg, fetchYouTubeVideo, parseYouTubeId,
+  sampleHudFrames, seekTo, type VideoFrame,
 } from '@/lib/hpVideo'
 import { deriveOriented, type RawFrameReading } from '@/lib/hpTimeline'
 import { detectGames } from '@/lib/lkScan'
@@ -56,7 +56,9 @@ const fmtT = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec %
 const FRAMES_PER_REQUEST = 8
 const MAX_FRAMES = 360 // 1ゲームのHUD精査の上限
 const SCAN_MIN_INTERVAL = 3 // 自動検出スキャンの間隔 (秒)
-const SCAN_MAX_FRAMES = 900 // 45分の動画まで3秒間隔を維持 (超えると間隔が広がる)
+const SCAN_MAX_FRAMES = 2400 // 2時間の動画まで3秒間隔を維持 (超えると間隔が広がる)
+const SCAN_CHUNK = 160 // メモリ節約のため、抽出→分類をこの枚数ずつ交互に行う
+const MAX_VIDEO_SEC = 3 * 3600
 
 // YouTube URL入力の表示フラグ。YouTubeがデータセンターIP (Supabase) からの
 // 取得をbot判定で拒否しているため現状はほぼ確実に失敗する。裏側 (yt-fetch) は
@@ -239,14 +241,30 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     vid.pause()
     try {
       const dur = vid.duration
+      if (dur > MAX_VIDEO_SEC) throw new Error('動画が長すぎます (3時間まで)。分割してからお試しください')
       const scanInterval = Math.max(SCAN_MIN_INTERVAL, dur / SCAN_MAX_FRAMES)
+      const scanEnd = Math.max(0, dur - 0.5)
+      const allTimes: number[] = []
+      for (let t = 0; t <= scanEnd; t += scanInterval) allTimes.push(Math.round(t * 10) / 10)
+      // 長時間動画でもメモリを使いすぎないよう、抽出とAI分類をチャンクごとに交互に行う
+      const chunks: number[][] = []
+      for (let off = 0; off < allTimes.length; off += SCAN_CHUNK) chunks.push(allTimes.slice(off, off + SCAN_CHUNK))
+      const totalBatches = chunks.reduce((s, c) => s + Math.ceil(c.length / FRAMES_PER_REQUEST), 0)
+      const scans: FrameReading[] = []
+      let extractedDone = 0
+      let classifiedDone = 0
       setStage('動画全体をスキャン中... 0%')
-      const scanFrames = await sampleScanFrames(vid, {
-        interval: scanInterval,
-        onProgress: (d, tot) => setStage(`動画全体をスキャン中... ${Math.round((d / tot) * 100)}%`),
-      })
-      if (scanFrames.length < 10) throw new Error('フレームを抽出できませんでした')
-      const scans = await invokeFrames(scanFrames, 'scan', (d, tot) => setStage(`AIがフレームを分類中... ${d}/${tot}`))
+      for (const chunkTimes of chunks) {
+        const frames = await captureFramesAt(vid, chunkTimes, { cropTopRatio: 1, width: 640, quality: 0.6 },
+          d => setStage(`動画全体をスキャン中 (フレーム抽出)... ${Math.round(((extractedDone + d) / allTimes.length) * 100)}%`))
+        extractedDone += chunkTimes.length
+        if (frames.length === 0) continue
+        const readings = await invokeFrames(frames, 'scan',
+          d => setStage(`AIがフレームを分類中... ${classifiedDone + d}/${totalBatches}`))
+        classifiedDone += Math.ceil(frames.length / FRAMES_PER_REQUEST)
+        scans.push(...readings)
+      }
+      if (scans.length < 10) throw new Error('フレームを抽出できませんでした')
       const detected = detectGames(
         scans.map(s => ({ t: s.t, phase: s.phase ?? 'other', left: s.left, right: s.right, clock: s.clock })),
         scanInterval
