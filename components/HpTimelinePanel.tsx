@@ -260,23 +260,19 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
       <StatTable minWidth={460} head={
         <>
           <th style={thLeft}>ポイント</th>
-          <th style={thStyle}>回数</th>
           <th style={thStyle}>{hostName} 平均保持</th>
           <th style={thStyle}>{guestName} 平均保持</th>
           <th style={thStyle}>差 ({myName}視点)</th>
-          <th style={thStyle}>{myName}が上回った</th>
         </>
       }>
         {agg.map(a => (
           <tr key={a.no} style={{ borderBottom: '1px solid var(--line)' }}>
             <td style={tdLeft}>{a.no}ポイント目</td>
-            <td style={{ ...tdStyle }} className="mono">{a.n}</td>
             <td style={{ ...tdStyle, ...heatBg(relT(hostAvgs, a.avgHost)) }} className="mono">{fmtDur(a.avgHost)}</td>
             <td style={{ ...tdStyle, ...heatBg(relT(guestAvgs, a.avgGuest)) }} className="mono">{fmtDur(a.avgGuest)}</td>
             <td style={{ ...tdStyle, ...heatBg(relT(diffs, a.diff)) }} className="mono">
               {a.diff > 0 ? '+' : ''}{Math.round(a.diff)}秒
             </td>
-            <td style={{ ...tdStyle }} className="mono">{a.wins}/{a.n}</td>
           </tr>
         ))}
       </StatTable>
