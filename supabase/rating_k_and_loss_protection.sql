@@ -1,7 +1,9 @@
 -- ============================================================
 -- レート計算の改定 (2026-10-19適用済み)
---   1. K値: 32 → 48。さらに通算10試合未満のプレイヤーは K=64
---      (2ヶ月シーズンで上位ティアに現実的に届く速度にする)
+--   1. K値: 32 → 40。さらに通算10試合未満のプレイヤーは K=56
+--      (2ヶ月シーズンで上位ティアに現実的に届く速度にする。
+--       全勝で31試合、勝率70%で約63試合でASCENDANT(2200)到達)
+--      ※ 当初48/64で適用したが速すぎたため40/56に調整 (rating_k40_adjust)
 --      ※ Kはプレイヤーごとに独立 (混在マッチでも各自のKで変動)
 --   2. 敗北保護: レート(変動前)1800未満のプレイヤーは、その日 (JST)
 --      最初の敗北によるレート減少が半分になる
@@ -36,10 +38,10 @@ BEGIN
   -- v_factor = 1 - 勝者チームの期待勝率 = 敗者チームの期待勝率
   v_factor := 1.0 - 1.0 / (1.0 + power(10.0, (coalesce(v_loser_avg, 1500) - coalesce(v_winner_avg, 1500)) / 400.0));
 
-  -- 勝者 (プレイヤーごとにK: 通算10試合未満は64、以降48)
+  -- 勝者 (プレイヤーごとにK: 通算10試合未満は56、以降40)
   FOR r_member IN SELECT mtm.user_id, mtm.rating_before FROM match_team_members mtm WHERE mtm.match_team_id = p_winner_team_id LOOP
     SELECT coalesce(wins, 0) + coalesce(losses, 0) INTO v_games FROM profiles WHERE id = r_member.user_id;
-    v_k := CASE WHEN coalesce(v_games, 0) < 10 THEN 64 ELSE 48 END;
+    v_k := CASE WHEN coalesce(v_games, 0) < 10 THEN 56 ELSE 40 END;
     v_delta := greatest(1, round(v_k * v_factor));
     UPDATE profiles SET current_rating = coalesce(current_rating, 1500) + v_delta,
                         wins = coalesce(wins, 0) + 1,
@@ -54,7 +56,7 @@ BEGIN
   -- 敗者 (1800未満は その日(JST)最初の敗北 が半減)
   FOR r_member IN SELECT mtm.user_id, mtm.rating_before FROM match_team_members mtm WHERE mtm.match_team_id = p_loser_team_id LOOP
     SELECT coalesce(wins, 0) + coalesce(losses, 0) INTO v_games FROM profiles WHERE id = r_member.user_id;
-    v_k := CASE WHEN coalesce(v_games, 0) < 10 THEN 64 ELSE 48 END;
+    v_k := CASE WHEN coalesce(v_games, 0) < 10 THEN 56 ELSE 40 END;
     v_delta := greatest(1, round(v_k * v_factor));
 
     v_protected := coalesce(r_member.rating_before, 1500) < 1800
