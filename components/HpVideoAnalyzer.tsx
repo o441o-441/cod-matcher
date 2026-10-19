@@ -56,9 +56,9 @@ const fmtT = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec %
 const FRAMES_PER_REQUEST = 8
 const MAX_FRAMES = 360 // 1ゲームのHUD精査の上限
 const SCAN_MIN_INTERVAL = 3 // 自動検出スキャンの間隔 (秒)
-const SCAN_MAX_FRAMES = 2400 // 2時間の動画まで3秒間隔を維持 (超えると間隔が広がる)
+const SCAN_MAX_FRAMES = 2400 // 2時間 (上限) の動画でも3秒間隔を維持できる枚数
 const SCAN_CHUNK = 160 // メモリ節約のため、抽出→分類をこの枚数ずつ交互に行う
-const MAX_VIDEO_SEC = 3 * 3600
+const MAX_VIDEO_SEC = 2 * 3600 // これを超える動画はエラー
 
 // YouTube URL入力の表示フラグ。YouTubeがデータセンターIP (Supabase) からの
 // 取得をbot判定で拒否しているため現状はほぼ確実に失敗する。裏側 (yt-fetch) は
@@ -125,6 +125,13 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
   const onMeta = () => {
     const v = videoRef.current
     if (!v) return
+    if (v.duration > MAX_VIDEO_SEC) {
+      if (url) URL.revokeObjectURL(url)
+      setUrl(null)
+      setFileName('')
+      setError('動画が長すぎます (2時間まで)。分割してからお試しください')
+      return
+    }
     setDuration(v.duration)
     setStartT(0)
     setEndT(Math.max(0, v.duration - 0.5))
@@ -241,7 +248,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     vid.pause()
     try {
       const dur = vid.duration
-      if (dur > MAX_VIDEO_SEC) throw new Error('動画が長すぎます (3時間まで)。分割してからお試しください')
+      if (dur > MAX_VIDEO_SEC) throw new Error('動画が長すぎます (2時間まで)。分割してからお試しください')
       const scanInterval = Math.max(SCAN_MIN_INTERVAL, dur / SCAN_MAX_FRAMES)
       const scanEnd = Math.max(0, dur - 0.5)
       const allTimes: number[] = []
