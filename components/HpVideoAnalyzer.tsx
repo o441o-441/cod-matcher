@@ -55,8 +55,8 @@ type FrameReading = RawFrameReading & { phase?: 'game' | 'result' | 'other' }
 const fmtT = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 const FRAMES_PER_REQUEST = 8
 const MAX_FRAMES = 360 // 1ゲームのHUD精査の上限
-const SCAN_MIN_INTERVAL = 6 // 自動検出スキャンの間隔 (秒)
-const SCAN_MAX_FRAMES = 450
+const SCAN_MIN_INTERVAL = 3 // 自動検出スキャンの間隔 (秒)
+const SCAN_MAX_FRAMES = 900 // 45分の動画まで3秒間隔を維持 (超えると間隔が広がる)
 
 // YouTube URL入力の表示フラグ。YouTubeがデータセンターIP (Supabase) からの
 // 取得をbot判定で拒否しているため現状はほぼ確実に失敗する。裏側 (yt-fetch) は
