@@ -7,6 +7,7 @@ import {
   sampleHudFrames, seekTo, type VideoFrame,
 } from '@/lib/hpVideo'
 import { deriveOriented, type RawFrameReading } from '@/lib/hpTimeline'
+import { loadCalib, readHudScores, saveCalib, warmupOcr, type HudCalib } from '@/lib/hpOcr'
 
 // ============================================================
 // LK動画 (試合録画) の解析フロー
@@ -78,6 +79,13 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
   const [startT, setStartT] = useState(0)
   const [endT, setEndT] = useState(0)
 
+  // ヒル推移の読み取り方式。既定はブラウザOCR (無料・通信なし)
+  const [readMode, setReadMode] = useState<'ocr' | 'ai'>('ocr')
+  const [calib, setCalib] = useState<HudCalib>(() => loadCalib())
+  const [testResult, setTestResult] = useState<string | null>(null)
+  const [testing, setTesting] = useState(false)
+
+  useEffect(() => { saveCalib(calib) }, [calib])
   useEffect(() => () => { if (url) URL.revokeObjectURL(url) }, [url])
 
   const hpGames = games.filter(g => g.mode === 'hp')
@@ -129,6 +137,22 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     setDuration(v.duration)
     setStartT(0)
     setEndT(Math.max(0, v.duration - 0.5))
+  }
+
+  // 現在表示中のフレームでOCRの読み取りテスト (枠位置の調整用)
+  const testRead = async () => {
+    const vid = videoRef.current
+    if (!vid || testing || running) return
+    setTesting(true); setTestResult(null)
+    try {
+      await warmupOcr()
+      const { left, right } = await readHudScores(vid, calib)
+      setTestResult(`読み取り結果 — 左: ${left ?? '×'} / 右: ${right ?? '×'}`)
+    } catch (e) {
+      setTestResult('読み取りに失敗しました: ' + (e instanceof Error ? e.message : 'エラー'))
+    } finally {
+      setTesting(false)
+    }
   }
 
   // ---- フレームのバッチ送信 (8枚ずつ・並列2) ----
@@ -208,14 +232,39 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     segEnd: number,
     onStage: (text: string) => void
   ): Promise<number> => {
-    const interval = Math.max(2.5, (Math.max(0, segEnd - anchorT)) / MAX_FRAMES)
-    onStage('フレームを抽出中... 0%')
-    const frames = await sampleHudFrames(vid, {
-      startT: anchorT, endT: segEnd, interval,
-      onProgress: (d, tot) => onStage(`フレームを抽出中... ${Math.round((d / tot) * 100)}%`),
-    })
-    if (frames.length < 10) throw new Error('フレームを十分に抽出できませんでした')
-    const readings = await invokeFrames(frames, (d, tot) => onStage(`AIがHUDを読み取り中... ${d}/${tot}`))
+    let readings: RawFrameReading[]
+    let interval: number
+    if (readMode === 'ocr') {
+      // ブラウザOCR (無料): 左右スコアの枠だけ切り出してローカルで読む
+      onStage('OCRエンジンを準備中...')
+      await warmupOcr()
+      interval = Math.max(2, (Math.max(0, segEnd - anchorT)) / 600)
+      const times: number[] = []
+      for (let t = anchorT; t <= segEnd; t += interval) times.push(Math.round(t * 10) / 10)
+      readings = []
+      for (let i = 0; i < times.length; i++) {
+        try {
+          await seekTo(vid, times[i])
+          const { left, right } = await readHudScores(vid, calib)
+          readings.push({ t: times[i], left, right, clock: null, hill: null })
+        } catch { /* シーク失敗したフレームは飛ばす */ }
+        onStage(`OCRでスコアを読み取り中... ${i + 1}/${times.length}`)
+      }
+      const okCount = readings.filter(r => r.left !== null || r.right !== null).length
+      if (readings.length === 0 || okCount / readings.length < 0.3) {
+        throw new Error('OCRでスコアをほとんど読み取れませんでした。「テスト読み取り」で枠の位置を調整するか、AI方式に切り替えてください')
+      }
+    } else {
+      // AI (クレジット消費): 画面上部クロップをEdge Function経由で読む
+      interval = Math.max(2.5, (Math.max(0, segEnd - anchorT)) / MAX_FRAMES)
+      onStage('フレームを抽出中... 0%')
+      const frames = await sampleHudFrames(vid, {
+        startT: anchorT, endT: segEnd, interval,
+        onProgress: (d, tot) => onStage(`フレームを抽出中... ${Math.round((d / tot) * 100)}%`),
+      })
+      if (frames.length < 10) throw new Error('フレームを十分に抽出できませんでした')
+      readings = await invokeFrames(frames, (d, tot) => onStage(`AIがHUDを読み取り中... ${d}/${tot}`))
+    }
     onStage('ヒル保持の推移を計算中...')
     const derived = deriveOriented(readings, game, { anchorT })
     if (derived.rotations.length === 0) {
@@ -277,7 +326,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
       <p className="muted" style={{ fontSize: 11.5, marginTop: 0, marginBottom: 10 }}>
         LK動画 (観戦/配信視点の録画・2時間まで) を読み込み、1ゲームずつ「試合開始」と「スコアボード画面」の位置を指定して解析します。
         YouTubeにある動画は一度ダウンロードしてから読み込んでください。
-        動画はサーバーに保存されず、ブラウザ内でフレームだけを切り出してAIが読み取ります。
+        動画はサーバーに保存されません。ヒル推移はブラウザ内のOCRで無料で読み取り、AIを使うのはスコアボード画像1枚の解析だけです。
       </p>
 
       <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -307,9 +356,25 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
 
       {url && (
         <div style={{ marginTop: 10 }}>
-          <video ref={videoRef} src={url} controls muted playsInline preload="metadata"
-            onLoadedMetadata={onMeta}
-            style={{ width: '100%', maxHeight: 360, borderRadius: 8, border: '1px solid var(--line)', background: '#000' }} />
+          <div style={{ position: 'relative' }}>
+            <video ref={videoRef} src={url} controls muted playsInline preload="metadata"
+              onLoadedMetadata={onMeta}
+              style={{ width: '100%', height: 'auto', borderRadius: 8, border: '1px solid var(--line)', background: '#000', display: 'block' }} />
+            {/* OCRの読み取り枠プレビュー */}
+            {readMode === 'ocr' && ([-1, 1] as const).map(side => (
+              <div key={side} aria-hidden style={{
+                position: 'absolute',
+                left: `${(0.5 + side * calib.cx - calib.w / 2) * 100}%`,
+                top: `${calib.y * 100}%`,
+                width: `${calib.w * 100}%`,
+                height: `${calib.h * 100}%`,
+                border: `1.5px solid ${side === -1 ? '#00e5ff' : '#ff2bd6'}`,
+                borderRadius: 3,
+                pointerEvents: 'none',
+                boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
+              }} />
+            ))}
+          </div>
 
           <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <select value={target} onChange={e => setTarget(e.target.value)} disabled={running} style={{ fontSize: 12 }}>
@@ -337,6 +402,52 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
             「開始」は試合が始まる瞬間に合わせてください。そこを1ポイント目の開始として、60秒ごとに次のポイントと数えます。
             {target === 'new' && ' 「終了」はリザルト (スコアボード) が表示されている画面に合わせてください。その画面からスタッツを読み取ります。'}
           </p>
+
+          {/* ヒル推移の読み取り方式 */}
+          <div className="row" style={{ gap: 12, marginTop: 10, flexWrap: 'wrap', alignItems: 'center', fontSize: 12 }}>
+            <span className="stat-label" style={{ margin: 0 }}>スコアの読み取り方式</span>
+            <label style={{ cursor: 'pointer' }}>
+              <input type="radio" name="readMode" checked={readMode === 'ocr'} disabled={running}
+                onChange={() => setReadMode('ocr')} /> ブラウザOCR (無料)
+            </label>
+            <label style={{ cursor: 'pointer' }}>
+              <input type="radio" name="readMode" checked={readMode === 'ai'} disabled={running}
+                onChange={() => setReadMode('ai')} /> AI (高精度・クレジット消費)
+            </label>
+          </div>
+
+          {readMode === 'ocr' && (
+            <div className="card" style={{ padding: 10, marginTop: 8 }}>
+              <p className="muted" style={{ fontSize: 11, margin: '0 0 8px' }}>
+                動画の上に表示されている<span style={{ color: '#00e5ff' }}>水色</span>/<span style={{ color: '#ff2bd6' }}>ピンク</span>の枠が、
+                左右チームのスコアを読む範囲です。試合中の画面に合わせてから、枠がスコアの数字をぴったり囲むようスライダーで調整し、「テスト読み取り」で確認してください。
+              </p>
+              <div className="row" style={{ gap: 14, flexWrap: 'wrap', fontSize: 11 }}>
+                {([
+                  ['横位置', 'cx', 0.02, 0.25],
+                  ['縦位置', 'y', 0, 0.2],
+                  ['幅', 'w', 0.02, 0.15],
+                  ['高さ', 'h', 0.02, 0.12],
+                ] as const).map(([label, key, min, max]) => (
+                  <label key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {label}
+                    <input type="range" min={min} max={max} step={0.002} value={calib[key]} disabled={running}
+                      onChange={e => setCalib(c => ({ ...c, [key]: Number(e.target.value) }))}
+                      style={{ width: 110 }} />
+                  </label>
+                ))}
+              </div>
+              <div className="row" style={{ gap: 10, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button type="button" className="btn-ghost btn-sm" onClick={() => void testRead()} disabled={running || testing}>
+                  {testing ? '読み取り中...' : '🔍 この画面でテスト読み取り'}
+                </button>
+                {testResult && <span className="mono" style={{ fontSize: 12 }}>{testResult}</span>}
+              </div>
+              <p className="dim" style={{ fontSize: 10.5, margin: '6px 0 0' }}>
+                初回はOCRエンジン (数MB) のダウンロードに少し時間がかかります。読み取りはすべてブラウザ内で行われ、クレジットは消費しません。
+              </p>
+            </div>
+          )}
 
           <div className="row" style={{ gap: 10, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <button className="btn-primary btn-sm" onClick={() => void run()} disabled={running}>
