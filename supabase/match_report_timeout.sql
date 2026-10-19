@@ -30,7 +30,6 @@ declare
   v_existing_pending uuid;
   v_opp_user_ids uuid[];
   v_mention_ids text[];
-  v_webhook text;
   v_link text;
 begin
   if v_uid is null then raise exception 'not authenticated'; end if;
@@ -91,28 +90,25 @@ begin
     exception when others then null;
     end;
 
-    -- Discord 個人メンション (#ランクマ通知)
+    -- Discord 個人メンション (#ランクマ通知、30分後に自動削除 — discord_notify_cleanup.sql)
     begin
-      select value into v_webhook from app_settings where key = 'discord_ranked_webhook';
-      if v_webhook is not null then
-        select array_agg(provider_id) into v_mention_ids
-        from auth.identities
-        where provider = 'discord' and user_id = any(v_opp_user_ids) and provider_id ~ '^\d+$';
+      select array_agg(provider_id) into v_mention_ids
+      from auth.identities
+      where provider = 'discord' and user_id = any(v_opp_user_ids) and provider_id ~ '^\d+$';
 
-        perform net.http_post(url := v_webhook, body := jsonb_build_object(
-          'content',
-            coalesce((select string_agg('<@' || x || '>', ' ') from unnest(v_mention_ids) as x), '')
-            || E'\n📋 **試合結果が報告されました。内容を確認してください (20分経過で自動確定)**',
-          'allowed_mentions', jsonb_build_object('parse', jsonb_build_array(), 'users', coalesce(to_jsonb(v_mention_ids), '[]'::jsonb)),
-          'embeds', jsonb_build_array(jsonb_build_object(
-            'title', '📋 結果報告の確認',
-            'url', 'https://ascent-esports.com' || v_link,
-            'color', 16758528,
-            'footer', jsonb_build_object('text', 'ASCENT · Ranked'),
-            'timestamp', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-          ))
-        ));
-      end if;
+      perform _discord_post_tracked('discord_ranked_webhook', jsonb_build_object(
+        'content',
+          coalesce((select string_agg('<@' || x || '>', ' ') from unnest(v_mention_ids) as x), '')
+          || E'\n📋 **試合結果が報告されました。内容を確認してください (20分経過で自動確定)**',
+        'allowed_mentions', jsonb_build_object('parse', jsonb_build_array(), 'users', coalesce(to_jsonb(v_mention_ids), '[]'::jsonb)),
+        'embeds', jsonb_build_array(jsonb_build_object(
+          'title', '📋 結果報告の確認',
+          'url', 'https://ascent-esports.com' || v_link,
+          'color', 16758528,
+          'footer', jsonb_build_object('text', 'ASCENT · Ranked'),
+          'timestamp', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+        ))
+      ), 30);
     exception when others then null;
     end;
   end if;

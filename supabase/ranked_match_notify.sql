@@ -19,7 +19,6 @@ AS $$
 DECLARE
   v_user_ids uuid[];
   v_mention_ids text[];
-  v_webhook text;
   v_link text;
 BEGIN
   IF NEW.queue_type <> 'ranked' OR NEW.status <> 'banpick' THEN RETURN NEW; END IF;
@@ -42,28 +41,25 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
 
-  -- Discord 個人メンション (#ランクマ通知)
+  -- Discord 個人メンション (#ランクマ通知、30分後に自動削除 — discord_notify_cleanup.sql)
   BEGIN
-    SELECT value INTO v_webhook FROM app_settings WHERE key = 'discord_ranked_webhook';
-    IF v_webhook IS NOT NULL THEN
-      SELECT array_agg(provider_id) INTO v_mention_ids
-      FROM auth.identities
-      WHERE provider = 'discord' AND user_id = ANY(v_user_ids) AND provider_id ~ '^\d+$';
+    SELECT array_agg(provider_id) INTO v_mention_ids
+    FROM auth.identities
+    WHERE provider = 'discord' AND user_id = ANY(v_user_ids) AND provider_id ~ '^\d+$';
 
-      PERFORM net.http_post(url := v_webhook, body := jsonb_build_object(
-        'content',
-          coalesce((SELECT string_agg('<@' || x || '>', ' ') FROM unnest(v_mention_ids) AS x), '')
-          || E'\n⚔️ **ランクマッチが成立しました！BAN/PICKを開始してください**',
-        'allowed_mentions', jsonb_build_object('parse', jsonb_build_array(), 'users', coalesce(to_jsonb(v_mention_ids), '[]'::jsonb)),
-        'embeds', jsonb_build_array(jsonb_build_object(
-          'title', '⚔️ マッチ成立 — BAN/PICKへ',
-          'url', 'https://ascent-esports.com' || v_link,
-          'color', 65535,
-          'footer', jsonb_build_object('text', 'ASCENT · Ranked'),
-          'timestamp', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-        ))
-      ));
-    END IF;
+    PERFORM _discord_post_tracked('discord_ranked_webhook', jsonb_build_object(
+      'content',
+        coalesce((SELECT string_agg('<@' || x || '>', ' ') FROM unnest(v_mention_ids) AS x), '')
+        || E'\n⚔️ **ランクマッチが成立しました！BAN/PICKを開始してください**',
+      'allowed_mentions', jsonb_build_object('parse', jsonb_build_array(), 'users', coalesce(to_jsonb(v_mention_ids), '[]'::jsonb)),
+      'embeds', jsonb_build_array(jsonb_build_object(
+        'title', '⚔️ マッチ成立 — BAN/PICKへ',
+        'url', 'https://ascent-esports.com' || v_link,
+        'color', 65535,
+        'footer', jsonb_build_object('text', 'ASCENT · Ranked'),
+        'timestamp', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+      ))
+    ), 30);
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
 
