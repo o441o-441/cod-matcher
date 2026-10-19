@@ -473,7 +473,7 @@ export default function ReportPage() {
         console.error("rating fetch error:", e);
       }
     })();
-  }, [match?.status, match?.approval_status, myUserId, myMember]);
+  }, [match?.status, match?.approval_status, myUserId, myMember, matchId]);
 
   // Fire win streak celebration when match completes with a win
   const winStreakFiredRef = useRef(false);
