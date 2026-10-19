@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import ConfirmDialog from '@/components/ConfirmDialog'
-import { cleanMonotonic, segmentsFromSamples, swapRotations, swapSamples, type Rotation, type TimelineSample } from '@/lib/hpTimeline'
+import { cleanMonotonic, hillNoOf, segmentsFromSamples, swapRotations, swapSamples, type Rotation, type TimelineSample } from '@/lib/hpTimeline'
 import { StatTable, thStyle, thLeft, tdStyle, tdLeft, heatBg, relT, fmtDur } from '@/components/scrimStatsUtils'
 
 // ============================================================
@@ -148,19 +148,21 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
   const myName = mySide === 'guest' ? guestName : hostName
   const oppName = mySide === 'guest' ? hostName : guestName
 
-  // 何ポイント目ごとの集計 (全HPゲーム横断)
+  // ポイント (ヒル番号) ごとの集計 (全HPゲーム横断)。
+  // ヒルはマップごとの数でループするため、通算5本目はP1として畳み込む
   const agg = useMemo(() => {
     const m = new Map<number, { n: number; host: number; guest: number; wins: number }>()
     for (const g of withData) {
       for (const r of rows[g.id].rotations) {
-        const a = m.get(r.no) ?? { n: 0, host: 0, guest: 0, wins: 0 }
+        const hill = hillNoOf(r.no, g.map)
+        const a = m.get(hill) ?? { n: 0, host: 0, guest: 0, wins: 0 }
         a.n += 1
         a.host += r.host_sec
         a.guest += r.guest_sec
         const my = mySide === 'guest' ? r.guest_sec : r.host_sec
         const opp = mySide === 'guest' ? r.host_sec : r.guest_sec
         if (my > opp) a.wins += 1
-        m.set(r.no, a)
+        m.set(hill, a)
       }
     }
     return [...m.entries()].sort((a, b) => a[0] - b[0]).map(([no, a]) => {
@@ -240,10 +242,11 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
               {row.rotations.map(r => {
                 const w = ((r.end_t - r.start_t) / Math.max(1, total)) * 100
                 const lead = r.host_sec - r.guest_sec
+                const hill = hillNoOf(r.no, g.map)
                 return (
-                  <div key={r.no} title={`${r.no}ポイント目: ${hostName} ${Math.round(r.host_sec)}秒 / ${guestName} ${Math.round(r.guest_sec)}秒`}
+                  <div key={r.no} title={`P${hill} (通算${r.no}本目): ${hostName} ${Math.round(r.host_sec)}秒 / ${guestName} ${Math.round(r.guest_sec)}秒`}
                     style={{ width: `${w}%`, minWidth: 0, textAlign: 'center', fontSize: 9.5, padding: '2px 0', borderRight: '1px solid var(--line)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                    <span className="dim">#{r.no}</span>{' '}
+                    <span className="dim">P{hill}</span>{' '}
                     <span className="mono" style={{ color: lead > 3 ? HOST_C : lead < -3 ? GUEST_C : undefined }}>
                       {Math.round(r.host_sec)}-{Math.round(r.guest_sec)}
                     </span>
@@ -267,7 +270,7 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
       }>
         {agg.map(a => (
           <tr key={a.no} style={{ borderBottom: '1px solid var(--line)' }}>
-            <td style={tdLeft}>{a.no}ポイント目</td>
+            <td style={tdLeft}>P{a.no}</td>
             <td style={{ ...tdStyle, ...heatBg(relT(hostAvgs, a.avgHost)) }} className="mono">{fmtDur(a.avgHost)}</td>
             <td style={{ ...tdStyle, ...heatBg(relT(guestAvgs, a.avgGuest)) }} className="mono">{fmtDur(a.avgGuest)}</td>
             <td style={{ ...tdStyle, ...heatBg(relT(diffs, a.diff)) }} className="mono">
@@ -278,12 +281,12 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
       </StatTable>
       {worst && (worst.diff < 0 ? (
         <p style={{ fontSize: 12, margin: '8px 0 0' }}>
-          💡 改善候補: <strong>{worst.no}ポイント目</strong> — {myName} は {oppName} に平均 <strong style={{ color: 'var(--danger)' }}>{Math.abs(Math.round(worst.diff))}秒</strong> 下回っています。
+          💡 改善候補: <strong>P{worst.no}</strong> — {myName} は {oppName} に平均 <strong style={{ color: 'var(--danger)' }}>{Math.abs(Math.round(worst.diff))}秒</strong> 下回っています。
           このポイントへの寄り方・リスポーン管理を見直すとスコアが伸びやすくなります。
         </p>
       ) : (
         <p style={{ fontSize: 12, margin: '8px 0 0' }}>
-          💡 すべてのポイントで {myName} が保持時間で上回っています。最も差が小さいのは <strong>{worst.no}ポイント目</strong> (平均 +{Math.round(worst.diff)}秒) です。
+          💡 すべてのポイントで {myName} が保持時間で上回っています。最も差が小さいのは <strong>P{worst.no}</strong> (平均 +{Math.round(worst.diff)}秒) です。
         </p>
       ))}
       {err && <p style={{ color: 'var(--danger)', fontSize: 12, margin: '8px 0 0' }}>{err}</p>}
