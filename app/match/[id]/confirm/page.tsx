@@ -879,15 +879,6 @@ export default function MatchConfirmPage() {
         </div>
       </div>
 
-      {/* Lobby tutorial image */}
-      <div className="section card-strong">
-        <h2 style={{ marginTop: 0 }}>ロビー画面の見方</h2>
-        <img
-          src="/tutorial.png"
-          alt="プライベートマッチロビーの見方 - ロビーコード、チーム1、チーム2の位置"
-          style={{ width: "100%", borderRadius: "var(--r-md)", border: "1px solid var(--line)", marginTop: 12 }}
-        />
-      </div>
     </main>
   );
 }
