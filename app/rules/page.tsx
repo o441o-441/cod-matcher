@@ -36,11 +36,6 @@ export default function RulesPage() {
               <li>試合開始</li>
             </ol>
           </div>
-          <img
-            src="/tutorial.png"
-            alt="プライベートマッチロビーの見方 - ロビーコード、チーム1、チーム2の位置"
-            style={{ width: '100%', borderRadius: 'var(--r-lg)', marginTop: 16 }}
-          />
         </div>
       </div>
 
