@@ -89,18 +89,34 @@ function ScoreLineChart({ row }: { row: TimelineRow }) {
     pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ')
   const gridVals: number[] = []
   for (let v = 50; v < maxV; v += 50) gridVals.push(v)
+  const CHART_PX = 220 // 表示高さ (px)
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
-      style={{ width: '100%', height: 110, display: 'block', borderRadius: 4, background: 'rgba(0,0,0,0.25)', marginTop: 4 }}>
+    <div style={{ position: 'relative', marginTop: 4 }}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+        style={{ width: '100%', height: CHART_PX, display: 'block', borderRadius: 4, background: 'rgba(0,0,0,0.25)' }}>
+        {gridVals.map(v => (
+          <line key={v} x1={0} x2={W} y1={y(v)} y2={y(v)} stroke="rgba(255,255,255,0.08)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        ))}
+        {rots.slice(1).map(r => (
+          <line key={r.no} x1={x(r.start_t)} x2={x(r.start_t)} y1={0} y2={H} stroke="rgba(255,255,255,0.35)" strokeWidth={1} strokeDasharray="2,3" vectorEffect="non-scaling-stroke" />
+        ))}
+        {hostPts.length >= 2 && <path d={path(hostPts)} fill="none" stroke={HOST_C} strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+        {guestPts.length >= 2 && <path d={path(guestPts)} fill="none" stroke={GUEST_C} strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+      </svg>
+      {/* Y軸ラベル (SVGはpreserveAspectRatio=noneで文字が歪むためHTMLで重ねる) */}
       {gridVals.map(v => (
-        <line key={v} x1={0} x2={W} y1={y(v)} y2={y(v)} stroke="rgba(255,255,255,0.08)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <span key={v} className="mono" aria-hidden style={{
+          position: 'absolute',
+          left: 4,
+          top: `${(y(v) / H) * 100}%`,
+          transform: 'translateY(-55%)',
+          fontSize: 9.5,
+          color: 'rgba(255,255,255,0.45)',
+          textShadow: '0 0 3px rgba(0,0,0,0.9)',
+          pointerEvents: 'none',
+        }}>{v}</span>
       ))}
-      {rots.slice(1).map(r => (
-        <line key={r.no} x1={x(r.start_t)} x2={x(r.start_t)} y1={0} y2={H} stroke="rgba(255,255,255,0.35)" strokeWidth={1} strokeDasharray="2,3" vectorEffect="non-scaling-stroke" />
-      ))}
-      {hostPts.length >= 2 && <path d={path(hostPts)} fill="none" stroke={HOST_C} strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
-      {guestPts.length >= 2 && <path d={path(guestPts)} fill="none" stroke={GUEST_C} strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
-    </svg>
+    </div>
   )
 }
 
@@ -159,6 +175,8 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
   if (withData.length === 0) return null
 
   const diffs = agg.map(a => a.diff)
+  const hostAvgs = agg.map(a => a.avgHost)
+  const guestAvgs = agg.map(a => a.avgGuest)
   const byDiff = [...agg].sort((a, b) => a.diff - b.diff)
   const worst = byDiff.find(a => a.n >= 2) ?? byDiff[0]
 
@@ -253,8 +271,8 @@ export default function HpTimelinePanel({ games, hostName, guestName, mySide, ca
           <tr key={a.no} style={{ borderBottom: '1px solid var(--line)' }}>
             <td style={tdLeft}>{a.no}ポイント目</td>
             <td style={{ ...tdStyle }} className="mono">{a.n}</td>
-            <td style={{ ...tdStyle }} className="mono">{fmtDur(a.avgHost)}</td>
-            <td style={{ ...tdStyle }} className="mono">{fmtDur(a.avgGuest)}</td>
+            <td style={{ ...tdStyle, ...heatBg(relT(hostAvgs, a.avgHost)) }} className="mono">{fmtDur(a.avgHost)}</td>
+            <td style={{ ...tdStyle, ...heatBg(relT(guestAvgs, a.avgGuest)) }} className="mono">{fmtDur(a.avgGuest)}</td>
             <td style={{ ...tdStyle, ...heatBg(relT(diffs, a.diff)) }} className="mono">
               {a.diff > 0 ? '+' : ''}{Math.round(a.diff)}秒
             </td>
