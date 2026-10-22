@@ -54,7 +54,7 @@ $$;
 
 -- ------------------------------------------------------------
 -- Discord ID からの参加キャンセル (service_role 専用)
--- ホストが抜けた場合は既存仕様どおりロビーが終了する
+-- ホストが抜けた場合は残メンバーへホストを引き継ぐ (eights_rematch.sql 参照)
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.rpc_discord_eights_leave(p_discord_id text, p_lobby_id uuid)
 RETURNS json

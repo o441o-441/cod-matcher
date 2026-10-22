@@ -3,6 +3,7 @@
 //
 // DB (pg_net) から呼ばれるサーバー間専用。kind で種別を切替:
 //   kind: 'lobby' (既定) — 開催告知。「参加する」+ ロール選択ボタン付き
+//   kind: 'reopen'       — 続行再募集。残メンバーを保持したまま不足枠を募集
 //   kind: 'teams'        — チーム編成確定。ALPHA/BRAVO の編成表 + 全員メンション
 //
 // 必要な secrets:
@@ -34,6 +35,7 @@ Deno.serve(async (req) => {
       kind?: string
       lobby_id?: string; title?: string; host_name?: string
       rate_label?: string; when_label?: string; mention_ids?: string[]
+      member_count?: number
       alpha?: TeamMember[]; bravo?: TeamMember[]
       alpha_avg?: number; bravo_avg?: number
     } | null
@@ -80,17 +82,21 @@ Deno.serve(async (req) => {
       return json(200, { ok: true })
     }
 
-    // ---- 開催告知 (既定) ----
+    // ---- 開催告知 (既定) / 続行再募集 (kind: 'reopen') ----
+    const isReopen = body.kind === 'reopen'
+    const memberCount = typeof body.member_count === 'number' ? body.member_count : 1
     const embed = {
-      title: `⚡ 8s 開催: ${body.title}`,
-      description: '8人カスタムマッチのロビーが作成されました。下のボタンからワンタップで参加・ロール選択ができます！',
+      title: isReopen ? `🔁 8s 再募集: ${body.title}` : `⚡ 8s 開催: ${body.title}`,
+      description: isReopen
+        ? `試合を終えたロビーが続行メンバーを保持したまま再募集中！残り${Math.max(0, 8 - memberCount)}枠です。下のボタンからワンタップで参加できます！`
+        : '8人カスタムマッチのロビーが作成されました。下のボタンからワンタップで参加・ロール選択ができます！',
       url: lobbyUrl,
       color: 65535,
       fields: [
         { name: '開催', value: body.when_label ?? '今すぐ', inline: true },
         { name: 'ホスト', value: body.host_name ?? '不明', inline: true },
         { name: 'レート制限', value: body.rate_label ?? 'なし', inline: true },
-        { name: '参加状況', value: '1 / 8', inline: true },
+        { name: '参加状況', value: `${memberCount} / 8`, inline: true },
       ],
       footer: { text: 'ASCENT · 8s Lobby' },
       timestamp: new Date().toISOString(),

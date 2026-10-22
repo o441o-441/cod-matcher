@@ -94,9 +94,34 @@ export default function EightsLobbyPage() {
   }
 
   const leaveLobby = async () => {
+    if (isHost && members.length > 1 && !confirm('あなたはホストです。退出するとホスト権限は残りのメンバー（最古参）に引き継がれます。退出しますか？')) return
     const { error } = await supabase.rpc('rpc_eights_leave_lobby', { p_lobby_id: lobbyId })
     if (error) { showToast(error.message, 'error'); return }
     router.push('/custom')
+  }
+
+  // ロビー解散 (ホストのみ)
+  const closeLobby = async () => {
+    if (!confirm('ロビーを解散します。メンバー全員が退出扱いになります。よろしいですか？')) return
+    const { error } = await supabase.rpc('rpc_eights_close_lobby', { p_lobby_id: lobbyId })
+    if (error) { showToast(error.message, 'error'); return }
+    router.push('/custom')
+  }
+
+  // 続行再募集: 残っているメンバーを保持したまま不足分を募集し直す (ホストのみ)
+  const reopenLobby = async () => {
+    const leavers = 8 - members.length
+    const msg = leavers > 0
+      ? `残っている${members.length}人を保持したまま、不足${leavers}枠の参加者を再募集します。よろしいですか？`
+      : '8人全員が残っています。振り分けをリセットして募集状態に戻します（通知は送信されません）。よろしいですか？'
+    if (!confirm(msg)) return
+    setBusy(true)
+    const { data, error } = await supabase.rpc('rpc_eights_reopen_lobby', { p_lobby_id: lobbyId })
+    setBusy(false)
+    if (error) { showToast(error.message, 'error'); return }
+    const slots = (data as { slots?: number } | null)?.slots ?? 0
+    showToast(slots > 0 ? `再募集を開始しました（残り${slots}枠を通知済み）` : '募集状態に戻しました', 'success')
+    void loadData()
   }
 
   const autoAssign = async (mode: string) => {
@@ -244,6 +269,7 @@ export default function EightsLobbyPage() {
           <span className="badge"><span className="badge-dot" />{members.length}/8</span>
           {lobby.rate_cap ? <span className="badge amber">≤ {lobby.rate_cap}</span> : <span className="badge" style={{ fontSize: 9 }}>制限なし</span>}
           <button className="btn-ghost btn-sm" onClick={leaveLobby}>退出</button>
+          {isHost && <button className="btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={closeLobby}>解散</button>}
         </div>
       </div>
 
@@ -331,10 +357,16 @@ export default function EightsLobbyPage() {
                   style={{ fontSize: 13, fontWeight: 700, background: 'rgba(0,245,160,0.14)', border: '1px solid rgba(0,245,160,0.4)', color: 'var(--success)' }}>
                   📣 この編成をDiscordに送信
                 </button>
+                <button
+                  onClick={() => void reopenLobby()}
+                  disabled={busy}
+                  style={{ fontSize: 13, fontWeight: 700, background: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.35)', color: 'var(--cyan)' }}>
+                  🔁 メンバー再募集
+                </button>
               </div>
             )}
           </div>
-          {isHost && <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>ドラッグ&ドロップ、またはタップで選択→移動先チームをタップしてプレイヤーを移動できます。編成が決まったら「この編成をDiscordに送信」でメンバー全員に共有できます。</p>}
+          {isHost && <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>ドラッグ&ドロップ、またはタップで選択→移動先チームをタップしてプレイヤーを移動できます。編成が決まったら「この編成をDiscordに送信」でメンバー全員に共有できます。試合後に続ける場合は、抜ける人に退出してもらってから「メンバー再募集」で残るメンバーを保持したまま不足分を募集できます。</p>}
 
           {/* Balance meter */}
           <div className="card" style={{ padding: '14px 18px', marginBottom: 16 }}>
@@ -374,6 +406,7 @@ export default function EightsLobbyPage() {
           </div>
           <div className="stack-sm" style={{ fontSize: 12.5 }}>
             <div className="muted">・8人そろったらホストがチームを振り分け（ランダム / レート+ロール考慮）。レート変動はありません</div>
+            <div className="muted">・試合後に続ける場合は、抜ける人が「退出」→ ホストが「メンバー再募集」で残るメンバーを保持したまま不足分を募集できます（ホストが退出してもロビーは残り、ホスト権限は引き継がれます）</div>
             <div className="muted">・武器ロール（AR / SMG / FLEX）は各自で選択してください</div>
             <div className="muted">・使用武器・アタッチメント・パークなどはGA（紳士協定）準拠。チート・コンバーター使用禁止</div>
             <div className="muted">・暴言・煽り行為禁止。違反があれば通報機能から報告してください</div>
