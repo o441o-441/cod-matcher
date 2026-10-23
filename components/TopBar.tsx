@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useFeatureReleases, isNewlyReleased, type FeatureKey } from '@/lib/featureReleases'
 
 type ProfileData = {
   display_name: string | null
@@ -21,6 +22,13 @@ const NAV_LINKS = [
   { id: '/mypage', label: 'MY PAGE', auth: true },
 ]
 
+// 公開から5日間、ナビに NEW バッジを出す対象 (ナビ先 → 機能キー)
+const NAV_FEATURES: Record<string, FeatureKey[]> = {
+  '/match': ['ranked'],
+  '/custom': ['8s', 'scrim'],
+  '/tournaments': ['tournament'],
+}
+
 export default function TopBar({
   onOpenFriends,
   friendsOpen,
@@ -35,6 +43,24 @@ export default function TopBar({
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [signedIn, setSignedIn] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const fr = useFeatureReleases()
+
+  // 公開から5日以内の機能を含むナビ項目に NEW を付ける
+  const navIsNew = (id: string) =>
+    !!fr && (NAV_FEATURES[id] ?? []).some((k) => isNewlyReleased(fr, k))
+
+  const renderNewBadge = () => (
+    <span
+      aria-label="新機能公開中"
+      style={{
+        marginLeft: 5, fontSize: 8, fontWeight: 800, letterSpacing: '0.08em',
+        color: '#05080e', background: 'var(--amber)', borderRadius: 4,
+        padding: '1px 4px', verticalAlign: 'middle',
+      }}
+    >
+      NEW
+    </span>
+  )
 
   useEffect(() => {
     const load = async () => {
@@ -120,6 +146,7 @@ export default function TopBar({
               aria-current={isActive(l.id) ? 'page' : undefined}
             >
               {l.label}
+              {navIsNew(l.id) && renderNewBadge()}
             </button>
           ))}
         </nav>

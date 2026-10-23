@@ -10,6 +10,7 @@ import WinStreakHost from './WinStreakCelebration'
 import QueueStatusBar from './QueueStatusBar'
 import DiscordGuildGate from './DiscordGuildGate'
 import SiteLockGate from './SiteLockGate'
+import FeatureGate from './FeatureGate'
 
 const HIDE_SHELL_ROUTES = ['/auth/callback', '/onboarding']
 
@@ -102,6 +103,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <QueueStatusBar />
       {uid && <DiscordGuildGate uid={uid} />}
       <SiteLockGate />
+      <FeatureGate />
     </div>
   )
 }

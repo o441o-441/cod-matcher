@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import LivePanel from '@/components/LivePanel'
+import { FeatureLockCard } from '@/components/FeatureGate'
+import { useFeatureReleases, isReleased, isNewlyReleased, releaseLabel, type FeatureKey } from '@/lib/featureReleases'
 
 type LobbyRow = {
   id: string; title: string; host_user_id: string; status: string
@@ -40,6 +42,17 @@ export default function CustomPage() {
   const [schedTime, setSchedTime] = useState('22:00')
   const [showCreate, setShowCreate] = useState(false)
   const [myLobbyId, setMyLobbyId] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  // 段階公開: 8s は 10/24 12:00、交流戦ボードは 11/6 19:00 (管理者は公開前も利用可)
+  const fr = useFeatureReleases()
+  const featureLocked = (key: FeatureKey) => !!fr && !isReleased(fr, key) && !isAdmin
+  const featureCaption = (key: FeatureKey) => {
+    if (!fr) return null
+    if (!isReleased(fr, key)) return <span className="badge" style={{ marginTop: 8 }}>🔒 {releaseLabel(fr, key)} 公開</span>
+    if (isNewlyReleased(fr, key)) return <span className="badge amber" style={{ marginTop: 8, fontWeight: 800 }}><span className="badge-dot" />NEW 公開中</span>
+    return null
+  }
 
   // 8s 通知設定 (オプトイン)
   const [showNotify, setShowNotify] = useState(false)
@@ -59,6 +72,8 @@ export default function CustomPage() {
 
     // Check if user is already in an active lobby
     if (uid) {
+      const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', uid).maybeSingle()
+      setIsAdmin(!!(prof as { is_admin?: boolean } | null)?.is_admin)
       const [{ data: myMembership }, { data: prefs }] = await Promise.all([
         supabase
           .from('eights_lobby_members')
@@ -195,11 +210,13 @@ export default function CustomPage() {
           style={{ textAlign: 'center', padding: 24, cursor: 'pointer', border: tab === '8s' ? '2px solid var(--cyan)' : undefined }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 900, letterSpacing: '-0.02em' }}>8s</div>
           <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>8人カスタム / 即席ロビー</p>
+          {featureCaption('8s')}
         </button>
         <button type="button" className="card" onClick={() => setTab('scrim')}
           style={{ textAlign: 'center', padding: 24, cursor: 'pointer', border: tab === 'scrim' ? '2px solid var(--magenta)' : undefined }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 900, letterSpacing: '-0.02em' }}>SCRIM</div>
           <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>チーム vs チーム / 交流戦ボード</p>
+          {featureCaption('scrim')}
         </button>
         <button type="button" className="card" onClick={() => setTab('rules')}
           style={{ textAlign: 'center', padding: 24, cursor: 'pointer', border: tab === 'rules' ? '2px solid var(--violet)' : undefined }}>
@@ -209,7 +226,8 @@ export default function CustomPage() {
       </div>
 
       {/* 8s Tab */}
-      {tab === '8s' && (
+      {tab === '8s' && featureLocked('8s') && <FeatureLockCard featureKey="8s" />}
+      {tab === '8s' && !featureLocked('8s') && (
         <div className="section">
           <div className="row" style={{ justifyContent: 'space-between', marginBottom: 16 }}>
             <h2 style={{ margin: 0 }}>開催中の 8s ロビー</h2>
@@ -390,7 +408,8 @@ export default function CustomPage() {
       )}
 
       {/* Scrim Tab (交流戦ボード) */}
-      {tab === 'scrim' && (
+      {tab === 'scrim' && featureLocked('scrim') && <FeatureLockCard featureKey="scrim" />}
+      {tab === 'scrim' && !featureLocked('scrim') && (
         <div className="section">
           <h2>交流戦ボード</h2>
           <p className="muted">1週間分のチームの空き時間を出し合い、ボードから相手チームを選んでその場で対戦を確定します。成立すると両チームの Discord に通知されます。</p>

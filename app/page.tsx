@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import { usePageView } from '@/lib/usePageView'
 import LivePanel from '@/components/LivePanel'
+import { useFeatureReleases, isReleased, isNewlyReleased, releaseLabel, type FeatureKey } from '@/lib/featureReleases'
 
 type TourneyRow = { id: string; title: string; format: string; status: string }
 type AnnouncementRow = { id: string; title: string; created_at: string }
@@ -30,9 +31,15 @@ const MODES = [
     icon: <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true"><path d="M7 4h10v5a5 5 0 01-10 0V4zM5 5H3v2a3 3 0 003 3M19 5h2v2a3 3 0 01-3 3M9 19h6M12 14v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg> },
 ]
 
+// モードカード → 段階公開の機能キー
+const MODE_FEATURE: Record<string, FeatureKey> = {
+  ranked: 'ranked', eights: '8s', scrim: 'scrim', tournament: 'tournament',
+}
+
 export default function HomePage() {
   const router = useRouter()
   const { showToast } = useToast()
+  const fr = useFeatureReleases()
   const [signedIn, setSignedIn] = useState(false)
   const [loading, setLoading] = useState(true)
   const [displayName, setDisplayName] = useState<string | null>(null)
@@ -114,9 +121,35 @@ export default function HomePage() {
 
       {/* 4 Mode Cards */}
       <section className="grid-2" style={{ gap: 14, marginBottom: 18 }}>
-        {MODES.map(m => (
-          <button key={m.id} type="button" className="mode-card" onClick={() => m.id === 'tournament' ? router.push(m.href) : go(m.href)}
-            style={{ border: `1px solid ${m.border}`, background: `linear-gradient(160deg, ${m.soft}, rgba(10,14,32,0.72) 60%, rgba(10,14,32,0.92))` }}>
+        {MODES.map(m => {
+          const fkey = MODE_FEATURE[m.id]
+          const locked = !!fr && !isReleased(fr, fkey)
+          const isNew = !!fr && isNewlyReleased(fr, fkey)
+          const handleClick = () => {
+            if (locked) { showToast(`${m.sub}は ${releaseLabel(fr!, fkey)} に公開予定です`, 'info'); return }
+            if (m.id === 'tournament') { router.push(m.href); return }
+            go(m.href)
+          }
+          return (
+          <button key={m.id} type="button" className="mode-card" onClick={handleClick}
+            style={{
+              border: isNew ? `2px solid ${m.color}` : `1px solid ${m.border}`,
+              background: `linear-gradient(160deg, ${m.soft}, rgba(10,14,32,0.72) 60%, rgba(10,14,32,0.92))`,
+              boxShadow: isNew ? `0 0 28px ${m.soft}` : undefined,
+              opacity: locked ? 0.6 : 1,
+              position: 'relative',
+            }}>
+            {/* 公開から5日間の NEW リボン / 公開前のロック表示 */}
+            {isNew && (
+              <span className="badge" style={{ position: 'absolute', top: 12, right: 12, background: m.color, color: '#05080e', fontWeight: 800, border: 'none' }}>
+                <span className="badge-dot" style={{ background: '#05080e' }} />NEW 公開中
+              </span>
+            )}
+            {locked && (
+              <span className="badge" style={{ position: 'absolute', top: 12, right: 12 }}>
+                🔒 {releaseLabel(fr!, fkey)} 公開
+              </span>
+            )}
             <span className="glyph" aria-hidden="true" style={{ color: m.color }}>{m.glyph}</span>
             <div className="row" style={{ gap: 12, position: 'relative' }}>
               <div className="mode-icon" style={{ color: m.color, borderColor: m.border, boxShadow: `0 0 16px ${m.soft}` }}>{m.icon}</div>
@@ -125,9 +158,12 @@ export default function HomePage() {
             <div className="mode-headline">{m.headline}</div>
             <p className="mode-desc">{m.desc}</p>
             <div className="mode-bullets">{m.bullets.map(b => <span key={b}>{b}</span>)}</div>
-            {signedIn && <div className="mode-cta" style={{ color: m.color }}><span>{m.cta}</span><span style={{ fontSize: 14 }}>›</span></div>}
+            {locked
+              ? <div className="mode-cta muted"><span>COMING SOON</span></div>
+              : signedIn && <div className="mode-cta" style={{ color: m.color }}><span>{isNew ? `${m.cta} — 公開中！` : m.cta}</span><span style={{ fontSize: 14 }}>›</span></div>}
           </button>
-        ))}
+          )
+        })}
       </section>
 
       {/* Bottom: Tournament strip (logged out) or 3-col feed (logged in) */}
