@@ -190,6 +190,13 @@ BEGIN
     NULL;
   END;
 
+  -- 外部Discordサーバーへの @everyone 告知 (eights_promo_webhook.sql。クールダウンは作成時と共有)
+  BEGIN
+    PERFORM _eights_promo_post(p_lobby_id, v_lobby.title, v_host_name, v_rate_label, '今すぐ', v_cnt);
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
   RETURN json_build_object('ok', true, 'member_count', v_cnt, 'slots', v_slots);
 END;
 $$;

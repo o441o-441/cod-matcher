@@ -274,6 +274,13 @@ BEGIN
     NULL;
   END;
 
+  -- 外部Discordサーバーへの @everyone 告知 (eights_promo_webhook.sql。未設定ならスキップ)
+  BEGIN
+    PERFORM _eights_promo_post(v_lid, trim(p_title), v_host_name, v_rate_label, v_when_label, 1);
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
   RETURN json_build_object('ok', true, 'lobby_id', v_lid);
 END;
 $$;
