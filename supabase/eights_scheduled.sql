@@ -62,9 +62,9 @@ BEGIN
     EXCEPTION WHEN OTHERS THEN NULL;
     END;
 
-    -- Discord 個人メンション
+    -- Discord 個人メンション (非公開ロビーは公開チャンネルへ出さない)
     BEGIN
-      IF v_webhook_url IS NOT NULL THEN
+      IF v_webhook_url IS NOT NULL AND NOT l.is_private THEN
         SELECT string_agg('<@' || t.provider_id || '>', ' '), jsonb_agg(t.provider_id)
         INTO v_mention_text, v_mention_ids
         FROM (

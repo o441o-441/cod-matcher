@@ -11,6 +11,12 @@ type Member = {
   weapon_role: string; team_side: string | null
 }
 
+// 未参加者が非公開ロビーのURLを踏んだとき用の最小情報 (rpc_eights_lobby_preview)
+type LobbyPreview = {
+  title: string; status: string; rate_cap: number | null; scheduled_at: string | null
+  is_private: boolean; host_name: string; member_count: number
+}
+
 const ROLE_COLOR: Record<string, string> = { AR: 'var(--cyan)', SMG: 'var(--magenta)', FLEX: 'var(--violet)' }
 
 // 開催時刻の表示 (例: 10/12 22:00)
@@ -26,7 +32,8 @@ export default function EightsLobbyPage() {
   const lobbyId = typeof params.id === 'string' ? params.id : null
 
   const [loading, setLoading] = useState(true)
-  const [lobby, setLobby] = useState<{ title: string; host_user_id: string; status: string; rate_cap: number | null; scheduled_at: string | null } | null>(null)
+  const [lobby, setLobby] = useState<{ title: string; host_user_id: string; status: string; rate_cap: number | null; scheduled_at: string | null; is_private: boolean } | null>(null)
+  const [preview, setPreview] = useState<LobbyPreview | null>(null)
   const [schedFuture, setSchedFuture] = useState(false) // 開催時刻が未来か (読込時に判定)
   const [members, setMembers] = useState<Member[]>([])
   const [myUserId, setMyUserId] = useState<string | null>(null)
@@ -35,6 +42,7 @@ export default function EightsLobbyPage() {
   const [isAdmin, setIsAdmin] = useState(false)
 
   const isHost = myUserId === lobby?.host_user_id
+  const isMember = myUserId != null && members.some(m => m.user_id === myUserId)
   const isDrafting = lobby?.status === 'drafting'
   const alphaTeam = members.filter(m => m.team_side === 'alpha')
   const bravoTeam = members.filter(m => m.team_side === 'bravo')
@@ -50,9 +58,21 @@ export default function EightsLobbyPage() {
     }
 
     const [{ data: l }, { data: mData }] = await Promise.all([
-      supabase.from('eights_lobbies').select('title, host_user_id, status, rate_cap, scheduled_at').eq('id', lobbyId).maybeSingle(),
+      supabase.from('eights_lobbies').select('title, host_user_id, status, rate_cap, scheduled_at, is_private').eq('id', lobbyId).maybeSingle(),
       supabase.from('eights_lobby_members').select('user_id, weapon_role, team_side').eq('lobby_id', lobbyId),
     ])
+
+    // 非公開ロビーは未参加者からSELECTできない (RLS)。
+    // URLを知っている人には最小プレビューを出し、参加はそこから行う
+    if (!l) {
+      const { data: pv } = await supabase.rpc('rpc_eights_lobby_preview', { p_lobby_id: lobbyId })
+      setPreview((pv as LobbyPreview | null) ?? null)
+      setLobby(null)
+      setMembers([])
+      setLoading(false)
+      return
+    }
+    setPreview(null)
     setLobby(l as typeof lobby)
     const sched = (l as { scheduled_at: string | null } | null)?.scheduled_at
     setSchedFuture(!!sched && new Date(sched).getTime() > Date.now())
@@ -86,6 +106,59 @@ export default function EightsLobbyPage() {
       .subscribe()
     return () => { void supabase.removeChannel(ch) }
   }, [lobbyId, loadData])
+
+  // 未参加者の参加 (一覧からの参加と同じRPC。招待URL経由でもここを通る)
+  const joinLobby = async () => {
+    if (!myUserId) { showToast('参加にはログインが必要です', 'error'); return }
+    setBusy(true)
+    const { error } = await supabase.rpc('rpc_eights_join_lobby', { p_lobby_id: lobbyId })
+    setBusy(false)
+    if (error) { showToast(error.message, 'error'); return }
+    void loadData()
+  }
+
+  // 非公開ロビーの全体公開 (ホストのみ)
+  const publishLobby = async () => {
+    if (!confirm('ロビーを全体に公開します。一覧に表示され、通常の開催と同じ募集通知（サイト内・Discord・Xなど）が送信されます。よろしいですか？')) return
+    setBusy(true)
+    const { error } = await supabase.rpc('rpc_eights_publish_lobby', { p_lobby_id: lobbyId })
+    setBusy(false)
+    if (error) { showToast(error.message, 'error'); return }
+    showToast('ロビーを公開し、募集通知を送信しました', 'success')
+    void loadData()
+  }
+
+  const copyInviteUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      showToast('招待URLをコピーしました', 'success')
+    } catch {
+      showToast('コピーできませんでした。アドレスバーのURLを共有してください', 'error')
+    }
+  }
+
+  // チーム編成をテキストでコピー (自前のDiscord等に貼って共有する用)
+  const copyTeams = async () => {
+    const alpha = members.filter(m => m.team_side === 'alpha')
+    const bravo = members.filter(m => m.team_side === 'bravo')
+    const avg = (team: Member[]) => team.length > 0 ? Math.round(team.reduce((s, m) => s + m.peak_rating, 0) / team.length) : 0
+    const lines = (team: Member[]) => team.map(m => `・${m.display_name}（${m.weapon_role}）`)
+    const text = [
+      `⚡ 8s チーム編成: ${lobby?.title ?? ''}`,
+      '',
+      `【ALPHA】PEAK平均 ${avg(alpha)}`,
+      ...lines(alpha),
+      '',
+      `【BRAVO】PEAK平均 ${avg(bravo)}`,
+      ...lines(bravo),
+    ].join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+      showToast('チーム編成をコピーしました', 'success')
+    } catch {
+      showToast('コピーできませんでした', 'error')
+    }
+  }
 
   const setRole = async (role: string) => {
     const { error } = await supabase.rpc('rpc_eights_set_role', { p_lobby_id: lobbyId, p_role: role })
@@ -157,7 +230,40 @@ export default function EightsLobbyPage() {
   }
 
   if (loading) return <main><LoadingSkeleton cards={2} /></main>
-  if (!lobby) return <main><p className="danger">ロビーが見つかりません</p></main>
+  if (!lobby) {
+    // 招待URLビュー: 非公開ロビーの未参加者向け最小情報 + 参加ボタン
+    if (preview) {
+      return (
+        <main>
+          <div className="eyebrow">CUSTOM / 8s</div>
+          <h1 className="display" style={{ fontSize: 'clamp(1.5rem, 3vw, 2.2rem)', marginTop: 8 }}>
+            <em>{preview.title}</em>
+          </h1>
+          <div className="card-strong" style={{ marginTop: 16, maxWidth: 560 }}>
+            {preview.is_private && (
+              <p style={{ margin: '0 0 10px', fontSize: 13.5, fontWeight: 700 }}>🔒 非公開ロビーに招待されています</p>
+            )}
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <span className="badge"><span className="badge-dot" />{preview.member_count}/8</span>
+              {preview.scheduled_at && <span className="badge violet">🕙 {fmtSchedule(preview.scheduled_at)} 開催</span>}
+              {preview.rate_cap ? <span className="badge amber">≤ {preview.rate_cap}</span> : <span className="badge" style={{ fontSize: 9 }}>制限なし</span>}
+            </div>
+            <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>ホスト: {preview.host_name}</p>
+            <div className="div" />
+            {preview.status === 'open' && preview.member_count < 8 ? (
+              <>
+                <button className="btn-primary" onClick={() => void joinLobby()} disabled={busy}>{busy ? '参加中...' : 'このロビーに参加する'}</button>
+                {!myUserId && <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>参加にはログインが必要です</p>}
+              </>
+            ) : (
+              <p className="muted" style={{ fontSize: 12, margin: 0 }}>このロビーは現在参加を受け付けていません（満員またはチーム振り分け中）</p>
+            )}
+          </div>
+        </main>
+      )
+    }
+    return <main><p className="danger">ロビーが見つかりません</p></main>
+  }
 
   const myRole = members.find(m => m.user_id === myUserId)?.weapon_role ?? 'FLEX'
   const avgPeak = members.length > 0 ? Math.round(members.reduce((s, m) => s + m.peak_rating, 0) / members.length) : 0
@@ -265,13 +371,43 @@ export default function EightsLobbyPage() {
           <em>{lobby.title}</em>
         </h1>
         <div className="row" style={{ gap: 8 }}>
+          {lobby.is_private && <span className="badge" style={{ fontSize: 9 }}>🔒 非公開</span>}
           {lobby.scheduled_at && <span className="badge violet">🕙 {fmtSchedule(lobby.scheduled_at)} 開催</span>}
           <span className="badge"><span className="badge-dot" />{members.length}/8</span>
           {lobby.rate_cap ? <span className="badge amber">≤ {lobby.rate_cap}</span> : <span className="badge" style={{ fontSize: 9 }}>制限なし</span>}
-          <button className="btn-ghost btn-sm" onClick={leaveLobby}>退出</button>
-          {isHost && <button className="btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={closeLobby}>解散</button>}
+          {isMember ? (
+            <>
+              <button className="btn-ghost btn-sm" onClick={leaveLobby}>退出</button>
+              {isHost && <button className="btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={closeLobby}>解散</button>}
+            </>
+          ) : (
+            lobby.status === 'open' && members.length < 8 && (
+              <button className="btn-primary btn-sm" onClick={() => void joinLobby()} disabled={busy}>参加する</button>
+            )
+          )}
         </div>
       </div>
+
+      {/* 非公開ロビー: 招待URLの共有と全体公開 (eights_private_lobbies.sql) */}
+      {lobby.is_private && isMember && (
+        <div className="card" style={{ borderColor: 'rgba(157,91,255,0.4)', background: 'rgba(157,91,255,0.08)', marginTop: 16, padding: '12px 16px' }}>
+          <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700 }}>🔒 非公開ロビー（静かに募集中）</p>
+              <p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>
+                通知は送信されていません。招待URLを知っている人だけが参加できます
+                {isHost ? '。メンバーが決まったら全体公開で残り枠を通常募集できます' : ''}
+              </p>
+            </div>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="btn-ghost btn-sm" onClick={() => void copyInviteUrl()}>🔗 招待URLをコピー</button>
+              {isHost && lobby.status === 'open' && (
+                <button className="btn-primary btn-sm" onClick={() => void publishLobby()} disabled={busy}>📣 全体に公開して通知</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 8人成立バナー: VC集合の案内 (予約開催なら開催時刻を表示) */}
       {members.length >= 8 && (
@@ -347,26 +483,36 @@ export default function EightsLobbyPage() {
         <div className="section">
           <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
             <h2 style={{ margin: 0 }}>チーム振り分け</h2>
-            {isHost && (
-              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-                <button className="btn-ghost" onClick={() => autoAssign('random')} disabled={busy}>ランダム振り分け</button>
-                <button className="btn-primary" onClick={() => autoAssign('considered')} disabled={busy}>考慮して振り分け</button>
-                <button
-                  onClick={() => void announceTeams()}
-                  disabled={busy || alphaTeam.length + bravoTeam.length < 8}
-                  style={{ fontSize: 13, fontWeight: 700, background: 'rgba(0,245,160,0.14)', border: '1px solid rgba(0,245,160,0.4)', color: 'var(--success)' }}>
-                  📣 この編成をDiscordに送信
-                </button>
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              {isHost && (
+                <>
+                  <button className="btn-ghost" onClick={() => autoAssign('random')} disabled={busy}>ランダム振り分け</button>
+                  <button className="btn-primary" onClick={() => autoAssign('considered')} disabled={busy}>考慮して振り分け</button>
+                  {/* 非公開ロビーは公開チャンネルに出せないため、コピーで共有する */}
+                  {!lobby.is_private && (
+                    <button
+                      onClick={() => void announceTeams()}
+                      disabled={busy || alphaTeam.length + bravoTeam.length < 8}
+                      style={{ fontSize: 13, fontWeight: 700, background: 'rgba(0,245,160,0.14)', border: '1px solid rgba(0,245,160,0.4)', color: 'var(--success)' }}>
+                      📣 この編成をDiscordに送信
+                    </button>
+                  )}
+                </>
+              )}
+              <button className="btn-ghost" onClick={() => void copyTeams()} disabled={alphaTeam.length + bravoTeam.length === 0}>
+                📋 編成をコピー
+              </button>
+              {isHost && (
                 <button
                   onClick={() => void reopenLobby()}
                   disabled={busy}
                   style={{ fontSize: 13, fontWeight: 700, background: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.35)', color: 'var(--cyan)' }}>
                   🔁 メンバー再募集
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-          {isHost && <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>ドラッグ&ドロップ、またはタップで選択→移動先チームをタップしてプレイヤーを移動できます。編成が決まったら「この編成をDiscordに送信」でメンバー全員に共有できます。試合後に続ける場合は、抜ける人に退出してもらってから「メンバー再募集」で残るメンバーを保持したまま不足分を募集できます。</p>}
+          {isHost && <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>ドラッグ&ドロップ、またはタップで選択→移動先チームをタップしてプレイヤーを移動できます。{lobby.is_private ? '編成が決まったら「編成をコピー」で自分たちのDiscordなどに貼って共有できます。' : '編成が決まったら「この編成をDiscordに送信」でメンバー全員に共有できます。'}試合後に続ける場合は、抜ける人に退出してもらってから「メンバー再募集」で残るメンバーを保持したまま不足分を募集できます。</p>}
 
           {/* Balance meter */}
           <div className="card" style={{ padding: '14px 18px', marginBottom: 16 }}>

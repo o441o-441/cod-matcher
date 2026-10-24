@@ -6,6 +6,8 @@
 --       「ASCENT公式サーバーのVCに集合」を通知
 --   (2) 8人全員へサイト内通知 (Discordを見ていない人向け)
 -- 通知はロビーごとに1回 (full_notified_at で管理)。ベストエフォート。
+-- 非公開ロビー (is_private) は公開チャンネルに出すと存在がバレるため
+-- (1) のDiscord送信をスキップし、(2) のサイト内通知のみ送る。
 -- ============================================================
 
 ALTER TABLE public.eights_lobbies ADD COLUMN IF NOT EXISTS full_notified_at timestamptz;
@@ -54,10 +56,10 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
 
-  -- Discord 個人メンション
+  -- Discord 個人メンション (非公開ロビーは公開チャンネルへ出さない)
   BEGIN
     SELECT value INTO v_webhook_url FROM app_settings WHERE key = 'discord_8s_webhook';
-    IF v_webhook_url IS NOT NULL THEN
+    IF v_webhook_url IS NOT NULL AND NOT v_lobby.is_private THEN
       SELECT string_agg('<@' || t.provider_id || '>', ' '), jsonb_agg(t.provider_id)
       INTO v_mention_text, v_mention_ids
       FROM (

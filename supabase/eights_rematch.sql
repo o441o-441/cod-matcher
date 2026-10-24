@@ -69,6 +69,11 @@ BEGIN
     RETURN json_build_object('ok', true, 'member_count', v_cnt, 'slots', 0);
   END IF;
 
+  -- 非公開ロビーは告知しない (URL共有のみで再募集。eights_private_lobbies.sql)
+  IF v_lobby.is_private THEN
+    RETURN json_build_object('ok', true, 'member_count', v_cnt, 'slots', v_slots);
+  END IF;
+
   SELECT display_name, peak_rating INTO v_host_name, v_host_peak FROM profiles WHERE id = v_lobby.host_user_id;
   v_rate_label := CASE WHEN v_lobby.rate_cap IS NOT NULL THEN '≤ ' || v_lobby.rate_cap ELSE 'なし' END;
 

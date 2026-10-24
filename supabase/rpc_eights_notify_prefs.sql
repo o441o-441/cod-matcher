@@ -88,16 +88,15 @@ $$;
 
 -- ------------------------------------------------------------
 -- 3) ロビー作成 RPC を更新
---    - 通知対象者をレート帯/時間帯/参加可否で1回抽出し、
---      サイト内通知と Discord 個人メンションの両方に使う。
---      直近10分に8s通知を受けた人はスキップ (連投対策)。
---    - Discord: 抽出された人だけを <@ユーザーID> で個人メンション。
---      ロール・Bot は不要 (Webhookのみで完結)。
---      content 2000字 / allowed_mentions 100件の制限があるため、
---      80人ずつに分割して複数メッセージで送信 (Embedは先頭のみ)。
---    どちらもベストエフォート (失敗してもロビー作成は成功)。
+--    告知 (サイト内/Discord/X/外部プロモ) は _eights_announce
+--    (eights_private_lobbies.sql) に集約。
+--    p_private = true の非公開ロビーは告知を一切送らない
+--    (URL共有のみで募集。後から rpc_eights_publish_lobby で公開可)。
 -- ------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.rpc_eights_create_lobby(p_title text, p_rate_cap integer DEFAULT NULL::integer, p_scheduled_at timestamptz DEFAULT NULL)
+-- 旧シグネチャ (3引数) は削除してオーバーロードの曖昧さを防ぐ
+DROP FUNCTION IF EXISTS public.rpc_eights_create_lobby(text, integer, timestamptz);
+
+CREATE OR REPLACE FUNCTION public.rpc_eights_create_lobby(p_title text, p_rate_cap integer DEFAULT NULL::integer, p_scheduled_at timestamptz DEFAULT NULL, p_private boolean DEFAULT false)
 RETURNS json
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -106,20 +105,6 @@ AS $$
 DECLARE
   v_uid uuid := auth.uid();
   v_lid uuid;
-  v_webhook_url text;
-  v_announce_url text;
-  v_announce_secret text;
-  v_host_name text;
-  v_host_peak integer;
-  v_rate_label text;
-  v_when_label text;
-  v_hour integer;
-  v_recipients uuid[];
-  v_mention_ids text[];
-  v_chunk text[];
-  v_embed jsonb;
-  v_total integer;
-  v_pos integer;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'not authenticated'; END IF;
   IF length(trim(p_title)) < 1 THEN RAISE EXCEPTION 'タイトルを入力してください'; END IF;
@@ -131,155 +116,19 @@ BEGIN
     RAISE EXCEPTION '既に他のロビーに参加しています';
   END IF;
 
-  INSERT INTO eights_lobbies (host_user_id, title, rate_cap, scheduled_at) VALUES (v_uid, trim(p_title), p_rate_cap, p_scheduled_at) RETURNING id INTO v_lid;
+  INSERT INTO eights_lobbies (host_user_id, title, rate_cap, scheduled_at, is_private)
+  VALUES (v_uid, trim(p_title), p_rate_cap, p_scheduled_at, coalesce(p_private, false))
+  RETURNING id INTO v_lid;
   INSERT INTO eights_lobby_members (lobby_id, user_id, weapon_role) VALUES (v_lid, v_uid, 'FLEX');
 
-  SELECT display_name, peak_rating INTO v_host_name, v_host_peak FROM profiles WHERE id = v_uid;
-  v_rate_label := CASE WHEN p_rate_cap IS NOT NULL THEN '≤ ' || p_rate_cap ELSE 'なし' END;
-  v_when_label := CASE WHEN p_scheduled_at IS NULL THEN '今すぐ'
-    ELSE to_char(p_scheduled_at AT TIME ZONE 'Asia/Tokyo', 'MM/DD HH24:MI') END;
-
-  -- 通知対象者の抽出 + サイト内通知 (オプトイン者のみ)
-  BEGIN
-    -- 時間帯フィルタは「開催時刻」基準 (予約開催なら開催時刻のJST時)
-    v_hour := extract(hour FROM coalesce(p_scheduled_at, now()) AT TIME ZONE 'Asia/Tokyo')::integer;
-
-    SELECT array_agg(user_id) INTO v_recipients FROM (
-      SELECT np.user_id
-      FROM eights_notify_prefs np
-      JOIN profiles pr ON pr.id = np.user_id
-      WHERE np.enabled
-        AND np.user_id <> v_uid
-        AND NOT pr.is_banned
-        AND (pr.suspended_until IS NULL OR pr.suspended_until < now())
-        -- 参加できないロビーは通知しない (ピークレート上限)
-        AND (p_rate_cap IS NULL OR pr.peak_rating <= p_rate_cap)
-        -- 時間帯指定 (JST)。start=end は常時扱い、start>end は日跨ぎ
-        AND (np.hour_start IS NULL
-             OR np.hour_start = np.hour_end
-             OR (np.hour_start < np.hour_end AND v_hour >= np.hour_start AND v_hour < np.hour_end)
-             OR (np.hour_start > np.hour_end AND (v_hour >= np.hour_start OR v_hour < np.hour_end)))
-        -- レート帯指定: ホストのピークレートが関心帯に入っているか
-        AND (np.rating_min IS NULL OR coalesce(v_host_peak, 1500) >= np.rating_min)
-        AND (np.rating_max IS NULL OR coalesce(v_host_peak, 1500) <= np.rating_max)
-        -- 既にアクティブなロビーに居る人はどうせ参加できないので除外
-        AND NOT EXISTS (
-          SELECT 1 FROM eights_lobby_members m JOIN eights_lobbies l ON l.id = m.lobby_id
-          WHERE m.user_id = np.user_id AND l.status IN ('open','drafting'))
-        -- 直近10分に8s通知を受けた人はスキップ (開催連投によるスパム防止)
-        AND NOT EXISTS (
-          SELECT 1 FROM notifications n
-          WHERE n.user_id = np.user_id AND n.type = 'eights_lobby'
-            AND n.created_at > now() - interval '10 minutes')
-      LIMIT 500
-    ) s;
-
-    IF v_recipients IS NOT NULL THEN
-      INSERT INTO notifications (user_id, type, body, link, is_read)
-      SELECT r,
-             'eights_lobby',
-             '⚡ 8s 開催: ' || trim(p_title) || '（開催: ' || v_when_label || ' / ホスト: ' || coalesce(v_host_name, '不明') || ' / レート制限: ' || v_rate_label || '）',
-             '/custom/eights/' || v_lid,
-             false
-      FROM unnest(v_recipients) AS r;
-    END IF;
-  EXCEPTION WHEN OTHERS THEN
-    NULL;
-  END;
-
-  -- Discord 通知 (条件に合致した人だけ個人メンション。80人ずつ分割送信)
-  BEGIN
-    IF v_recipients IS NOT NULL THEN
-      SELECT array_agg(i.provider_id ORDER BY i.provider_id)
-      INTO v_mention_ids
-      FROM auth.identities i
-      WHERE i.provider = 'discord'
-        AND i.user_id = ANY(v_recipients)
-        AND i.provider_id ~ '^\d+$';
-    END IF;
-
-    -- Bot送信 (「参加する」ボタン付き) が設定済みなら Edge Function 経由で送る
-    SELECT value INTO v_announce_url FROM app_settings WHERE key = 'discord_announce_url';
-    SELECT value INTO v_announce_secret FROM app_settings WHERE key = 'edge_internal_secret';
-    IF v_announce_url IS NOT NULL AND v_announce_secret IS NOT NULL THEN
-      PERFORM net.http_post(
-        url := v_announce_url,
-        headers := jsonb_build_object('Content-Type', 'application/json', 'x-internal-secret', v_announce_secret),
-        body := jsonb_build_object(
-          'lobby_id', v_lid,
-          'title', trim(p_title),
-          'host_name', coalesce(v_host_name, '不明'),
-          'rate_label', v_rate_label,
-          'when_label', v_when_label,
-          'mention_ids', coalesce(to_jsonb(v_mention_ids), '[]'::jsonb)
-        )
-      );
-    ELSE
-      -- フォールバック: 従来の Webhook 送信 (ボタンなし)
-      SELECT value INTO v_webhook_url FROM app_settings WHERE key = 'discord_8s_webhook';
-
-      IF v_webhook_url IS NOT NULL THEN
-      v_total := coalesce(array_length(v_mention_ids, 1), 0);
-
-      v_embed := jsonb_build_array(jsonb_build_object(
-        'title', '⚡ 8s 開催: ' || trim(p_title),
-        'description', '8人カスタムマッチのロビーが作成されました。参加者募集中！',
-        'url', 'https://ascent-esports.com/custom/eights/' || v_lid,
-        'color', 65535,
-        'fields', jsonb_build_array(
-          jsonb_build_object('name', '開催', 'value', v_when_label, 'inline', true),
-          jsonb_build_object('name', 'ホスト', 'value', coalesce(v_host_name, '不明'), 'inline', true),
-          jsonb_build_object('name', 'レート制限', 'value', v_rate_label, 'inline', true),
-          jsonb_build_object('name', '参加状況', 'value', '1 / 8', 'inline', true)
-        ),
-        'footer', jsonb_build_object('text', 'ASCENT · 8s Lobby'),
-        'timestamp', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
-      ));
-
-      IF v_total = 0 THEN
-        -- 対象者なし: メンションなしの Embed のみ
-        PERFORM net.http_post(url := v_webhook_url, body := jsonb_build_object(
-          'content', '',
-          'allowed_mentions', jsonb_build_object('parse', jsonb_build_array()),
-          'embeds', v_embed
-        ));
-      ELSE
-        -- 80人ずつ分割。Embed は先頭メッセージのみ、2通目以降はメンションのみ
-        v_pos := 1;
-        WHILE v_pos <= v_total LOOP
-          v_chunk := v_mention_ids[v_pos : least(v_pos + 79, v_total)];
-          PERFORM net.http_post(url := v_webhook_url, body := jsonb_build_object(
-            'content', (SELECT string_agg('<@' || x || '>', ' ') FROM unnest(v_chunk) AS x),
-            'allowed_mentions', jsonb_build_object('parse', jsonb_build_array(), 'users', (SELECT jsonb_agg(x) FROM unnest(v_chunk) AS x)),
-            'embeds', CASE WHEN v_pos = 1 THEN v_embed ELSE '[]'::jsonb END
-          ));
-          v_pos := v_pos + 80;
-        END LOOP;
-      END IF;
-      END IF;
-    END IF;
-  EXCEPTION WHEN OTHERS THEN
-    NULL;
-  END;
-
-  -- X (plze) への告知 (ベストエフォート。_x_post 未設定ならスキップ)
-  BEGIN
-    PERFORM _x_post(
-      '⚡ 8s（プライベートマッチ）募集中！【' || v_when_label || ' 開催】ホスト: ' || coalesce(v_host_name, '不明')
-      || CASE WHEN p_rate_cap IS NOT NULL THEN '（レート ≤ ' || p_rate_cap || '）' ELSE '' END || E'\n'
-      || '参加はこちら → https://ascent-esports.com/custom/eights/' || v_lid || E'\n'
-      || 'plze #cod #MW4'
-    );
-  EXCEPTION WHEN OTHERS THEN
-    NULL;
-  END;
-
-  -- 外部Discordサーバーへの @everyone 告知 (eights_promo_webhook.sql。未設定ならスキップ)
-  BEGIN
-    PERFORM _eights_promo_post(v_lid, trim(p_title), v_host_name, v_rate_label, v_when_label, 1);
-  EXCEPTION WHEN OTHERS THEN
-    NULL;
-  END;
+  -- 告知 (ベストエフォート。失敗してもロビー作成は成功)
+  IF NOT coalesce(p_private, false) THEN
+    BEGIN
+      PERFORM _eights_announce(v_lid);
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+  END IF;
 
   RETURN json_build_object('ok', true, 'lobby_id', v_lid);
 END;

@@ -194,11 +194,11 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
 
-  -- Discord (Bot送信が設定済みの場合のみ)
+  -- Discord (Bot送信が設定済みの場合のみ。非公開ロビーは公開チャンネルへ出さない)
   BEGIN
     SELECT value INTO v_url FROM app_settings WHERE key = 'discord_announce_url';
     SELECT value INTO v_secret FROM app_settings WHERE key = 'edge_internal_secret';
-    IF v_url IS NOT NULL AND v_secret IS NOT NULL THEN
+    IF v_url IS NOT NULL AND v_secret IS NOT NULL AND NOT v_lobby.is_private THEN
       SELECT array_agg(i.provider_id) INTO v_mention_ids
       FROM auth.identities i
       WHERE i.provider = 'discord' AND i.user_id = ANY(v_member_ids) AND i.provider_id ~ '^\d+$';

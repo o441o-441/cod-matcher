@@ -28,13 +28,13 @@ BEGIN
     AND queue_type = 'ranked'
     AND last_heartbeat > now() - interval '60 seconds';
 
-  -- 8s: 募集中・振り分け中のロビー数と参加人数
+  -- 8s: 募集中・振り分け中のロビー数と参加人数 (非公開ロビーは除外)
   SELECT count(*) INTO v_eights_lobbies
-  FROM eights_lobbies WHERE status IN ('open', 'drafting');
+  FROM eights_lobbies WHERE status IN ('open', 'drafting') AND NOT is_private;
   SELECT count(*) INTO v_eights_players
   FROM eights_lobby_members m
   JOIN eights_lobbies l ON l.id = m.lobby_id
-  WHERE l.status IN ('open', 'drafting');
+  WHERE l.status IN ('open', 'drafting') AND NOT l.is_private;
 
   -- 今日の交流戦 (成立済み)
   SELECT count(*) INTO v_scrims_today

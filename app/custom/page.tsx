@@ -11,6 +11,7 @@ import { useFeatureReleases, isReleased, isNewlyReleased, releaseLabel, type Fea
 type LobbyRow = {
   id: string; title: string; host_user_id: string; status: string
   rate_cap: number | null; scheduled_at: string | null; created_at: string
+  is_private: boolean
   member_count: number; host_name: string | null
 }
 
@@ -40,6 +41,7 @@ export default function CustomPage() {
   const [scheduleMode, setScheduleMode] = useState<'now' | 'later'>('now')
   const [schedDay, setSchedDay] = useState(0) // 0=今日, 1=明日
   const [schedTime, setSchedTime] = useState('22:00')
+  const [createPrivate, setCreatePrivate] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [myLobbyId, setMyLobbyId] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -101,13 +103,14 @@ export default function CustomPage() {
       }
     }
 
+    // 非公開ロビーはRLSで自分が関係するものしか返らない (eights_private_lobbies.sql)
     const { data } = await supabase
       .from('eights_lobbies')
-      .select('id, title, host_user_id, status, rate_cap, scheduled_at, created_at')
+      .select('id, title, host_user_id, status, rate_cap, scheduled_at, created_at, is_private')
       .in('status', ['open', 'drafting'])
       .order('created_at', { ascending: false })
 
-    const rows = (data ?? []) as { id: string; title: string; host_user_id: string; status: string; rate_cap: number | null; scheduled_at: string | null; created_at: string }[]
+    const rows = (data ?? []) as { id: string; title: string; host_user_id: string; status: string; rate_cap: number | null; scheduled_at: string | null; created_at: string; is_private: boolean }[]
 
     // Get member counts + host names
     const hostIds = [...new Set(rows.map(r => r.host_user_id))]
@@ -153,9 +156,11 @@ export default function CustomPage() {
       p_title: createTitle.trim(),
       p_rate_cap: createRateCap,
       p_scheduled_at: scheduledAt,
+      p_private: createPrivate,
     })
     setBusy(false)
     if (error) { showToast(error.message, 'error'); return }
+    if (createPrivate) showToast('非公開ロビーを作成しました。ロビーページから招待URLを共有してください', 'success')
     const result = data as { lobby_id: string }
     router.push(`/custom/eights/${result.lobby_id}`)
   }
@@ -267,6 +272,7 @@ export default function CustomPage() {
                       <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>ホスト: {l.host_name}</div>
                     </div>
                     <div className="row" style={{ gap: 8 }}>
+                      {l.is_private && <span className="badge" style={{ fontSize: 9 }}>🔒 非公開</span>}
                       {l.scheduled_at && (
                         <span className="badge violet">🕙 {fmtSchedule(l.scheduled_at)} 開催</span>
                       )}
@@ -292,9 +298,11 @@ export default function CustomPage() {
               onClick={() => setShowCreate(false)}>
               <div className="card-strong" style={{ maxWidth: 460, width: '100%', overflow: 'visible' }} onClick={e => e.stopPropagation()}>
                 <h2 style={{ marginTop: 0 }}>8s を開催する</h2>
-                <div className="card" style={{ padding: '10px 14px', marginBottom: 14, borderColor: 'rgba(88,101,242,0.4)', background: 'rgba(88,101,242,0.08)' }}>
+                <div className="card" style={{ padding: '10px 14px', marginBottom: 14, borderColor: createPrivate ? 'rgba(157,91,255,0.4)' : 'rgba(88,101,242,0.4)', background: createPrivate ? 'rgba(157,91,255,0.08)' : 'rgba(88,101,242,0.08)' }}>
                   <p style={{ margin: 0, fontSize: 12, color: 'var(--text)' }}>
-                    通知設定をオンにしたメンバーへのサイト内通知と、<span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> #8s-lobby への個人メンション通知が自動送信されます
+                    {createPrivate
+                      ? <>🔒 通知は一切送信されず、一覧にも表示されません。招待URLを知っている人だけが参加できます</>
+                      : <>通知設定をオンにしたメンバーへのサイト内通知と、<span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> #8s-lobby への個人メンション通知が自動送信されます</>}
                   </p>
                 </div>
                 <div style={{ marginBottom: 12 }}>
@@ -327,6 +335,18 @@ export default function CustomPage() {
                         募集は今すぐ始まり、開催時刻になるとメンバー全員に集合通知（サイト内+Discordメンション）が飛びます。
                       </p>
                     </>
+                  )}
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={createPrivate} onChange={e => setCreatePrivate(e.target.checked)} style={{ width: 'auto' }} />
+                    🔒 静かに募集する（通知を送らない）
+                  </label>
+                  {createPrivate && (
+                    <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
+                      決まったメンバーと内輪で開きたいときに。作成後にロビーページで招待URLをコピーして共有してください。メンバーが揃ったあと「全体に公開して通知」で通常の募集に切り替えることもできます。
+                    </p>
                   )}
                 </div>
                 <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
