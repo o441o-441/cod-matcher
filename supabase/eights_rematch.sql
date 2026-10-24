@@ -9,7 +9,14 @@
 --       full_notified_at もクリアするので、8人に戻った時の集合通知が再発火する。
 --   (2) rpc_eights_leave_lobby — ホストが退出してもロビーを閉じず、
 --       残メンバーの最古参へホストを引き継ぐ (誰も残らなければ closed)。
+--       8人成立後に募集中 (open) のまま抜けた場合は full_notified_at を
+--       リセットし (補充で8人に戻れば集合通知が再発火)、残りのメンバーへ
+--       枠が空いたことを通知 (非公開ロビーはサイト内通知のみ)。
+--       さらに公開ロビーはオプトインユーザーへ残り枠の再募集を告知
+--       (_eights_slot_announce。X/外部プロモは送らない)。
 --   (3) rpc_eights_close_lobby — 明示的な解散 (従来のホスト退出=解散の代替)。
+--       メンバー全員へサイト内通知 + Discord個人メンション
+--       (非公開ロビーはサイト内通知のみ)。
 -- X への再投稿はしない (連投スパム防止。Discord/サイト内通知のみ)。
 -- ============================================================
 
@@ -208,6 +215,164 @@ END;
 $$;
 
 -- ------------------------------------------------------------
+-- 1.5) 8人成立後に枠が空いたとき、オプトインユーザーへ残り枠の
+--      再募集を告知 (サイト内 + DiscordボタンつきBot投稿)。
+--      X/外部プロモは送らない (退出ごとに発火するには重いため)。
+--      非公開ロビーは対象外。rpc_eights_leave_lobby から呼ばれる。
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public._eights_slot_announce(p_lobby_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_lobby record;
+  v_cnt int;
+  v_slots int;
+  v_host_name text;
+  v_host_peak integer;
+  v_rate_label text;
+  v_hour integer;
+  v_recipients uuid[];
+  v_mention_ids text[];
+  v_chunk text[];
+  v_embed jsonb;
+  v_total integer;
+  v_pos integer;
+  v_announce_url text;
+  v_announce_secret text;
+  v_webhook_url text;
+BEGIN
+  SELECT * INTO v_lobby FROM eights_lobbies WHERE id = p_lobby_id;
+  IF v_lobby IS NULL OR v_lobby.status <> 'open' OR v_lobby.is_private THEN RETURN; END IF;
+
+  SELECT count(*) INTO v_cnt FROM eights_lobby_members WHERE lobby_id = p_lobby_id;
+  v_slots := 8 - v_cnt;
+  IF v_slots <= 0 THEN RETURN; END IF;
+
+  SELECT display_name, peak_rating INTO v_host_name, v_host_peak FROM profiles WHERE id = v_lobby.host_user_id;
+  v_rate_label := CASE WHEN v_lobby.rate_cap IS NOT NULL THEN '≤ ' || v_lobby.rate_cap ELSE 'なし' END;
+
+  -- 対象者の抽出 + サイト内通知 (作成告知と同じ条件。type を揃えて10分ガードを共有)
+  BEGIN
+    v_hour := extract(hour FROM now() AT TIME ZONE 'Asia/Tokyo')::integer;
+
+    SELECT array_agg(user_id) INTO v_recipients FROM (
+      SELECT np.user_id
+      FROM eights_notify_prefs np
+      JOIN profiles pr ON pr.id = np.user_id
+      WHERE np.enabled
+        AND np.user_id <> v_lobby.host_user_id
+        AND NOT pr.is_banned
+        AND (pr.suspended_until IS NULL OR pr.suspended_until < now())
+        AND (v_lobby.rate_cap IS NULL OR pr.peak_rating <= v_lobby.rate_cap)
+        AND (np.hour_start IS NULL
+             OR np.hour_start = np.hour_end
+             OR (np.hour_start < np.hour_end AND v_hour >= np.hour_start AND v_hour < np.hour_end)
+             OR (np.hour_start > np.hour_end AND (v_hour >= np.hour_start OR v_hour < np.hour_end)))
+        AND (np.rating_min IS NULL OR coalesce(v_host_peak, 1500) >= np.rating_min)
+        AND (np.rating_max IS NULL OR coalesce(v_host_peak, 1500) <= np.rating_max)
+        AND NOT EXISTS (
+          SELECT 1 FROM eights_lobby_members m
+          WHERE m.lobby_id = p_lobby_id AND m.user_id = np.user_id)
+        AND NOT EXISTS (
+          SELECT 1 FROM notifications n
+          WHERE n.user_id = np.user_id AND n.type = 'eights_lobby'
+            AND n.created_at > now() - interval '10 minutes')
+      LIMIT 500
+    ) s;
+
+    IF v_recipients IS NOT NULL THEN
+      INSERT INTO notifications (user_id, type, body, link, is_read)
+      SELECT r,
+             'eights_lobby',
+             '🔁 8s 残り' || v_slots || '枠: ' || v_lobby.title || ' に空きが出ました（ホスト: ' || coalesce(v_host_name, '不明') || ' / レート制限: ' || v_rate_label || '）',
+             '/custom/eights/' || p_lobby_id,
+             false
+      FROM unnest(v_recipients) AS r;
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  -- Discord (ボタン付きBot投稿。未設定なら Webhook フォールバック)
+  BEGIN
+    IF v_recipients IS NOT NULL THEN
+      SELECT array_agg(i.provider_id ORDER BY i.provider_id)
+      INTO v_mention_ids
+      FROM auth.identities i
+      WHERE i.provider = 'discord'
+        AND i.user_id = ANY(v_recipients)
+        AND i.provider_id ~ '^\d+$';
+    END IF;
+
+    SELECT value INTO v_announce_url FROM app_settings WHERE key = 'discord_announce_url';
+    SELECT value INTO v_announce_secret FROM app_settings WHERE key = 'edge_internal_secret';
+    IF v_announce_url IS NOT NULL AND v_announce_secret IS NOT NULL THEN
+      PERFORM net.http_post(
+        url := v_announce_url,
+        headers := jsonb_build_object('Content-Type', 'application/json', 'x-internal-secret', v_announce_secret),
+        body := jsonb_build_object(
+          'kind', 'reopen',
+          'lobby_id', p_lobby_id,
+          'title', v_lobby.title,
+          'host_name', coalesce(v_host_name, '不明'),
+          'rate_label', v_rate_label,
+          'when_label', '今すぐ',
+          'member_count', v_cnt,
+          'mention_ids', coalesce(to_jsonb(v_mention_ids), '[]'::jsonb)
+        )
+      );
+    ELSE
+      SELECT value INTO v_webhook_url FROM app_settings WHERE key = 'discord_8s_webhook';
+      IF v_webhook_url IS NOT NULL THEN
+        v_total := coalesce(array_length(v_mention_ids, 1), 0);
+
+        v_embed := jsonb_build_array(jsonb_build_object(
+          'title', '🔁 8s 残り' || v_slots || '枠: ' || v_lobby.title,
+          'description', '8人揃った後に空きが出ました。残り' || v_slots || '枠を再募集中です！',
+          'url', 'https://ascent-esports.com/custom/eights/' || p_lobby_id,
+          'color', 65535,
+          'fields', jsonb_build_array(
+            jsonb_build_object('name', 'ホスト', 'value', coalesce(v_host_name, '不明'), 'inline', true),
+            jsonb_build_object('name', 'レート制限', 'value', v_rate_label, 'inline', true),
+            jsonb_build_object('name', '参加状況', 'value', v_cnt || ' / 8', 'inline', true)
+          ),
+          'footer', jsonb_build_object('text', 'ASCENT · 8s Lobby'),
+          'timestamp', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+        ));
+
+        IF v_total > 0 THEN
+          v_pos := 1;
+          WHILE v_pos <= v_total LOOP
+            v_chunk := v_mention_ids[v_pos : least(v_pos + 79, v_total)];
+            PERFORM net.http_post(url := v_webhook_url, body := jsonb_build_object(
+              'content', (SELECT string_agg('<@' || x || '>', ' ') FROM unnest(v_chunk) AS x),
+              'allowed_mentions', jsonb_build_object('parse', jsonb_build_array(), 'users', (SELECT jsonb_agg(x) FROM unnest(v_chunk) AS x)),
+              'embeds', CASE WHEN v_pos = 1 THEN v_embed ELSE '[]'::jsonb END
+            ));
+            v_pos := v_pos + 80;
+          END LOOP;
+        ELSE
+          PERFORM net.http_post(url := v_webhook_url, body := jsonb_build_object(
+            'content', '',
+            'allowed_mentions', jsonb_build_object('parse', jsonb_build_array()),
+            'embeds', v_embed
+          ));
+        END IF;
+      END IF;
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public._eights_slot_announce(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public._eights_slot_announce(uuid) TO service_role;
+
+-- ------------------------------------------------------------
 -- 2) 退出: ホストが抜けてもロビーを閉じず、最古参へホストを引き継ぐ
 --    (従来は「ホスト退出 = ロビー終了」。解散は rpc_eights_close_lobby へ分離)
 -- ------------------------------------------------------------
@@ -221,12 +386,73 @@ DECLARE
   v_uid uuid := auth.uid();
   v_lobby record;
   v_new_host uuid;
+  v_was_member boolean;
+  v_remaining uuid[];
+  v_cnt int;
+  v_mention_text text;
+  v_mention_ids jsonb;
+  v_webhook_url text;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'not authenticated'; END IF;
   SELECT * INTO v_lobby FROM eights_lobbies WHERE id = p_lobby_id;
   IF v_lobby IS NULL THEN RAISE EXCEPTION 'ロビーが見つかりません'; END IF;
 
   DELETE FROM eights_lobby_members WHERE lobby_id = p_lobby_id AND user_id = v_uid;
+  v_was_member := FOUND;
+
+  -- 8人成立後に募集中のまま枠が空いた場合:
+  -- 集合通知の1回ガードを戻して (補充で8人に戻れば再発火)、残りへ通知
+  IF v_was_member AND v_lobby.status = 'open' AND v_lobby.full_notified_at IS NOT NULL THEN
+    UPDATE eights_lobbies SET full_notified_at = NULL WHERE id = p_lobby_id;
+
+    SELECT count(*), array_agg(user_id) INTO v_cnt, v_remaining
+    FROM eights_lobby_members WHERE lobby_id = p_lobby_id;
+
+    IF v_remaining IS NOT NULL THEN
+      -- サイト内通知 (ベストエフォート)
+      BEGIN
+        INSERT INTO notifications (user_id, type, body, link, is_read)
+        SELECT u, 'eights_leave',
+               '⚠️ 8s「' || v_lobby.title || '」から1人抜けました（現在 ' || v_cnt || '/8人）。枠が空いたため再び募集中です',
+               '/custom/eights/' || p_lobby_id, false
+        FROM unnest(v_remaining) AS u;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+
+      -- Discord 個人メンション (非公開ロビーは公開チャンネルへ出さない)
+      BEGIN
+        IF NOT v_lobby.is_private THEN
+          SELECT value INTO v_webhook_url FROM app_settings WHERE key = 'discord_8s_webhook';
+          IF v_webhook_url IS NOT NULL THEN
+            SELECT string_agg('<@' || t.provider_id || '>', ' '), jsonb_agg(t.provider_id)
+            INTO v_mention_text, v_mention_ids
+            FROM (
+              SELECT DISTINCT i.provider_id
+              FROM auth.identities i
+              WHERE i.provider = 'discord'
+                AND i.user_id = ANY(v_remaining)
+                AND i.provider_id ~ '^\d+$'
+              LIMIT 20
+            ) t;
+
+            IF v_mention_text IS NOT NULL THEN
+              PERFORM net.http_post(url := v_webhook_url, body := jsonb_build_object(
+                'content', v_mention_text || E'\n⚠️ **「' || v_lobby.title || '」から1人抜けました**（現在 ' || v_cnt || '/8人）。枠が空いたため再び募集中です → https://ascent-esports.com/custom/eights/' || p_lobby_id,
+                'allowed_mentions', jsonb_build_object('parse', jsonb_build_array(), 'users', coalesce(v_mention_ids, '[]'::jsonb))
+              ));
+            END IF;
+          END IF;
+        END IF;
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+    END IF;
+
+    -- 公開ロビーはオプトインユーザーへ残り枠の再募集を告知
+    BEGIN
+      PERFORM _eights_slot_announce(p_lobby_id);
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
 
   IF v_lobby.host_user_id = v_uid AND v_lobby.status IN ('open', 'drafting') THEN
     SELECT user_id INTO v_new_host
@@ -257,6 +483,8 @@ $$;
 
 -- ------------------------------------------------------------
 -- 3) ロビー解散 (ホスト or 管理者)
+--    実行者以外のメンバー全員へサイト内通知 + Discord個人メンション。
+--    非公開ロビーは公開チャンネルに出せないためサイト内通知のみ。
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.rpc_eights_close_lobby(p_lobby_id uuid)
 RETURNS json
@@ -267,6 +495,10 @@ AS $$
 DECLARE
   v_uid uuid := auth.uid();
   v_lobby record;
+  v_member_ids uuid[];
+  v_mention_text text;
+  v_mention_ids jsonb;
+  v_webhook_url text;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'ログインが必要です'; END IF;
   SELECT * INTO v_lobby FROM eights_lobbies WHERE id = p_lobby_id;
@@ -278,7 +510,51 @@ BEGIN
     RETURN json_build_object('ok', true); -- 既に終了済み
   END IF;
 
+  -- 通知対象: 実行者以外のメンバー (status更新前に取得)
+  SELECT array_agg(user_id) INTO v_member_ids
+  FROM eights_lobby_members WHERE lobby_id = p_lobby_id AND user_id <> v_uid;
+
   UPDATE eights_lobbies SET status = 'closed' WHERE id = p_lobby_id;
+
+  IF v_member_ids IS NOT NULL THEN
+    -- サイト内通知 (ベストエフォート)
+    BEGIN
+      INSERT INTO notifications (user_id, type, body, link, is_read)
+      SELECT u, 'eights_closed',
+             '⚠️ 8s「' || v_lobby.title || '」は解散されました。別のロビーを探すか、新しく開催できます',
+             '/custom', false
+      FROM unnest(v_member_ids) AS u;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+
+    -- Discord 個人メンション (非公開ロビーは公開チャンネルへ出さない)
+    BEGIN
+      IF NOT v_lobby.is_private THEN
+        SELECT value INTO v_webhook_url FROM app_settings WHERE key = 'discord_8s_webhook';
+        IF v_webhook_url IS NOT NULL THEN
+          SELECT string_agg('<@' || t.provider_id || '>', ' '), jsonb_agg(t.provider_id)
+          INTO v_mention_text, v_mention_ids
+          FROM (
+            SELECT DISTINCT i.provider_id
+            FROM auth.identities i
+            WHERE i.provider = 'discord'
+              AND i.user_id = ANY(v_member_ids)
+              AND i.provider_id ~ '^\d+$'
+            LIMIT 20
+          ) t;
+
+          IF v_mention_text IS NOT NULL THEN
+            PERFORM net.http_post(url := v_webhook_url, body := jsonb_build_object(
+              'content', v_mention_text || E'\n⚠️ **「' || v_lobby.title || '」は解散されました。** 別のロビーを探すか、新しく開催できます → https://ascent-esports.com/custom',
+              'allowed_mentions', jsonb_build_object('parse', jsonb_build_array(), 'users', coalesce(v_mention_ids, '[]'::jsonb))
+            ));
+          END IF;
+        END IF;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
+
   RETURN json_build_object('ok', true);
 END;
 $$;

@@ -175,7 +175,7 @@ export default function EightsLobbyPage() {
 
   // ロビー解散 (ホストのみ)
   const closeLobby = async () => {
-    if (!confirm('ロビーを解散します。メンバー全員が退出扱いになります。よろしいですか？')) return
+    if (!confirm('ロビーを解散します。メンバー全員が退出扱いになり、解散通知が送られます。よろしいですか？')) return
     const { error } = await supabase.rpc('rpc_eights_close_lobby', { p_lobby_id: lobbyId })
     if (error) { showToast(error.message, 'error'); return }
     router.push('/custom')
