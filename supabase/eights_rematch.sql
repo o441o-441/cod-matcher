@@ -96,10 +96,11 @@ BEGIN
              OR (np.hour_start > np.hour_end AND (v_hour >= np.hour_start OR v_hour < np.hour_end)))
         AND (np.rating_min IS NULL OR coalesce(v_host_peak, 1500) >= np.rating_min)
         AND (np.rating_max IS NULL OR coalesce(v_host_peak, 1500) <= np.rating_max)
-        -- 継続メンバー含め、アクティブなロビーに居る人は除外
+        -- 継続メンバーには通知不要
+        -- (複数参加の解禁により「他ロビー参加中」は除外しない。eights_multi_join.sql)
         AND NOT EXISTS (
-          SELECT 1 FROM eights_lobby_members m JOIN eights_lobbies l ON l.id = m.lobby_id
-          WHERE m.user_id = np.user_id AND l.status IN ('open','drafting'))
+          SELECT 1 FROM eights_lobby_members m
+          WHERE m.lobby_id = p_lobby_id AND m.user_id = np.user_id)
         -- 直近10分に8s通知を受けた人はスキップ (連投スパム防止)
         AND NOT EXISTS (
           SELECT 1 FROM notifications n

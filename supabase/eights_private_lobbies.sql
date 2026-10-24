@@ -138,11 +138,11 @@ BEGIN
         -- レート帯指定: ホストのピークレートが関心帯に入っているか
         AND (np.rating_min IS NULL OR coalesce(v_host_peak, 1500) >= np.rating_min)
         AND (np.rating_max IS NULL OR coalesce(v_host_peak, 1500) <= np.rating_max)
-        -- 既にアクティブなロビーに居る人はどうせ参加できないので除外
-        -- (後から公開の場合、確定済みメンバーもここで除外される)
+        -- このロビーの確定済みメンバーには通知不要
+        -- (複数参加の解禁により「他ロビー参加中」は除外しない。eights_multi_join.sql)
         AND NOT EXISTS (
-          SELECT 1 FROM eights_lobby_members m JOIN eights_lobbies l ON l.id = m.lobby_id
-          WHERE m.user_id = np.user_id AND l.status IN ('open','drafting'))
+          SELECT 1 FROM eights_lobby_members m
+          WHERE m.lobby_id = p_lobby_id AND m.user_id = np.user_id)
         -- 直近10分に8s通知を受けた人はスキップ (開催連投によるスパム防止)
         AND NOT EXISTS (
           SELECT 1 FROM notifications n

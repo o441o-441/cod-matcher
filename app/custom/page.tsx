@@ -43,7 +43,7 @@ export default function CustomPage() {
   const [schedTime, setSchedTime] = useState('22:00')
   const [createPrivate, setCreatePrivate] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
-  const [myLobbyId, setMyLobbyId] = useState<string | null>(null)
+  const [myLobbyIds, setMyLobbyIds] = useState<string[]>([]) // 複数ロビー同時参加OK (eights_multi_join.sql)
   const [isAdmin, setIsAdmin] = useState(false)
 
   // 段階公開: 8s は 10/24 12:00、交流戦ボードは 11/6 19:00 (管理者は公開前も利用可)
@@ -76,21 +76,19 @@ export default function CustomPage() {
     if (uid) {
       const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', uid).maybeSingle()
       setIsAdmin(!!(prof as { is_admin?: boolean } | null)?.is_admin)
-      const [{ data: myMembership }, { data: prefs }] = await Promise.all([
+      const [{ data: myMemberships }, { data: prefs }] = await Promise.all([
         supabase
           .from('eights_lobby_members')
           .select('lobby_id, eights_lobbies!inner(id, status)')
           .eq('user_id', uid)
-          .in('eights_lobbies.status', ['open', 'drafting'])
-          .limit(1)
-          .maybeSingle(),
+          .in('eights_lobbies.status', ['open', 'drafting']),
         supabase
           .from('eights_notify_prefs')
           .select('enabled, hour_start, hour_end, rating_min, rating_max')
           .eq('user_id', uid)
           .maybeSingle(),
       ])
-      setMyLobbyId((myMembership as { lobby_id: string } | null)?.lobby_id ?? null)
+      setMyLobbyIds(((myMemberships ?? []) as { lobby_id: string }[]).map(m => m.lobby_id))
       const p = prefs as NotifyPrefsRow | null
       if (p) {
         setNotifyOn(p.enabled)
@@ -187,7 +185,7 @@ export default function CustomPage() {
 
   const handleJoin = async (lobbyId: string) => {
     // Already in this lobby — just navigate
-    if (myLobbyId === lobbyId) { router.push(`/custom/eights/${lobbyId}`); return }
+    if (myLobbyIds.includes(lobbyId)) { router.push(`/custom/eights/${lobbyId}`); return }
     setBusy(true)
     const { error } = await supabase.rpc('rpc_eights_join_lobby', { p_lobby_id: lobbyId })
     setBusy(false)
@@ -251,11 +249,18 @@ export default function CustomPage() {
             8sが開催されると、通知設定をオンにしたメンバーにサイト内通知と <span style={{ color: '#5865F2', fontWeight: 700 }}>Discord</span> #8s-lobby での個人メンションが届きます（レート帯・時間帯で絞り込み可）
           </p>
 
-          {myLobbyId && (
+          {myLobbyIds.length > 0 && (
             <div className="card" style={{ borderColor: 'rgba(0,245,160,0.35)', background: 'var(--success-soft)', marginBottom: 16, padding: '14px 18px' }}>
-              <div className="row" style={{ justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 14, fontWeight: 700 }}>参加中のロビーがあります</span>
-                <button className="btn-primary btn-sm" onClick={() => router.push(`/custom/eights/${myLobbyId}`)}>ロビーに戻る</button>
+              <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>参加中のロビー（{myLobbyIds.length}件）</span>
+                <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                  {myLobbyIds.map(id => (
+                    <button key={id} className="btn-primary btn-sm" onClick={() => router.push(`/custom/eights/${id}`)}
+                      style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {lobbies.find(l => l.id === id)?.title ?? 'ロビー'}に戻る
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -282,8 +287,8 @@ export default function CustomPage() {
                       ) : (
                         <span className="badge" style={{ fontSize: 9 }}>制限なし</span>
                       )}
-                      <button className={`${myLobbyId === l.id ? 'btn-ghost' : 'btn-primary'} btn-sm`} disabled={busy} onClick={e => { e.stopPropagation(); handleJoin(l.id) }}>
-                        {myLobbyId === l.id ? '戻る' : '参加'}
+                      <button className={`${myLobbyIds.includes(l.id) ? 'btn-ghost' : 'btn-primary'} btn-sm`} disabled={busy} onClick={e => { e.stopPropagation(); handleJoin(l.id) }}>
+                        {myLobbyIds.includes(l.id) ? '戻る' : '参加'}
                       </button>
                     </div>
                   </div>

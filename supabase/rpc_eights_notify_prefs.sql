@@ -112,8 +112,10 @@ BEGIN
     IF p_scheduled_at <= now() THEN RAISE EXCEPTION '開催時刻は未来の時刻を指定してください'; END IF;
     IF p_scheduled_at > now() + interval '48 hours' THEN RAISE EXCEPTION '開催時刻は48時間以内で指定してください'; END IF;
   END IF;
-  IF EXISTS (SELECT 1 FROM eights_lobby_members m JOIN eights_lobbies l ON l.id = m.lobby_id WHERE m.user_id = v_uid AND l.status IN ('open','drafting')) THEN
-    RAISE EXCEPTION '既に他のロビーに参加しています';
+  -- 多重ホストOK (例: 21時の予約開催 + 今すぐ開催)。乱立防止に3件まで
+  -- (複数参加の解禁: eights_multi_join.sql)
+  IF (SELECT count(*) FROM eights_lobbies WHERE host_user_id = v_uid AND status IN ('open','drafting')) >= 3 THEN
+    RAISE EXCEPTION '同時に開催できるロビーは3件までです。先に解散するか、終了してから開催してください';
   END IF;
 
   INSERT INTO eights_lobbies (host_user_id, title, rate_cap, scheduled_at, is_private)
