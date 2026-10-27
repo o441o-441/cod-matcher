@@ -561,9 +561,36 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
 
       {url && (
         <div style={{ marginTop: 10 }}>
-          <video ref={videoRef} src={url} controls muted playsInline preload="metadata"
-            onLoadedMetadata={onMeta}
-            style={{ width: '100%', height: 'auto', borderRadius: 8, border: '1px solid var(--line)', background: '#000', display: 'block' }} />
+          <div style={{ position: 'relative' }}>
+            <video ref={videoRef} src={url} controls muted playsInline preload="metadata"
+              onLoadedMetadata={onMeta}
+              style={{ width: '100%', height: 'auto', borderRadius: 8, border: '1px solid var(--line)', background: '#000', display: 'block' }} />
+            {/* OCRの読み取り枠プレビュー (位置は固定・目視確認用) */}
+            {([-1, 1] as const).map(side => (
+              <div key={side} aria-hidden style={{
+                position: 'absolute',
+                left: `${(0.5 + side * calib.cx - calib.w / 2) * 100}%`,
+                top: `${calib.y * 100}%`,
+                width: `${calib.w * 100}%`,
+                height: `${calib.h * 100}%`,
+                border: `1.5px solid ${side === -1 ? '#00e5ff' : '#ff2bd6'}`,
+                borderRadius: 3,
+                pointerEvents: 'none',
+                boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
+              }} />
+            ))}
+            <div aria-hidden style={{
+              position: 'absolute',
+              left: `${(0.5 - calib.clockW / 2) * 100}%`,
+              top: `${calib.clockY * 100}%`,
+              width: `${calib.clockW * 100}%`,
+              height: `${calib.clockH * 100}%`,
+              border: '1.5px solid #f59e0b',
+              borderRadius: 3,
+              pointerEvents: 'none',
+              boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
+            }} />
+          </div>
 
           <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <select value={target} onChange={e => setTarget(e.target.value)} disabled={running} style={{ fontSize: 12 }}>
