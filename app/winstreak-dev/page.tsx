@@ -1,14 +1,22 @@
 'use client'
 
 import { useState } from 'react'
-import { TIERS, tierFor, triggerWinStreak, type TierConfig } from '@/components/WinStreakCelebration'
+import { TIERS, tierFor, triggerWinStreak, type TierConfig, type TierKey } from '@/components/WinStreakCelebration'
 
 const tierList: TierConfig[] = [TIERS.streak, TIERS.rampage, TIERS.unstoppable, TIERS.godlike]
 
 export default function WinStreakDevPage() {
   const [customCount, setCustomCount] = useState(12)
 
-  const fire = (count: number, tierKey?: string) => triggerWinStreak(count, tierKey as Parameters<typeof triggerWinStreak>[1])
+  // devプレビューはTIERS内のサンプル値を特進表示に渡す (本番は実データを渡す)
+  const fire = (count: number, tierKey?: string) => {
+    const t = tierKey ? TIERS[tierKey as TierKey] : tierFor(count)
+    triggerWinStreak(
+      count,
+      tierKey as TierKey | undefined,
+      t ? { ratingFrom: t.promoFrom, ratingTo: t.promoTo, rankFrom: t.rankFrom, rankTo: t.rankTo } : undefined,
+    )
+  }
 
   return (
     <main>

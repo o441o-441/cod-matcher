@@ -101,6 +101,15 @@ export function tierFor(count: number): TierConfig | null {
   return null
 }
 
+// 特進表示の実データ (レート変動と順位変動)。渡されなかった場合、
+// 特進パネルは表示しない (TIERS内の promo/rank 値はdevプレビュー用のサンプル)
+export type PromoData = {
+  ratingFrom: number
+  ratingTo: number
+  rankFrom: number
+  rankTo: number
+}
+
 // ================================================================
 // AUDIO ENGINE (WebAudio synth)
 // ================================================================
@@ -292,13 +301,13 @@ const PROMO_LABELS: Record<TierKey, string> = {
 // ================================================================
 type Phase = 'hold' | 'burst' | 'main' | 'promo' | 'outro'
 
-function Celebration({ tierKey, count, onDone }: { tierKey: TierKey; count: number; onDone?: () => void }) {
+function Celebration({ tierKey, count, promo, onDone }: { tierKey: TierKey; count: number; promo?: PromoData | null; onDone?: () => void }) {
   const tier = TIERS[tierKey]
   const [phase, setPhase] = useState<Phase>('hold')
   const [colorIdx, setColorIdx] = useState(0)
   const [gaugePct, setGaugePct] = useState(0)
-  const [promoRank, setPromoRank] = useState(tier.rankFrom)
-  const [promoRating, setPromoRating] = useState(tier.promoFrom)
+  const [promoRank, setPromoRank] = useState(promo?.rankFrom ?? 0)
+  const [promoRating, setPromoRating] = useState(promo?.ratingFrom ?? 0)
   const [shards, setShards] = useState<Shard[]>([])
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
@@ -385,20 +394,22 @@ function Celebration({ tierKey, count, onDone }: { tierKey: TierKey; count: numb
       const arpNotes = [523, 659, 784, 1047, 1319, 1568, 2093, 2637]
       arp(ctx, now(), master, { notes: arpNotes.slice(0, 5 + tier.stopStep), step: 0.06, gain: 0.16 })
 
-      const rankDelta = tier.rankFrom - tier.rankTo
-      const rtDelta = tier.promoTo - tier.promoFrom
-      const countDur = 1600
-      const steps = 30
-      for (let i = 1; i <= steps; i++) {
-        const p = i / steps
-        const ease = 1 - Math.pow(1 - p, 3)
-        t(() => {
-          setPromoRank(Math.round(tier.rankFrom - rankDelta * ease))
-          setPromoRating(Math.round(tier.promoFrom + rtDelta * ease))
-          if (i % 4 === 0) {
-            glassPing(ctx, now() + 0.01, master, { freq: 6000 + i * 100, gain: 0.2, dur: 0.15 })
-          }
-        }, (i / steps) * countDur)
+      if (promo) {
+        const rankDelta = promo.rankFrom - promo.rankTo
+        const rtDelta = promo.ratingTo - promo.ratingFrom
+        const countDur = 1600
+        const steps = 30
+        for (let i = 1; i <= steps; i++) {
+          const p = i / steps
+          const ease = 1 - Math.pow(1 - p, 3)
+          t(() => {
+            setPromoRank(Math.round(promo.rankFrom - rankDelta * ease))
+            setPromoRating(Math.round(promo.ratingFrom + rtDelta * ease))
+            if (i % 4 === 0) {
+              glassPing(ctx, now() + 0.01, master, { freq: 6000 + i * 100, gain: 0.2, dur: 0.15 })
+            }
+          }, (i / steps) * countDur)
+        }
       }
 
       if (tier.key === 'godlike') {
@@ -421,7 +432,7 @@ function Celebration({ tierKey, count, onDone }: { tierKey: TierKey; count: numb
       timersRef.current = []
       document.body.classList.remove('ws-active')
     }
-  }, [tier, onDone])
+  }, [tier, promo, onDone])
 
   const curColor = COLOR_STEPS[colorIdx] || COLOR_STEPS[0]
   const isBurst = phase === 'burst' || phase === 'main' || phase === 'promo'
@@ -525,14 +536,14 @@ function Celebration({ tierKey, count, onDone }: { tierKey: TierKey; count: numb
         </div>
       </div>
 
-      {/* RANK PROMOTION */}
-      {showPromo && (
+      {/* RANK PROMOTION (実データがある場合のみ表示) */}
+      {showPromo && promo && (
         <div className="ws-promo active">
           <div className="ws-promo-label">{PROMO_LABELS[tier.key]}</div>
-          <div className="ws-promo-from">{tier.rankFrom}位</div>
+          <div className="ws-promo-from">{promo.rankFrom}位</div>
           <div className="ws-promo-arrow">▶</div>
           <div className="ws-promo-to">{promoRank}位</div>
-          <div className="ws-promo-delta">+{tier.rankFrom - promoRank}</div>
+          <div className="ws-promo-delta">+{promo.rankFrom - promoRank}</div>
           <div style={{
             gridColumn: '1 / -1',
             fontFamily: 'var(--font-mono, monospace)',
@@ -541,8 +552,8 @@ function Celebration({ tierKey, count, onDone }: { tierKey: TierKey; count: numb
             marginTop: 2,
             letterSpacing: '0.1em',
           }}>
-            SR {tier.promoFrom} → <span style={{ color: tierGlow, fontWeight: 800 }}>{promoRating}</span>
-            <span style={{ color: '#00ff88', marginLeft: 10, fontWeight: 800 }}>(+{promoRating - tier.promoFrom})</span>
+            SR {promo.ratingFrom} → <span style={{ color: tierGlow, fontWeight: 800 }}>{promoRating}</span>
+            <span style={{ color: '#00ff88', marginLeft: 10, fontWeight: 800 }}>(+{promoRating - promo.ratingFrom})</span>
           </div>
         </div>
       )}
@@ -553,12 +564,12 @@ function Celebration({ tierKey, count, onDone }: { tierKey: TierKey; count: numb
 // ================================================================
 // HOST — listens for custom events
 // ================================================================
-export function triggerWinStreak(count: number, tier?: TierKey) {
-  window.dispatchEvent(new CustomEvent('ascent:winstreak', { detail: { count, tier } }))
+export function triggerWinStreak(count: number, tier?: TierKey, promo?: PromoData) {
+  window.dispatchEvent(new CustomEvent('ascent:winstreak', { detail: { count, tier, promo } }))
 }
 
 export default function WinStreakHost() {
-  const [state, setState] = useState<{ tierKey: TierKey; count: number; id: number } | null>(null)
+  const [state, setState] = useState<{ tierKey: TierKey; count: number; promo: PromoData | null; id: number } | null>(null)
 
   const handleDone = useCallback(() => setState(null), [])
 
@@ -569,7 +580,7 @@ export default function WinStreakHost() {
       const forced = detail?.tier as TierKey | undefined
       const tier = forced ? TIERS[forced] : tierFor(count)
       if (!tier) return
-      setState({ tierKey: tier.key, count, id: Date.now() })
+      setState({ tierKey: tier.key, count, promo: (detail?.promo as PromoData | undefined) ?? null, id: Date.now() })
     }
     window.addEventListener('ascent:winstreak', handler)
     return () => window.removeEventListener('ascent:winstreak', handler)
@@ -581,6 +592,7 @@ export default function WinStreakHost() {
       key={state.id}
       tierKey={state.tierKey}
       count={state.count}
+      promo={state.promo}
       onDone={handleDone}
     />
   )

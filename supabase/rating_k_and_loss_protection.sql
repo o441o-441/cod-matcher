@@ -30,35 +30,44 @@ DECLARE
   v_games integer;
   v_k integer;
   v_delta integer;
+  v_before integer;
+  v_after integer;
   v_protected boolean;
 BEGIN
+  -- 期待勝率はマッチメイク時 (キュー参加時点 = match_team_members.rating_before) の
+  -- チーム平均で計算する。一方、各プレイヤーへの適用は「適用時点の実レート
+  -- (profiles.current_rating)」基準で行う。連戦中に前の試合の変動が挟まっても
+  -- rating_history と profiles が一致し、表示とズレない (2026-10-27修正)
   SELECT avg(rating_before) INTO v_winner_avg FROM match_team_members WHERE match_team_id = p_winner_team_id;
   SELECT avg(rating_before) INTO v_loser_avg FROM match_team_members WHERE match_team_id = p_loser_team_id;
   -- v_factor = 1 - 勝者チームの期待勝率 = 敗者チームの期待勝率
   v_factor := 1.0 - 1.0 / (1.0 + power(10.0, (coalesce(v_loser_avg, 1500) - coalesce(v_winner_avg, 1500)) / 400.0));
 
   -- 勝者 (プレイヤーごとにK: 通算10試合未満は48、以降32)
-  FOR r_member IN SELECT mtm.user_id, mtm.rating_before FROM match_team_members mtm WHERE mtm.match_team_id = p_winner_team_id LOOP
-    SELECT coalesce(wins, 0) + coalesce(losses, 0) INTO v_games FROM profiles WHERE id = r_member.user_id;
+  FOR r_member IN SELECT mtm.user_id FROM match_team_members mtm WHERE mtm.match_team_id = p_winner_team_id LOOP
+    SELECT coalesce(wins, 0) + coalesce(losses, 0), coalesce(current_rating, 1500)
+    INTO v_games, v_before FROM profiles WHERE id = r_member.user_id;
     v_k := CASE WHEN coalesce(v_games, 0) < 10 THEN 48 ELSE 32 END;
     v_delta := greatest(1, round(v_k * v_factor));
-    UPDATE profiles SET current_rating = coalesce(current_rating, 1500) + v_delta,
+    v_after := v_before + v_delta;
+    UPDATE profiles SET current_rating = v_after,
                         wins = coalesce(wins, 0) + 1,
                         win_streak = coalesce(win_streak, 0) + 1
     WHERE id = r_member.user_id;
-    UPDATE match_team_members SET rating_after = coalesce(r_member.rating_before, 1500) + v_delta, rating_delta = v_delta
+    UPDATE match_team_members SET rating_after = v_after, rating_delta = v_delta
     WHERE match_team_id = p_winner_team_id AND user_id = r_member.user_id;
     INSERT INTO rating_history (user_id, match_id, rating_before, rating_after, rating_delta, reason)
-    VALUES (r_member.user_id, p_match_id, r_member.rating_before, coalesce(r_member.rating_before, 1500) + v_delta, v_delta, 'match_win');
+    VALUES (r_member.user_id, p_match_id, v_before, v_after, v_delta, 'match_win');
   END LOOP;
 
-  -- 敗者 (1800未満は その日(JST)最初の敗北 が半減)
-  FOR r_member IN SELECT mtm.user_id, mtm.rating_before FROM match_team_members mtm WHERE mtm.match_team_id = p_loser_team_id LOOP
-    SELECT coalesce(wins, 0) + coalesce(losses, 0) INTO v_games FROM profiles WHERE id = r_member.user_id;
+  -- 敗者 (変動前の実レートが1800未満は その日(JST)最初の敗北 が半減)
+  FOR r_member IN SELECT mtm.user_id FROM match_team_members mtm WHERE mtm.match_team_id = p_loser_team_id LOOP
+    SELECT coalesce(wins, 0) + coalesce(losses, 0), coalesce(current_rating, 1500)
+    INTO v_games, v_before FROM profiles WHERE id = r_member.user_id;
     v_k := CASE WHEN coalesce(v_games, 0) < 10 THEN 48 ELSE 32 END;
     v_delta := greatest(1, round(v_k * v_factor));
 
-    v_protected := coalesce(r_member.rating_before, 1500) < 1800
+    v_protected := v_before < 1800
       AND NOT EXISTS (
         SELECT 1 FROM rating_history rh
         WHERE rh.user_id = r_member.user_id
@@ -69,14 +78,15 @@ BEGIN
       v_delta := greatest(1, round(v_delta / 2.0));
     END IF;
 
-    UPDATE profiles SET current_rating = greatest(0, coalesce(current_rating, 1500) - v_delta),
+    v_after := greatest(0, v_before - v_delta);
+    UPDATE profiles SET current_rating = v_after,
                         losses = coalesce(losses, 0) + 1,
                         win_streak = 0
     WHERE id = r_member.user_id;
-    UPDATE match_team_members SET rating_after = greatest(0, coalesce(r_member.rating_before, 1500) - v_delta), rating_delta = -v_delta
+    UPDATE match_team_members SET rating_after = v_after, rating_delta = -v_delta
     WHERE match_team_id = p_loser_team_id AND user_id = r_member.user_id;
     INSERT INTO rating_history (user_id, match_id, rating_before, rating_after, rating_delta, reason)
-    VALUES (r_member.user_id, p_match_id, r_member.rating_before, greatest(0, coalesce(r_member.rating_before, 1500) - v_delta), -v_delta,
+    VALUES (r_member.user_id, p_match_id, v_before, v_after, -v_delta,
             CASE WHEN v_protected THEN 'match_loss_protected' ELSE 'match_loss' END);
   END LOOP;
 END;

@@ -449,24 +449,23 @@ export default function ReportPage() {
     if (match?.status !== "completed" || match.approval_status === "voided") return;
     if (!myUserId || !myMember) return;
 
-    const ratingBefore = myMember.rating_before;
-    if (ratingBefore == null) return;
-
     void (async () => {
       try {
         // 必ずこのマッチの履歴だけを見る (最新行だと別マッチの値を表示してしまう)。
-        // レート変動なしで確定したマッチ (管理者承認等) は履歴が無いので何も表示しない
+        // レート変動なしで確定したマッチ (管理者承認等) は履歴が無いので何も表示しない。
+        // 変動前も履歴から取る (match_team_members.rating_before はキュー参加時点の値の
+        // ため、連戦で前の試合の変動が挟まると実際の変動量とズレて表示される)
         const { data } = await supabase
           .from("rating_history")
-          .select("rating_after")
+          .select("rating_before, rating_after")
           .eq("user_id", myUserId)
           .eq("match_id", matchId)
           .order("created_at", { ascending: false })
           .limit(1)
-          .maybeSingle<{ rating_after: number }>();
+          .maybeSingle<{ rating_before: number | null; rating_after: number }>();
 
         if (data?.rating_after != null) {
-          setOldRating(ratingBefore);
+          setOldRating(data.rating_before ?? myMember.rating_before ?? data.rating_after);
           setNewRating(data.rating_after);
         }
       } catch (e) {
@@ -495,13 +494,38 @@ export default function ReportPage() {
 
         const streak = data?.win_streak ?? 0;
         if (streak >= 3) {
-          triggerWinStreak(streak);
+          // 特進表示は実際のレート変動と順位から作る (取れなければ演出のみで順位表示なし)
+          let promo: { ratingFrom: number; ratingTo: number; rankFrom: number; rankTo: number } | undefined;
+          try {
+            const { data: rh } = await supabase
+              .from("rating_history")
+              .select("rating_before, rating_after")
+              .eq("user_id", myUserId)
+              .eq("match_id", matchId)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle<{ rating_before: number | null; rating_after: number | null }>();
+            if (rh?.rating_before != null && rh.rating_after != null) {
+              // 順位 = 自分よりレートが高いプレイヤー数 + 1
+              const rankAt = async (rating: number) => {
+                const { count } = await supabase
+                  .from("profiles")
+                  .select("id", { count: "exact", head: true })
+                  .gt("current_rating", rating)
+                  .neq("id", myUserId);
+                return (count ?? 0) + 1;
+              };
+              const [rankFrom, rankTo] = await Promise.all([rankAt(rh.rating_before), rankAt(rh.rating_after)]);
+              promo = { ratingFrom: rh.rating_before, ratingTo: rh.rating_after, rankFrom, rankTo };
+            }
+          } catch { /* 順位が取れなくても演出は出す */ }
+          triggerWinStreak(streak, undefined, promo);
         }
       } catch (e) {
         console.error("win streak fetch error:", e);
       }
     })();
-  }, [match?.status, match?.approval_status, match?.winner_match_team_id, myUserId, myMatchTeamId]);
+  }, [match?.status, match?.approval_status, match?.winner_match_team_id, myUserId, myMatchTeamId, matchId]);
 
   const handleGameChange = <K extends keyof ReportFormGame>(
     index: number,
