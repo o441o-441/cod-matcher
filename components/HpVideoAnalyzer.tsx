@@ -49,11 +49,15 @@ type ParseResponse = {
 
 const fmtT = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 const MAX_VIDEO_SEC = 2 * 3600 // これを超える動画はエラー
-const SCAN_STEP_SEC = 0.2 // 自動検出のサンプリング間隔 (秒)。スコアボードは試合終了後0.3秒しか表示されないため細かく刻む
+const SCAN_STEP_SEC = 0.2 // スコアボード探索の間隔 (秒)。表示は試合終了後0.3秒だけなので細かく刻む
 const SCAN_REFINE_SEC = 0.1 // 検出後に表示区間の端を探る間隔 (秒)
 const SCAN_REFINE_MAX_STEPS = 5 // 表示は0.3秒程度なので端探りは片側0.5秒まで
-const SCAN_SKIP_AFTER_HIT_SEC = 5 * 60 // 検出後、次のゲームまで飛ばす幅 (ゲーム間は5分以上空く)
-const SCAN_STAGE_EVERY = 25 // 進捗表示の更新間隔 (ステップ数。0.2秒刻みで約5秒ごと)
+const SB_HUNT_WINDOW_SEC = 30 // 試合終了を検知してからスコアボードを探す範囲 (秒)
+const START_CLOCK_MIN = 270 // 残り時間がこれ以上 (4:30〜4:59) 読めたら試合開始直後とみなす
+const START_CLOCK_MAX = 299
+const END_SCORE = 250 // どちらかがここに達したら試合終了
+const END_CONFIRM_READS = 2 // 250到達 / 残り0:00 は連続n回読めたら確定 (単発の誤読対策)
+const END_NULL_STREAK = 5 // スコアと残り時間が全て読めない状態がn秒続いたら試合終了
 const OCR_INTERVAL_SEC = 1 // OCRのサンプリング間隔 (秒)
 const OCR_MAX_FRAMES = 1200 // 1ゲームのOCRサンプリング上限 (超える長さは間隔が広がる)
 const GAME_LOOKBACK_SEC = 16 * 60 // スコアボードから遡って読む最大範囲 (1ゲームの最長想定)
@@ -160,62 +164,158 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
 
   const clearMarks = () => { setSbMarks([]); setThumbs({}) }
 
-  // ---- スコアボード画面の自動検出 ----
-  // 2本のチーム区切り線 (シアン/オレンジ) のピクセル判定で動画全体を
-  // 粗くスキャンし、見つけた表示区間の中央をスコアボード位置として登録する。
-  // 全てブラウザ内処理 (無料)。誤検出はサムネイルを見て ✕ で外せる
-  const autoScan = async () => {
+  // ---- スコアボード画面の探索 (ピクセル判定・ブラウザ内) ----
+  // fromT から windowSec の範囲を0.2秒刻みで探し、見つけた表示区間の
+  // 中央フレームの時刻を返す (表示は0.3秒しかない)
+  const huntScoreboard = async (
+    vid: HTMLVideoElement,
+    canvas: HTMLCanvasElement,
+    fromT: number,
+    windowSec: number,
+    endLimit: number
+  ): Promise<number | null> => {
+    const huntEnd = Math.min(endLimit, fromT + windowSec)
+    for (let ts = fromT; ts <= huntEnd; ts = Math.round((ts + SCAN_STEP_SEC) * 10) / 10) {
+      if (scanCancel.current) return null
+      let hit = false
+      try {
+        await seekTo(vid, ts)
+        hit = readScoreboardSignature(vid, canvas)
+      } catch { /* シーク失敗は未検出として先へ進む */ }
+      if (!hit) continue
+      // 表示区間の端を探り、中央のフレームを採用 (表示アニメーション途中を避ける)
+      let lo = ts
+      let hi = ts
+      for (let i = 0; i < SCAN_REFINE_MAX_STEPS && lo - SCAN_REFINE_SEC >= 0; i++) {
+        try {
+          await seekTo(vid, lo - SCAN_REFINE_SEC)
+          if (!readScoreboardSignature(vid, canvas)) break
+          lo -= SCAN_REFINE_SEC
+        } catch { break }
+      }
+      for (let i = 0; i < SCAN_REFINE_MAX_STEPS && hi + SCAN_REFINE_SEC <= endLimit; i++) {
+        try {
+          await seekTo(vid, hi + SCAN_REFINE_SEC)
+          if (!readScoreboardSignature(vid, canvas)) break
+          hi += SCAN_REFINE_SEC
+        } catch { break }
+      }
+      return Math.round(((lo + hi) / 2) * 10) / 10
+    }
+    return null
+  }
+
+  // ---- 全自動解析 ----
+  // 1) 1秒間隔で残り時間 (4:30〜4:59) を探して試合開始を検出
+  //    (誤読対策: 2秒後にもう一度読んで残り時間が約2秒進んでいるか検証)
+  // 2) 試合中は1秒間隔でスコアと残り時間を記録 (そのままヒル推移の元データ)
+  // 3) どちらかが250 / 残り0:00 (各連続2回) か、3値とも読めない状態が
+  //    5秒続いたら試合終了
+  // 4) 最後にHUDが読めた時点から30秒間を0.2秒刻みでスコアボードを探索し、
+  //    AI解析でスタッツ保存 + 記録済みの読み取りからヒル推移を保存
+  const autoRun = async () => {
     const vid = videoRef.current
     if (!vid || running || scanning || !vid.duration) return
-    setScanning(true); setError(null)
+    setScanning(true); setError(null); setResults([])
     scanCancel.current = false
     vid.pause()
     const canvas = document.createElement('canvas')
-    let foundCount = 0
+    const msgs: string[] = []
+    let gameNo = Math.max(0, ...games.map(g => g.game_no)) + 1
     try {
+      setScanStage('OCRエンジンを準備中...')
+      await warmupOcr()
       const end = Math.max(0, vid.duration - 0.3)
-      let t = 1
+      let t = 0
       let step = 0
       while (t <= end && !scanCancel.current) {
-        if (step % SCAN_STAGE_EVERY === 0) {
-          setScanStage(`スキャン中... ${fmtT(t)} / ${fmtT(end)} (検出 ${foundCount}件)`)
-        }
+        // --- 1) 試合開始 (残り4:59) を探す ---
+        if (step % 10 === 0) setScanStage(`試合開始を探しています... ${fmtT(t)} / ${fmtT(end)}`)
         step += 1
-        let hit = false
+        let first: { left: number | null; right: number | null; clock: number | null }
         try {
           await seekTo(vid, t)
-          hit = readScoreboardSignature(vid, canvas)
-        } catch { /* シーク失敗は未検出として先へ進む */ }
-        if (!hit) { t = Math.round((t + SCAN_STEP_SEC) * 10) / 10; continue }
-        // 表示区間の端を探り、中央のフレームを採用 (表示アニメーション途中を避ける)
-        let lo = t
-        let hi = t
-        for (let i = 0; i < SCAN_REFINE_MAX_STEPS && lo - SCAN_REFINE_SEC >= 0; i++) {
-          try {
-            await seekTo(vid, lo - SCAN_REFINE_SEC)
-            if (!readScoreboardSignature(vid, canvas)) break
-            lo -= SCAN_REFINE_SEC
-          } catch { break }
-        }
-        for (let i = 0; i < SCAN_REFINE_MAX_STEPS && hi + SCAN_REFINE_SEC <= end; i++) {
-          try {
-            await seekTo(vid, hi + SCAN_REFINE_SEC)
-            if (!readScoreboardSignature(vid, canvas)) break
-            hi += SCAN_REFINE_SEC
-          } catch { break }
-        }
-        const mid = Math.round(((lo + hi) / 2) * 10) / 10
+          first = await readHudScores(vid, calib)
+        } catch { t += 1; continue }
+        if (first.clock === null || first.clock < START_CLOCK_MIN || first.clock > START_CLOCK_MAX) { t += 1; continue }
+        let second: { left: number | null; right: number | null; clock: number | null }
         try {
-          await seekTo(vid, mid)
-          const thumb = 'data:image/jpeg;base64,' + captureJpeg(vid, { width: 240, quality: 0.6 })
-          setThumbs(prev => ({ ...prev, [mid]: thumb }))
-        } catch { /* サムネイル無しでも登録はする */ }
-        setSbMarks(m => (m.some(x => Math.abs(x - mid) < 10) ? m : [...m, mid]))
-        foundCount += 1
-        t = hi + SCAN_SKIP_AFTER_HIT_SEC
+          await seekTo(vid, t + 2)
+          second = await readHudScores(vid, calib)
+        } catch { t += 1; continue }
+        if (second.clock === null || Math.abs(first.clock - 2 - second.clock) > 3) { t += 1; continue }
+
+        // --- 2) 試合中: スコアと残り時間を記録 ---
+        const gameStartT = t
+        const readings: RawFrameReading[] = [
+          { t, left: first.left, right: first.right, clock: first.clock, hill: null },
+          { t: t + 2, left: second.left, right: second.right, clock: second.clock, hill: null },
+        ]
+        let lastOkT = t + 2
+        let nullStreak = 0
+        let scoreEndStreak = 0
+        let clockEndStreak = 0
+        let tb = t + 3
+        while (tb <= end && !scanCancel.current) {
+          let r: { left: number | null; right: number | null; clock: number | null } = { left: null, right: null, clock: null }
+          try {
+            await seekTo(vid, tb)
+            r = await readHudScores(vid, calib)
+          } catch { /* 読めないフレームとして扱う */ }
+          readings.push({ t: tb, left: r.left, right: r.right, clock: r.clock, hill: null })
+          const anyVal = r.left !== null || r.right !== null || r.clock !== null
+          if (anyVal) lastOkT = tb
+          nullStreak = anyVal ? 0 : nullStreak + 1
+          scoreEndStreak = (r.left ?? 0) >= END_SCORE || (r.right ?? 0) >= END_SCORE ? scoreEndStreak + 1 : 0
+          clockEndStreak = r.clock === 0 ? clockEndStreak + 1 : 0
+          setScanStage(`試合を記録中... ${fmtT(tb)} (${r.left ?? '?'} - ${r.right ?? '?'} / 残り ${r.clock !== null ? fmtT(r.clock) : '?'})`)
+          // --- 3) 試合終了の判定 ---
+          if (scoreEndStreak >= END_CONFIRM_READS || clockEndStreak >= END_CONFIRM_READS || nullStreak >= END_NULL_STREAK) break
+          if (tb - gameStartT > GAME_LOOKBACK_SEC) break // 保険: 想定最長を超えたら打ち切り
+          tb += 1
+        }
+        if (scanCancel.current) break
+
+        // --- 4) 試合終了直後のスコアボードを探す ---
+        setScanStage(`スコアボード画面を探しています... (${fmtT(lastOkT)} から${SB_HUNT_WINDOW_SEC}秒間)`)
+        const sbT = await huntScoreboard(vid, canvas, lastOkT, SB_HUNT_WINDOW_SEC, end)
+        if (sbT === null) {
+          if (!scanCancel.current) {
+            msgs.push(`✗ ${fmtT(gameStartT)} 開始の試合: 終了後にスコアボード画面を見つけられず、提出をスキップしました`)
+            setResults([...msgs])
+          }
+          t = lastOkT + SB_HUNT_WINDOW_SEC + 1
+          continue
+        }
+        if (gameNo > 12) { msgs.push('1試合12ゲームの上限に達したため残りをスキップしました'); setResults([...msgs]); break }
+        try {
+          setScanStage(`スコアボード (${fmtT(sbT)}) をAI解析中...`)
+          const game = await submitScoreboardAt(vid, sbT, gameNo)
+          gameNo += 1
+          onSaved()
+          if (game.mode === 'hp') {
+            try {
+              setScanStage('ヒル保持の推移を計算中...')
+              const res = await saveTimelineFromReadings(game, readings, OCR_INTERVAL_SEC)
+              msgs.push(`✓ GAME ${game.game_no}${game.map ? ` (${game.map})` : ''}: スタッツ + ヒル推移 (${res.n}ポイント、試合開始 ${fmtT(res.anchorAt)}) を保存`)
+              onSaved()
+            } catch (e2) {
+              msgs.push(`△ GAME ${game.game_no}: スタッツは保存、ヒル推移は失敗 — ${e2 instanceof Error ? e2.message : 'エラー'}`)
+            }
+          } else {
+            msgs.push(`✓ GAME ${game.game_no}${game.map ? ` (${game.map})` : ''}: スタッツを保存 (ハードポイント以外のため推移なし)`)
+          }
+        } catch (e) {
+          msgs.push(`✗ スコアボード (${fmtT(sbT)}): AI解析に失敗 — ${e instanceof Error ? e.message : 'エラー'}`)
+        }
+        setResults([...msgs])
+        t = sbT + 30 // ロビーを少し飛ばして次の試合を探す
       }
-      if (foundCount === 0 && !scanCancel.current) {
-        setError('スコアボード画面を検出できませんでした。録画の画質や画面比率によっては検出できないことがあります。手動でシークして「追加」してください')
+      if (msgs.length === 0 && !scanCancel.current) {
+        setError('試合を検出できませんでした。試合中の画面で「テスト読み取り」をして、残り時間とスコアの枠位置が合っているか確認してください')
+      } else if (msgs.length > 0) {
+        msgs.push(scanCancel.current ? '中断しました。保存済みのゲームはそのまま残っています' : '完了しました。間違いがあれば各ゲームの「取り消す」で削除して再提出できます')
+        setResults([...msgs])
       }
     } finally {
       setScanning(false)
@@ -301,6 +401,15 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
       onStage(`OCRで読み取り中... ${i + 1}/${times.length}`)
     }
     onStage('ヒル保持の推移を計算中...')
+    return saveTimelineFromReadings(game, readings, interval)
+  }
+
+  // 読み取り済みのフレーム列からヒル保持の推移を導出して保存する
+  const saveTimelineFromReadings = async (
+    game: AnalyzerGame,
+    readings: RawFrameReading[],
+    interval: number
+  ): Promise<{ n: number; anchorAt: number }> => {
     const anchorT = detectAnchorFromClock(readings)
     if (anchorT === null) {
       throw new Error('ゲーム残り時間を読み取れず、試合開始位置を判定できませんでした。「残り時間枠」の位置を調整してください')
@@ -393,8 +502,8 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
         <button className="btn-ghost btn-sm" onClick={onClose} disabled={running}>閉じる</button>
       </div>
       <p className="muted" style={{ fontSize: 11.5, marginTop: 0, marginBottom: 10 }}>
-        LK動画 (観戦/配信視点の録画・2時間まで) を読み込んで「自動検出」を押すと、各ゲームのスコアボード (リザルト) 画面を探して登録し、
-        スタッツとハードポイントのヒル保持推移を順に保存します。試合開始位置は残り時間から自動判定されます。
+        LK動画 (観戦/配信視点の録画・2時間まで) を読み込んで「全自動で解析して保存」を押すと、試合開始の検出 → スコア推移の記録 →
+        リザルト画面の検出 → スタッツとヒル保持推移の保存までを一括で行います。
         YouTubeにある動画は一度ダウンロードしてから読み込んでください。
         動画はサーバーに保存されません。AIを使うのはスコアボード画像の解析だけで、推移の読み取りはブラウザ内OCR (無料) です。
       </p>
@@ -469,9 +578,11 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
 
           {/* スコアボード位置の登録 */}
           <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <button className="btn-primary btn-sm" disabled={running || scanning} onClick={() => void autoScan()}>
-              {scanning ? (scanStage || 'スキャン中...') : '🔎 スコアボード画面を自動検出'}
-            </button>
+            {target === 'new' && (
+              <button className="btn-primary btn-sm" disabled={running || scanning} onClick={() => void autoRun()}>
+                {scanning ? (scanStage || '自動解析中...') : '▶ 全自動で解析して保存'}
+              </button>
+            )}
             {scanning && (
               <button className="btn-ghost btn-sm" style={{ fontSize: 10.5 }} onClick={() => { scanCancel.current = true }}>
                 中断
@@ -507,8 +618,9 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
             </div>
           )}
           <p className="dim" style={{ fontSize: 11, margin: '6px 0 0' }}>
-            「自動検出」は動画全体を0.2秒刻みでスキャンして各ゲームのリザルト画面 (表示は0.3秒だけ) を探します (ブラウザ内処理・無料、動画10分あたり1〜3分ほど)。
-            検出結果はサムネイルで確認し、間違いは ✕ で外してください。
+            「全自動」は動画の頭から試合開始 (残り4:59) を探し、スコアの推移を記録しながら試合終了を検知して、
+            直後のリザルト画面 (表示は0.3秒だけ) を自動で見つけて保存まで行います。
+            ハードポイント以外のゲーム (SnDなど) は自動では見つからないため、リザルト画面を手動で追加して「解析して保存」を使ってください。
             {target === 'new'
               ? ' 試合の順番どおりでなくても、位置順に並べ替えて処理されます。'
               : ' 既存ゲームへの後付けでは、最初に登録した1つだけが使われます。'}
