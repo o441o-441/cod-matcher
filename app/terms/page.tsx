@@ -96,7 +96,7 @@ export default function TermsPage() {
           利用者がブログ機能を通じて投稿したコンテンツの著作権は当該利用者に帰属しますが、本サービス上での表示・配信に必要な範囲で運営者に利用を許諾するものとします。
         </p>
         <p className="muted">
-          ※ Call of Duty、Black Ops 等のゲームタイトルおよび関連する商標は、Activision Publishing, Inc. および各権利者の商標または登録商標です。本サービスはこれらの権利者とは一切関係ありません。
+          ※ Call of Duty、Modern Warfare、Black Ops 等のゲームタイトルおよび関連する商標は、Activision Publishing, Inc. および各権利者の商標または登録商標です。本サービスはこれらの権利者とは一切関係ありません。
         </p>
 
         <h2>第8条（免責事項）</h2>

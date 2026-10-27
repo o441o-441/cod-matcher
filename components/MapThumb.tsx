@@ -12,6 +12,13 @@ const MAP_GRADS: Record<string, [string, string, string]> = {
   pier:     ['#0a1e2e', '#205878', '#7cd8ff'],
   orbit:    ['#0a0a2e', '#2828a0', '#8080ff'],
   hacienda: ['#2e1a0a', '#8a5a2a', '#ffc870'],
+  coal:     ['#1a2430', '#3e617e', '#9ccfee'],
+  silkworm: ['#241a30', '#5a3e7e', '#cfaaee'],
+  munitions:['#302010', '#7e5a2e', '#eec88a'],
+  mumbai:   ['#301a14', '#8a4a30', '#ffb288'],
+  reactor:  ['#102820', '#2e6e52', '#8aeec0'],
+  rooftop:  ['#141e32', '#3a4e8a', '#aab8ff'],
+  lotus:    ['#2a1020', '#7e2e5a', '#ee8ac0'],
 }
 
 export default function MapThumb({

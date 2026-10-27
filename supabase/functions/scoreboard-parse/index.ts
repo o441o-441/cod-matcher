@@ -34,11 +34,11 @@ type ParsedPlayer = {
   stats: Record<string, unknown>
 }
 
-const PROMPT = `これはCall of Duty (Black Ops 7) の試合終了時スコアボードのスクリーンショットです(配信画面の切り抜きの場合があります)。UI言語は日本語・英語・韓国語のいずれかです。以下のJSONだけを出力してください(説明文・コードフェンス不要):
+const PROMPT = `これはCall of Duty (Modern Warfare 4) の試合終了時スコアボードのスクリーンショットです(配信画面の切り抜きの場合があります)。UI言語は日本語・英語・韓国語のいずれかです。以下のJSONだけを出力してください(説明文・コードフェンス不要):
 
 {
   "mode": "hp" | "snd" | "ovl" | null,  // CDLハードポイント=hp, サーチ&デストロイ=snd, オーバーロード=ovl
-  "map": string | null,                  // マップ名。日本語の通称があれば日本語で (例: グリッドロック, デン, フリークエンシー, 酒, コロッサス, スカー, ハシエンダ)。不明ならそのままの表記
+  "map": string | null,                  // マップ名。日本語の通称があれば日本語で (例: コール, シルクウォーム, ミューニション, ムンバイ, リアクター, ルーフトップ, ロータス)。不明ならそのままの表記
   "duration_seconds": number | null,     // 総プレイ時間を秒に換算
   "team_a_score": number | null,         // 上のチーム(A)のスコア (画面上部の左側の数字)
   "team_b_score": number | null,

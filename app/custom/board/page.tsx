@@ -894,7 +894,7 @@ export default function ScrimBoardPage() {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
           <div className="mono" style={{ fontSize: 19, fontWeight: 600, letterSpacing: '0.04em' }}>{dateLabel || ' '}</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <span className="badge"><span className="badge-dot" />BLACK OPS 7 · 4v4</span>
+            <span className="badge"><span className="badge-dot" />MODERN WARFARE 4 · 4v4</span>
             <span className="badge violet">UNRATED — レート変動なし</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>

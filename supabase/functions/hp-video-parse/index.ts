@@ -28,7 +28,7 @@ const MAX_FRAME_B64 = 600_000 // 約450KB/枚
 type Frame = { i: number; data: string }
 type Reading = { i: number; left: number | null; right: number | null; clock: number | null; hill: number | null; phase?: string }
 
-const PROMPT_HUD = `これはCall of Duty (Black Ops 7) ハードポイントの試合映像(観戦/配信視点)から切り出した「画面上部」の連続フレームです。各フレームの直前に「フレーム N」とラベルを付けています。HUDから以下を読み取り、JSON配列だけを出力してください(説明文・コードフェンス不要):
+const PROMPT_HUD = `これはCall of Duty (Modern Warfare 4) ハードポイントの試合映像(観戦/配信視点)から切り出した「画面上部」の連続フレームです。各フレームの直前に「フレーム N」とラベルを付けています。HUDから以下を読み取り、JSON配列だけを出力してください(説明文・コードフェンス不要):
 
 [
   {
@@ -43,7 +43,7 @@ const PROMPT_HUD = `これはCall of Duty (Black Ops 7) ハードポイントの
 注意: スコアは0〜300程度の整数。確信が持てない値は null にしてください。試合中でないフレーム(リザルト画面・キルカメラ・ロード画面・リプレイ)はすべて null で構いません。必ず渡したフレームと同じ数の要素を、同じ "i" で返してください。`
 
 // 自動ゲーム検出用: 縮小フル画面フレームの分類
-const PROMPT_SCAN = `これはCall of Duty (Black Ops 7) の交流戦の録画(観戦/配信視点)から等間隔で切り出した縮小フレームです。1本の動画に複数ゲームが収録されています。各フレームの直前に「フレーム N」とラベルを付けています。各フレームを分類し、JSON配列だけを出力してください(説明文・コードフェンス不要):
+const PROMPT_SCAN = `これはCall of Duty (Modern Warfare 4) の交流戦の録画(観戦/配信視点)から等間隔で切り出した縮小フレームです。1本の動画に複数ゲームが収録されています。各フレームの直前に「フレーム N」とラベルを付けています。各フレームを分類し、JSON配列だけを出力してください(説明文・コードフェンス不要):
 
 [
   {

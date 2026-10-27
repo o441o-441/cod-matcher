@@ -131,7 +131,7 @@ type MatchMessageRow = {
 };
 
 const PHASE_POOLS: Record<"hp" | "snd" | "ovl", string[]> = {
-  hp: ["酒", "コロッサス", "デン", "スカー", "グリッドロック", "ハシエンダ"],
+  hp: ["コール", "シルクウォーム", "ミューニション", "ムンバイ", "リアクター", "ルーフトップ", "ロータス"],
   snd: ["デン", "グリッドロック", "レイド", "フリンジ", "酒", "ハシエンダ"],
   ovl: ["デン", "エクスポージャー", "スカー", "グリッドロック"],
 };
@@ -163,13 +163,19 @@ const MAP_META: Record<string, { id: string; en: string }> = {
   "酒": { id: "sake", en: "Sake" },
   "コロッサス": { id: "colossus", en: "Colossus" },
   "デン": { id: "den", en: "Den" },
-
   "スカー": { id: "scar", en: "Scar" },
   "グリッドロック": { id: "gridlock", en: "Gridlock" },
   "ハシエンダ": { id: "hacienda", en: "Hacienda" },
   "レイド": { id: "raid", en: "Raid" },
   "フリンジ": { id: "fringe", en: "Fringe" },
   "エクスポージャー": { id: "exposure", en: "Exposure" },
+  "コール": { id: "coal", en: "Coal" },
+  "シルクウォーム": { id: "silkworm", en: "Silkworm" },
+  "ミューニション": { id: "munitions", en: "Munitions" },
+  "ムンバイ": { id: "mumbai", en: "Mumbai" },
+  "リアクター": { id: "reactor", en: "Reactor" },
+  "ルーフトップ": { id: "rooftop", en: "Rooftop" },
+  "ロータス": { id: "lotus", en: "Lotus" },
 };
 
 function parsePhaseState(

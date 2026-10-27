@@ -13,7 +13,7 @@ export default function RulesPage() {
         <div>
           <p className="eyebrow">RULES &amp; FAQ</p>
           <h1 className="display"><em>ルール一覧</em></h1>
-          <p className="muted">Black Ops 7 GA（ジェントルマンズアグリーメント）</p>
+          <p className="muted">ASCENT独自ルール（Modern Warfare 4）</p>
         </div>
         <button className="btn-ghost" style={{ padding: '8px 14px' }} onClick={() => router.back()}>
           戻る
@@ -46,12 +46,13 @@ export default function RulesPage() {
             <div className="card">
               <h3>ハードポイント</h3>
               <ul>
-                <li>酒</li>
-                <li>コロッサス</li>
-                <li>デン</li>
-                <li>スカー</li>
-                <li>グリッドロック</li>
-                <li>ハシエンダ</li>
+                <li>コール</li>
+                <li>シルクウォーム</li>
+                <li>ミューニション</li>
+                <li>ムンバイ</li>
+                <li>リアクター</li>
+                <li>ルーフトップ</li>
+                <li>ロータス</li>
               </ul>
             </div>
 
@@ -98,7 +99,10 @@ export default function RulesPage() {
             <h3>CDL ハードポイント</h3>
             <p>「CDL ハードポイント」を選択。ルール設定から以下を変更してください。</p>
             <ul>
-              <li>ゲームプレイタブ → オーバークロック無効：<strong>オフ</strong></li>
+              <li>チームタブ → キルカメラ：<strong>ON</strong></li>
+              <li>チームタブ → リスポーンの無効期間：<strong>3秒</strong></li>
+              <li>チームタブ → 味方への誤射：<strong>処罰</strong></li>
+              <li>チームタブ → 味方への誤射の処罰リミット：<strong>5キル</strong></li>
             </ul>
           </div>
         </div>
@@ -132,144 +136,102 @@ export default function RulesPage() {
       </div>
 
       <div className="section">
-        <p className="sec-title">使用可能武器</p>
+        <p className="sec-title">使用禁止アイテム（主なもの）</p>
+        <div className="card-strong">
+          <div className="grid grid-3">
+            <div className="card" style={{ borderColor: 'rgba(255,77,109,0.3)' }}>
+              <h3>武器</h3>
+              <ul>
+                <li>ショットガン・LMG・スナイパー・マークスマン全種</li>
+                <li>M4</li>
+                <li>HYEON BURST</li>
+                <li>KASTOV 762</li>
+                <li>PATRIOT XMR</li>
+                <li>ODEN</li>
+                <li>AXION</li>
+                <li>CRONEN SQUALL</li>
+                <li>WZ.55 STRIGA</li>
+                <li>PPSH-41</li>
+                <li>X-58 Nyx</li>
+                <li>その他新武器</li>
+              </ul>
+            </div>
+
+            <div className="card" style={{ borderColor: 'rgba(255,77,109,0.3)' }}>
+              <h3>サブ</h3>
+              <ul>
+                <li>ランチャー全種</li>
+                <li>KRAIT P68</li>
+                <li>.50 GS</li>
+                <li>Mojave .357</li>
+              </ul>
+            </div>
+
+            <div className="card" style={{ borderColor: 'rgba(255,77,109,0.3)' }}>
+              <h3>アタッチメント</h3>
+              <ul>
+                <li>等倍以外の倍率スコープ</li>
+                <li>レーザー</li>
+                <li>サプレッサー（その他赤点を消す装備）</li>
+                <li>HS倍率バレル</li>
+                <li>連射系</li>
+                <li>APEX</li>
+                <li>アキンボ</li>
+                <li>高速弾以外の特殊弾全般</li>
+                <li>ピストル用全般</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="section">
+        <p className="sec-title">許可されているもの</p>
         <div className="card-strong">
           <div className="grid grid-2">
             <div className="card">
               <h3>AR</h3>
-              <p className="mono">M15 MOD 0</p>
-              <p className="muted">マズル、マガジン禁止 / 等倍サイト必須</p>
+              <p className="mono">HAN 86</p>
             </div>
 
             <div className="card">
               <h3>SMG</h3>
-              <p className="mono">DRAVEC 45 / MPC-25</p>
-              <p className="muted">マズルは KuHN ポートコンプ以外使用不可 / バレルは 13.1&quot;レイザーバックバレル以外使用不可 / フローガードフォアグリップ使用不可 / 強装弾使用不可</p>
+              <p className="mono">ISO NIGHTSHADE / VEL 46</p>
             </div>
 
             <div className="card">
-              <h3>SR</h3>
-              <p className="mono">VS RECON</p>
-              <p className="muted">アタッチメント全て禁止 / S&amp;D で 1 人のみ使用可</p>
-            </div>
-
-            <div className="card">
-              <h3>HG</h3>
-              <p className="mono">JAGER 45</p>
-              <p className="muted">アタッチメントはサイトのみ可</p>
-            </div>
-
-            <div className="card">
-              <h3>近接武器</h3>
-              <p className="mono">KNIFE</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="section">
-        <p className="sec-title">装備</p>
-        <div className="card-strong">
-          <div className="grid grid-2">
-            <div className="card">
-              <h3>フィールドアップグレード</h3>
-              <ul>
-                <li>トロフィー（チーム内 2 人まで、高性能バッテリー必須）</li>
-                <li>トロフィーを持たない人はミュートフィールドを持つ</li>
-              </ul>
-            </div>
-
-            <div className="card">
-              <h3>タクティカル</h3>
-              <ul>
-                <li>スタングレネード</li>
-                <li>スモーク（S&amp;D のみ 1 人まで可）</li>
-              </ul>
-              <p className="muted">タクティカルはオーバークロック可</p>
+              <h3>サブ</h3>
+              <p className="mono">SANG 9MM</p>
             </div>
 
             <div className="card">
               <h3>リーサル</h3>
-              <ul>
-                <li>フラグ</li>
-                <li>スティッキーグレネード</li>
-              </ul>
-              <p className="muted">リーサルのオーバークロックは「高密度爆薬」のみ使用可</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="section">
-        <p className="sec-title">パーク</p>
-        <div className="card-strong">
-          <div className="grid grid-2">
-            <div className="card">
-              <h3>PERK 1</h3>
-              <ul>
-                <li>ライトウェイト</li>
-                <li>ニンジャ</li>
-                <li>フラックジャケット</li>
-              </ul>
+              <p className="mono">Frag / Semtex</p>
             </div>
 
             <div className="card">
-              <h3>PERK 2</h3>
-              <ul>
-                <li>テックマスク</li>
-                <li>ファストハンド</li>
-              </ul>
+              <h3>タクティカル</h3>
+              <p className="mono">コンカッショングレネード</p>
             </div>
 
             <div className="card">
-              <h3>PERK 3</h3>
-              <ul>
-                <li>デクスタリティ</li>
-              </ul>
+              <h3>フィールドアップグレード</h3>
+              <p className="mono">トロフィーのみ（チーム2人）</p>
             </div>
 
             <div className="card">
-              <h3>ワイルドカード</h3>
+              <h3>キルストリーク</h3>
+              <p className="mono">無し</p>
+            </div>
+
+            <div className="card">
+              <h3>パーク</h3>
               <ul>
-                <li>PERK グリード</li>
+                <li>パーク1：キルチェーン</li>
+                <li>パーク2：ブラッドラッシュ / ボムスクアッド / ファストハンド / ニンジャ</li>
+                <li>パーク3：バトルハーデン</li>
               </ul>
             </div>
-          </div>
-
-          <div className="card mt-s" style={{ borderColor: 'rgba(255,77,109,0.3)' }}>
-            <p className="danger">
-              <strong>禁止:</strong> フラックジャケット と テックマスク の同時使用は禁止
-            </p>
-            <p className="muted">コンバットスペシャルのタクティシャンは使用可</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="section">
-        <p className="sec-title">スコアストリーク</p>
-        <div className="card-strong">
-          <div className="card">
-            <p>ヘルストームのみ使用可能</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="section">
-        <p className="sec-title">アタッチメント制限</p>
-        <div className="card-strong">
-          <div className="card">
-            <ul>
-              <li>等倍以外のサイト禁止</li>
-              <li>赤点を消すものは禁止</li>
-              <li>ヘッドショット倍率を上げるものは禁止</li>
-              <li>連射速度を上げるものは禁止</li>
-              <li>レーザー禁止</li>
-              <li>アンダーバレルの M335-X 系統は禁止</li>
-              <li>プレステージアタッチメント禁止</li>
-              <li>AR はマズル禁止</li>
-              <li>VAS 収束フォアグリップ禁止</li>
-              <li>HG はサイト以外禁止</li>
-            </ul>
           </div>
         </div>
       </div>
