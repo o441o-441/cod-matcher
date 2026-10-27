@@ -164,6 +164,25 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
 
   const clearMarks = () => { setSbMarks([]); setThumbs({}) }
 
+  // スコアボードの解析・保存を最大3回試す (AI解析の一時的な失敗対策)。
+  // 2回目以降はフレームを±0.1秒ずらして、ブレたフレームを引いた場合もカバーする
+  const submitScoreboardWithRetry = async (
+    vid: HTMLVideoElement,
+    sbT: number,
+    gameNo: number,
+    onAttempt?: (attempt: number) => void
+  ): Promise<AnalyzerGame> => {
+    const offsets = [0, -0.1, 0.1]
+    let lastErr: unknown = null
+    for (let i = 0; i < offsets.length; i++) {
+      if (i > 0) onAttempt?.(i + 1)
+      try {
+        return await submitScoreboardAt(vid, Math.max(0, sbT + offsets[i]), gameNo)
+      } catch (e) { lastErr = e }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error('スコアボードの解析に失敗しました')
+  }
+
   // ---- スコアボード画面の探索 (ピクセル判定・ブラウザ内) ----
   // fromT から windowSec の範囲を0.2秒刻みで探し、見つけた表示区間の
   // 中央フレームの時刻を返す (表示は0.3秒しかない)
@@ -244,6 +263,10 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
           second = await readHudScores(vid, calib)
         } catch { t += 1; continue }
         if (second.clock === null || Math.abs(first.clock - 2 - second.clock) > 3) { t += 1; continue }
+        // 試合開始位置 (残り時間が4:59だった瞬間) を検出フレームから逆算する。
+        // 残り時間は地点保持中に停止するため、停止がまだ蓄積していない
+        // 開始直後のこの2フレームからの逆算が最も正確 (早い方の候補を採用)
+        const anchorT = Math.max(0, Math.min(t + first.clock - 299, t + 2 + second.clock - 299))
 
         // --- 2) 試合中: スコアと残り時間を記録 ---
         const gameStartT = t
@@ -290,13 +313,14 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
         if (gameNo > 12) { msgs.push('1試合12ゲームの上限に達したため残りをスキップしました'); setResults([...msgs]); break }
         try {
           setScanStage(`スコアボード (${fmtT(sbT)}) をAI解析中...`)
-          const game = await submitScoreboardAt(vid, sbT, gameNo)
+          const game = await submitScoreboardWithRetry(vid, sbT, gameNo,
+            n => setScanStage(`スコアボード (${fmtT(sbT)}) をAI解析中... (再試行 ${n}/3)`))
           gameNo += 1
           onSaved()
           if (game.mode === 'hp') {
             try {
               setScanStage('ヒル保持の推移を計算中...')
-              const res = await saveTimelineFromReadings(game, readings, OCR_INTERVAL_SEC)
+              const res = await saveTimelineFromReadings(game, readings, OCR_INTERVAL_SEC, anchorT)
               msgs.push(`✓ GAME ${game.game_no}${game.map ? ` (${game.map})` : ''}: スタッツ + ヒル推移 (${res.n}ポイント、試合開始 ${fmtT(res.anchorAt)}) を保存`)
               onSaved()
             } catch (e2) {
@@ -404,13 +428,16 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     return saveTimelineFromReadings(game, readings, interval)
   }
 
-  // 読み取り済みのフレーム列からヒル保持の推移を導出して保存する
+  // 読み取り済みのフレーム列からヒル保持の推移を導出して保存する。
+  // knownAnchorT: 呼び出し側が試合開始位置を確定できている場合はそれを使う
+  // (残り時間は保持中に停止するため、読み値からの逆算より開始検出時の値が正確)
   const saveTimelineFromReadings = async (
     game: AnalyzerGame,
     readings: RawFrameReading[],
-    interval: number
+    interval: number,
+    knownAnchorT?: number
   ): Promise<{ n: number; anchorAt: number }> => {
-    const anchorT = detectAnchorFromClock(readings)
+    const anchorT = knownAnchorT ?? detectAnchorFromClock(readings)
     if (anchorT === null) {
       throw new Error('ゲーム残り時間を読み取れず、試合開始位置を判定できませんでした。「残り時間枠」の位置を調整してください')
     }
@@ -453,7 +480,8 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
           if (gameNo > 12) { msgs.push('1試合12ゲームの上限に達したため残りをスキップしました'); break }
           try {
             setStage(`${label}: スコアボードを解析中...`)
-            const game = await submitScoreboardAt(vid, sbT, gameNo)
+            const game = await submitScoreboardWithRetry(vid, sbT, gameNo,
+              n => setStage(`${label}: スコアボードを解析中... (再試行 ${n}/3)`))
             gameNo += 1
             onSaved()
             if (game.mode === 'hp') {

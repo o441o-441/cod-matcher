@@ -260,15 +260,24 @@ export function derive(readings: RawFrameReading[], hostIsLeft: boolean, opts?: 
 
 // ゲーム残り時間の読み取りから試合開始位置を推定する。
 // HPの残り時間は5:00から始まり、4:59 (=299秒) になった瞬間が試合開始。
-// 各サンプルの「開始位置候補 = t + clock - 299」の中央値を取るため、
-// 一部のフレームでOCRが誤読・欠損しても安定して求まる
+//
+// 注意: BO7のHPは地点を保持している間は残り時間が停止する。
+// そのため「開始位置候補 = t + clock - 299」が正しいのは、停止が
+// まだ蓄積していない開始直後の読みだけで、試合が進むほど候補は
+// 後ろ (大きい値) にズレていく。開始直後 (残り時間が高い) の読みを
+// 優先し、無ければ停止の蓄積が最小な下位側の分位点を採用する
 export function detectAnchorFromClock(readings: RawFrameReading[], clockStart = 299): number | null {
-  const cands = readings
-    .filter(r => r.clock !== null && r.clock >= 30 && r.clock <= clockStart)
-    .map(r => r.t + (r.clock as number) - clockStart)
-  if (cands.length < 5) return null
-  const s = [...cands].sort((a, b) => a - b)
-  return Math.max(0, s[Math.floor(s.length / 2)])
+  const valid = readings.filter(r => r.clock !== null && r.clock >= 30 && r.clock <= clockStart)
+  if (valid.length < 5) return null
+  // 開始から約25秒以内 (停止の蓄積がほぼゼロ) の読みがあればその中央値
+  const early = valid.filter(r => (r.clock as number) >= clockStart - 25)
+  if (early.length >= 3) {
+    const cands = early.map(r => r.t + (r.clock as number) - clockStart).sort((a, b) => a - b)
+    return Math.max(0, cands[Math.floor(cands.length / 2)])
+  }
+  // フォールバック: 全候補の下位10% (誤読の外れ値は避けつつ、停止の影響が小さい側)
+  const cands = valid.map(r => r.t + (r.clock as number) - clockStart).sort((a, b) => a - b)
+  return Math.max(0, cands[Math.floor(cands.length * 0.1)])
 }
 
 // 左右どちらがホストかを、確定済みの最終スコアと照合して自動判定する。
