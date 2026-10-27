@@ -7,6 +7,7 @@ import {
 } from '@/lib/hpVideo'
 import { deriveOriented, detectAnchorFromClock, type RawFrameReading } from '@/lib/hpTimeline'
 import { loadCalib, readHudScores, saveCalib, warmupOcr, type HudCalib } from '@/lib/hpOcr'
+import { readScoreboardSignature } from '@/lib/sbDetect'
 
 // ============================================================
 // LK動画 (試合録画) の解析フロー
@@ -48,6 +49,11 @@ type ParseResponse = {
 
 const fmtT = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 const MAX_VIDEO_SEC = 2 * 3600 // これを超える動画はエラー
+const SCAN_STEP_SEC = 0.2 // 自動検出のサンプリング間隔 (秒)。スコアボードは試合終了後0.3秒しか表示されないため細かく刻む
+const SCAN_REFINE_SEC = 0.1 // 検出後に表示区間の端を探る間隔 (秒)
+const SCAN_REFINE_MAX_STEPS = 5 // 表示は0.3秒程度なので端探りは片側0.5秒まで
+const SCAN_SKIP_AFTER_HIT_SEC = 5 * 60 // 検出後、次のゲームまで飛ばす幅 (ゲーム間は5分以上空く)
+const SCAN_STAGE_EVERY = 25 // 進捗表示の更新間隔 (ステップ数。0.2秒刻みで約5秒ごと)
 const OCR_INTERVAL_SEC = 1 // OCRのサンプリング間隔 (秒)
 const OCR_MAX_FRAMES = 1200 // 1ゲームのOCRサンプリング上限 (超える長さは間隔が広がる)
 const GAME_LOOKBACK_SEC = 16 * 60 // スコアボードから遡って読む最大範囲 (1ゲームの最長想定)
@@ -72,6 +78,10 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
 
   const [target, setTarget] = useState<string>('new') // 'new' | 既存HPゲームのid
   const [sbMarks, setSbMarks] = useState<number[]>([]) // スコアボード画面の動画内位置 (秒)
+  const [thumbs, setThumbs] = useState<Record<number, string>>({}) // 位置 → サムネイル (dataURL)
+  const [scanning, setScanning] = useState(false)
+  const [scanStage, setScanStage] = useState('')
+  const scanCancel = useRef(false)
 
   // ヒル推移の読み取りはブラウザOCR (無料・通信なし) のみ
   const [calib, setCalib] = useState<HudCalib>(() => loadCalib())
@@ -88,7 +98,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     const f = files?.[0]
     if (!f) return
     if (url) URL.revokeObjectURL(url)
-    setError(null); setResults([]); setSbMarks([])
+    setError(null); setResults([]); setSbMarks([]); setThumbs({})
     setFileName(f.name)
     setUrl(URL.createObjectURL(f))
   }
@@ -109,7 +119,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
       })
       if (url) URL.revokeObjectURL(url)
       setFileName(title ?? `YouTube (${videoId})`)
-      setSbMarks([])
+      setSbMarks([]); setThumbs({})
       setUrl(URL.createObjectURL(blob))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'YouTube動画の取得に失敗しました')
@@ -134,17 +144,89 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
 
   const addMark = () => {
     const v = videoRef.current
-    if (!v || running) return
+    if (!v || running || scanning) return
     const t = Math.round(v.currentTime * 10) / 10
+    try {
+      const thumb = 'data:image/jpeg;base64,' + captureJpeg(v, { width: 240, quality: 0.6 })
+      setThumbs(prev => ({ ...prev, [t]: thumb }))
+    } catch { /* サムネイルが取れなくても位置登録は続ける */ }
     setSbMarks(m => (m.some(x => Math.abs(x - t) < 2) ? m : [...m, t]))
   }
 
-  const removeMark = (t: number) => setSbMarks(m => m.filter(x => x !== t))
+  const removeMark = (t: number) => {
+    setSbMarks(m => m.filter(x => x !== t))
+    setThumbs(prev => { const next = { ...prev }; delete next[t]; return next })
+  }
+
+  const clearMarks = () => { setSbMarks([]); setThumbs({}) }
+
+  // ---- スコアボード画面の自動検出 ----
+  // 2本のチーム区切り線 (シアン/オレンジ) のピクセル判定で動画全体を
+  // 粗くスキャンし、見つけた表示区間の中央をスコアボード位置として登録する。
+  // 全てブラウザ内処理 (無料)。誤検出はサムネイルを見て ✕ で外せる
+  const autoScan = async () => {
+    const vid = videoRef.current
+    if (!vid || running || scanning || !vid.duration) return
+    setScanning(true); setError(null)
+    scanCancel.current = false
+    vid.pause()
+    const canvas = document.createElement('canvas')
+    let foundCount = 0
+    try {
+      const end = Math.max(0, vid.duration - 0.3)
+      let t = 1
+      let step = 0
+      while (t <= end && !scanCancel.current) {
+        if (step % SCAN_STAGE_EVERY === 0) {
+          setScanStage(`スキャン中... ${fmtT(t)} / ${fmtT(end)} (検出 ${foundCount}件)`)
+        }
+        step += 1
+        let hit = false
+        try {
+          await seekTo(vid, t)
+          hit = readScoreboardSignature(vid, canvas)
+        } catch { /* シーク失敗は未検出として先へ進む */ }
+        if (!hit) { t = Math.round((t + SCAN_STEP_SEC) * 10) / 10; continue }
+        // 表示区間の端を探り、中央のフレームを採用 (表示アニメーション途中を避ける)
+        let lo = t
+        let hi = t
+        for (let i = 0; i < SCAN_REFINE_MAX_STEPS && lo - SCAN_REFINE_SEC >= 0; i++) {
+          try {
+            await seekTo(vid, lo - SCAN_REFINE_SEC)
+            if (!readScoreboardSignature(vid, canvas)) break
+            lo -= SCAN_REFINE_SEC
+          } catch { break }
+        }
+        for (let i = 0; i < SCAN_REFINE_MAX_STEPS && hi + SCAN_REFINE_SEC <= end; i++) {
+          try {
+            await seekTo(vid, hi + SCAN_REFINE_SEC)
+            if (!readScoreboardSignature(vid, canvas)) break
+            hi += SCAN_REFINE_SEC
+          } catch { break }
+        }
+        const mid = Math.round(((lo + hi) / 2) * 10) / 10
+        try {
+          await seekTo(vid, mid)
+          const thumb = 'data:image/jpeg;base64,' + captureJpeg(vid, { width: 240, quality: 0.6 })
+          setThumbs(prev => ({ ...prev, [mid]: thumb }))
+        } catch { /* サムネイル無しでも登録はする */ }
+        setSbMarks(m => (m.some(x => Math.abs(x - mid) < 10) ? m : [...m, mid]))
+        foundCount += 1
+        t = hi + SCAN_SKIP_AFTER_HIT_SEC
+      }
+      if (foundCount === 0 && !scanCancel.current) {
+        setError('スコアボード画面を検出できませんでした。録画の画質や画面比率によっては検出できないことがあります。手動でシークして「追加」してください')
+      }
+    } finally {
+      setScanning(false)
+      setScanStage('')
+    }
+  }
 
   // 現在表示中のフレームでOCRの読み取りテスト (枠位置の調整用)
   const testRead = async () => {
     const vid = videoRef.current
-    if (!vid || testing || running) return
+    if (!vid || testing || running || scanning) return
     setTesting(true); setTestResult(null)
     try {
       await warmupOcr()
@@ -247,7 +329,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
   // ---- 登録されたスコアボード位置を順に処理 ----
   const run = async () => {
     const vid = videoRef.current
-    if (!vid || running) return
+    if (!vid || running || scanning) return
     const marks = [...sbMarks].sort((a, b) => a - b)
     if (marks.length === 0) { setError('スコアボード画面の位置を追加してください'); return }
     setRunning(true); setError(null); setResults([])
@@ -311,7 +393,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
         <button className="btn-ghost btn-sm" onClick={onClose} disabled={running}>閉じる</button>
       </div>
       <p className="muted" style={{ fontSize: 11.5, marginTop: 0, marginBottom: 10 }}>
-        LK動画 (観戦/配信視点の録画・2時間まで) を読み込み、各ゲームのスコアボード (リザルト) 画面を試合数ぶん登録するだけで、
+        LK動画 (観戦/配信視点の録画・2時間まで) を読み込んで「自動検出」を押すと、各ゲームのスコアボード (リザルト) 画面を探して登録し、
         スタッツとハードポイントのヒル保持推移を順に保存します。試合開始位置は残り時間から自動判定されます。
         YouTubeにある動画は一度ダウンロードしてから読み込んでください。
         動画はサーバーに保存されません。AIを使うのはスコアボード画像の解析だけで、推移の読み取りはブラウザ内OCR (無料) です。
@@ -320,7 +402,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
       <div className="row" style={{ gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <label className="btn-ghost btn-sm" style={{ cursor: running ? 'wait' : 'pointer', display: 'inline-block' }}>
           📁 動画ファイルを選択
-          <input type="file" accept="video/*" style={{ display: 'none' }} disabled={running || ytLoading}
+          <input type="file" accept="video/*" style={{ display: 'none' }} disabled={running || ytLoading || scanning}
             onChange={e => { handleFile(e.target.files); e.target.value = '' }} />
         </label>
         {ENABLE_YOUTUBE_INPUT && (
@@ -387,29 +469,46 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
 
           {/* スコアボード位置の登録 */}
           <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <button className="btn-ghost btn-sm" disabled={running} onClick={addMark}>
-              ➕ 現在位置をスコアボード画面として追加
+            <button className="btn-primary btn-sm" disabled={running || scanning} onClick={() => void autoScan()}>
+              {scanning ? (scanStage || 'スキャン中...') : '🔎 スコアボード画面を自動検出'}
+            </button>
+            {scanning && (
+              <button className="btn-ghost btn-sm" style={{ fontSize: 10.5 }} onClick={() => { scanCancel.current = true }}>
+                中断
+              </button>
+            )}
+            <button className="btn-ghost btn-sm" disabled={running || scanning} onClick={addMark}>
+              ➕ 現在位置を手動で追加
             </button>
             {sbMarks.length > 0 && (
-              <button className="btn-ghost btn-sm" style={{ fontSize: 10.5 }} disabled={running} onClick={() => setSbMarks([])}>
+              <button className="btn-ghost btn-sm" style={{ fontSize: 10.5 }} disabled={running || scanning} onClick={clearMarks}>
                 すべてクリア
               </button>
             )}
           </div>
           {sortedMarks.length > 0 && (
-            <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+            <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
               {sortedMarks.map((t, i) => (
-                <span key={t} className="badge" style={{ fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  {i + 1}. {fmtT(t)}
-                  <button type="button" disabled={running} onClick={() => removeMark(t)}
-                    style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0, fontSize: 11, lineHeight: 1 }}
-                    aria-label={`${fmtT(t)} を削除`}>✕</button>
-                </span>
+                <div key={t} className="card" style={{ padding: 6, width: 132 }}>
+                  {thumbs[t] && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={thumbs[t]} alt={`スコアボード候補 ${fmtT(t)}`}
+                      style={{ width: '100%', borderRadius: 4, display: 'block', cursor: 'pointer' }}
+                      onClick={() => { const v = videoRef.current; if (v && !running && !scanning) v.currentTime = t }} />
+                  )}
+                  <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                    <span className="mono" style={{ fontSize: 10.5 }}>{i + 1}. {fmtT(t)}</span>
+                    <button type="button" disabled={running || scanning} onClick={() => removeMark(t)}
+                      style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0, fontSize: 12, lineHeight: 1 }}
+                      aria-label={`${fmtT(t)} を削除`}>✕</button>
+                  </div>
+                </div>
               ))}
             </div>
           )}
           <p className="dim" style={{ fontSize: 11, margin: '6px 0 0' }}>
-            動画をシークして、各ゲームのリザルト (スコアボード) が表示されている画面で「追加」を押してください。
+            「自動検出」は動画全体を0.2秒刻みでスキャンして各ゲームのリザルト画面 (表示は0.3秒だけ) を探します (ブラウザ内処理・無料、動画10分あたり1〜3分ほど)。
+            検出結果はサムネイルで確認し、間違いは ✕ で外してください。
             {target === 'new'
               ? ' 試合の順番どおりでなくても、位置順に並べ替えて処理されます。'
               : ' 既存ゲームへの後付けでは、最初に登録した1つだけが使われます。'}
@@ -465,7 +564,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
           </div>
 
           <div className="row" style={{ gap: 10, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="btn-primary btn-sm" onClick={() => void run()} disabled={running || sbMarks.length === 0}>
+            <button className="btn-primary btn-sm" onClick={() => void run()} disabled={running || scanning || sbMarks.length === 0}>
               {running ? (stage || '解析中...') : `解析して保存${sortedMarks.length > 0 ? ` (${target === 'new' ? `${sortedMarks.length}ゲーム` : '1ゲーム'})` : ''}`}
             </button>
             {running && <span className="muted" style={{ fontSize: 11 }}>1ゲームあたり数分かかります。このままお待ちください</span>}
