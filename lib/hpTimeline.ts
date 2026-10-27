@@ -15,11 +15,17 @@
 export const HILL_DURATION_SEC = 60
 
 // マップごとのヒル数 (P1〜Pいくつでループするか)。
-// CDLハードポイントは標準4ヒル (例: グリッドロックは P1→P4→P1...)。
-// 例外のマップが見つかったらここに追記する
+// キーはスコアボードAI解析が返すマップ名表記と完全一致させること。
+// 未登録のマップは DEFAULT_HILL_CYCLE 扱い
 export const DEFAULT_HILL_CYCLE = 4
 export const MAP_HILL_CYCLES: Record<string, number> = {
-  '酒': 5,
+  'コール': 5,
+  'シルクウォーム': 6,
+  'ミューニション': 6,
+  'ムンバイ': 5,
+  'リアクター U92': 5,
+  'ルーフトップ': 6,
+  'ロータス': 6,
 }
 
 export const hillCycleForMap = (map: string | null | undefined): number =>
