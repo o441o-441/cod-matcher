@@ -553,6 +553,20 @@ export default function ScrimBoardPage() {
     if (!dateStr || !myUserId) return null
     return rooms.find(r => r.date === dateStr && r.status === 'open' && roomMembersOf(r.id).some(m => m.uid === myUserId)) ?? null
   }
+
+  // 自分の側 (自チーム or 参加中の混成ルーム) がその枠でマッチングできるか。
+  // 他チーム/ルームの空きを「噛み合う枠だけ明るく表示」するための判定。
+  // null = 自分の側が無い (チーム未所属かつルーム不参加) → 判定不能で従来どおり全表示
+  const mySideOk = (day: number, i: number): boolean | null => {
+    if (teamInfo) {
+      const c = countsFor(teamInfo.id, day)
+      const taken = matchedSet(teamInfo.id, day)
+      return c[i] >= 4 && !taken.has(i)
+    }
+    const room = myRoomForDay(day)
+    if (room) return i >= room.slot_start && i < room.slot_end
+    return null
+  }
   // ボードに載せるルーム: その日・募集中・4人以上
   const boardRooms = (() => {
     const dateStr = weekDays[viewDay]?.dateStr
@@ -1440,11 +1454,14 @@ export default function ScrimBoardPage() {
                     {a.map((cnt, i) => {
                       const set = taken.has(i)
                       const r = runAt(i)
-                      const canStart = !!r && mode !== 'all' && need > 0 && i + need - 1 <= r[1] && i + need <= 10
+                      // 自分の側が噛み合う枠か (自チーム4人+未成立 / 参加中ルームの時間内)。自分の行と判定不能時は常にtrue
+                      const mutual = isMe ? true : (mySideOk(viewDay, i) ?? true)
+                      const mutualRun = (start: number) => Array.from({ length: need }, (_, k) => (isMe ? true : (mySideOk(viewDay, start + k) ?? true))).every(Boolean)
+                      const canStart = !!r && mode !== 'all' && need > 0 && i + need - 1 <= r[1] && i + need <= 10 && mutualRun(i)
                       const inRun = !!r
                       const hatch = inRun && mode !== 'all' && !canStart
                       const lit = !!hoverRun && !!r && hoverRun === `${t.id}-${r[0]}`
-                      const clickable = !!(teamInfo || myRoomForDay(viewDay)) && !isMe && !dimMode && inRun && mode !== 'all' && need > 0
+                      const clickable = !!(teamInfo || myRoomForDay(viewDay)) && !isMe && !dimMode && inRun && mode !== 'all' && need > 0 && mutual
                       const ended = slotEnded(viewDay, i)
                       let bg: string, border: string, numCl: string, text: string, numSize = 15
                       if (set) {
@@ -1453,6 +1470,10 @@ export default function ScrimBoardPage() {
                       } else if (ended) {
                         bg = 'rgba(6,9,20,0.9)'; border = '1px solid transparent'
                         numCl = '#333c52'; text = '–'; numSize = 12
+                      } else if (cnt >= 4 && !mutual) {
+                        // 相手は募集中だが自分の側と噛み合わない枠 → 淡色
+                        bg = 'rgba(0,229,255,0.04)'; border = '1px solid rgba(0,229,255,0.12)'
+                        numCl = '#55657f'; text = String(cnt); numSize = 12
                       } else if (cnt >= 4) {
                         bg = hatch
                           ? 'repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,229,255,0.14) 4px 6px), rgba(0,229,255,0.06)'
@@ -1469,9 +1490,11 @@ export default function ScrimBoardPage() {
                       const click = clickable ? () => {
                         const open = (start: number) => { setModal({ side: 'team', targetId: t.id, day: viewDay, start, len: need }); setModalAs(teamInfo ? 'team' : 'room') }
                         if (canStart) { open(i); return }
-                        const snap = Math.min(r![1] - need + 1, 10 - need)
-                        if (snap >= r![0]) open(snap)
-                        else showToast(`この空きには ${currentModeLabel()} が入りません`, `空きが ${r![1] - r![0] + 1}枠 (${(r![1] - r![0] + 1) * 30}分) しかありません`)
+                        // 相手の空きに収まり、かつ自分の側とも噛み合う開始位置を探す
+                        let s = Math.min(r![1] - need + 1, 10 - need)
+                        while (s >= r![0] && !mutualRun(s)) s--
+                        if (s >= r![0]) open(s)
+                        else showToast(`この空きには ${currentModeLabel()} が入りません`, '相手の空きと自チームの空きが噛み合う連続枠がありません')
                       } : undefined
                       return (
                         <div key={`${t.id}-${i}`}
@@ -1520,12 +1543,18 @@ export default function ScrimBoardPage() {
                     {SLOTS.map((_, i) => {
                       const ended = slotEnded(viewDay, i)
                       const inWin = i >= r.slot_start && i < r.slot_end && !ended
-                      const canStart = inWin && mode !== 'all' && need > 0 && i + need <= r.slot_end && i + need <= 10
+                      const mutual = isMineRoom ? true : (mySideOk(viewDay, i) ?? true)
+                      const mutualRun = (start: number) => Array.from({ length: need }, (_, k) => (isMineRoom ? true : (mySideOk(viewDay, start + k) ?? true))).every(Boolean)
+                      const canStart = inWin && mode !== 'all' && need > 0 && i + need <= r.slot_end && i + need <= 10 && mutualRun(i)
                       const hatch = inWin && mode !== 'all' && !canStart
                       const lit = !!hoverRun && hoverRun === `room-${r.id}` && inWin
-                      const clickable = canAct && inWin
+                      const clickable = canAct && inWin && mutual
                       let bg: string, border: string, numCl: string, text: string, numSize = 15
-                      if (inWin) {
+                      if (inWin && !mutual) {
+                        // 募集中だが自分の側と噛み合わない枠 → 淡色
+                        bg = 'rgba(139,92,246,0.05)'; border = '1px solid rgba(139,92,246,0.14)'
+                        numCl = '#55657f'; text = String(ms.length); numSize = 12
+                      } else if (inWin) {
                         bg = hatch
                           ? 'repeating-linear-gradient(45deg, transparent 0 4px, rgba(139,92,246,0.16) 4px 6px), rgba(139,92,246,0.06)'
                           : 'rgba(139,92,246,0.14)'
@@ -1537,9 +1566,10 @@ export default function ScrimBoardPage() {
                       }
                       const click = clickable ? () => {
                         if (canStart) { openModal(i); return }
-                        const snap = Math.min(r.slot_end - need, 10 - need)
-                        if (snap >= r.slot_start && !slotEnded(viewDay, snap)) openModal(snap)
-                        else showToast(`この時間帯には ${currentModeLabel()} が入りません`, `残り時間が ${need * 30}分 に足りません`)
+                        let s = Math.min(r.slot_end - need, 10 - need)
+                        while (s >= r.slot_start && (!mutualRun(s) || slotEnded(viewDay, s))) s--
+                        if (s >= r.slot_start) openModal(s)
+                        else showToast(`この時間帯には ${currentModeLabel()} が入りません`, '相手の時間と自分の側の空きが噛み合う連続枠がありません')
                       } : undefined
                       return (
                         <div key={`room-${r.id}-${i}`}
@@ -1581,6 +1611,7 @@ export default function ScrimBoardPage() {
           <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: 'var(--text-soft)' }}><i style={{ width: 13, height: 13, borderRadius: 3, flex: 'none', background: 'rgba(0,229,255,0.14)', border: '1px solid rgba(0,229,255,0.5)' }} />4人以上・募集中</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: 'var(--text-soft)' }}><span style={{ color: 'var(--cyan)', fontSize: 9 }}>▶</span>このモードで開始可</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: 'var(--text-soft)' }}><i style={{ width: 13, height: 13, borderRadius: 3, flex: 'none', background: 'repeating-linear-gradient(45deg, transparent 0 3px, rgba(0,229,255,0.22) 3px 5px)', border: '1px solid rgba(0,229,255,0.25)' }} />空きはあるが入りきらない</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: 'var(--text-soft)' }}><i style={{ width: 13, height: 13, borderRadius: 3, flex: 'none', background: 'rgba(0,229,255,0.04)', border: '1px solid rgba(0,229,255,0.16)' }} />相手は募集中・自チームの空きと不一致</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: 'var(--text-soft)' }}><i style={{ width: 13, height: 13, borderRadius: 3, flex: 'none', background: 'rgba(255,176,32,0.15)', border: '1px solid rgba(255,176,32,0.55)' }} />成立済み</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: 'var(--text-soft)' }}><i style={{ width: 13, height: 13, borderRadius: 3, flex: 'none', background: 'rgba(6,9,20,0.9)', border: `1px solid ${LINE}` }} />人数不足</span>
         </div>
