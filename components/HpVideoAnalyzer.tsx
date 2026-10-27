@@ -52,7 +52,7 @@ const MAX_VIDEO_SEC = 2 * 3600 // これを超える動画はエラー
 const SCAN_STEP_SEC = 0.2 // スコアボード探索の間隔 (秒)。表示は試合終了後0.3秒だけなので細かく刻む
 const SCAN_REFINE_SEC = 0.1 // 検出後に表示区間の端を探る間隔 (秒)
 const SCAN_REFINE_MAX_STEPS = 5 // 表示は0.3秒程度なので端探りは片側0.5秒まで
-const SB_HUNT_WINDOW_SEC = 30 // 試合終了を検知してからスコアボードを探す範囲 (秒)
+const SB_HUNT_WINDOW_SEC = 60 // 試合終了を検知してからスコアボードを探す範囲 (秒)
 const START_CLOCK_MIN = 270 // 残り時間がこれ以上 (4:30〜4:59) 読めたら試合開始直後とみなす
 const START_CLOCK_MAX = 299
 const END_SCORE = 250 // どちらかがここに達したら試合終了
@@ -211,7 +211,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
   // 2) 試合中は1秒間隔でスコアと残り時間を記録 (そのままヒル推移の元データ)
   // 3) どちらかが250 / 残り0:00 (各連続2回) か、3値とも読めない状態が
   //    5秒続いたら試合終了
-  // 4) 最後にHUDが読めた時点から30秒間を0.2秒刻みでスコアボードを探索し、
+  // 4) 最後にHUDが読めた時点から1分間を0.2秒刻みでスコアボードを探索し、
   //    AI解析でスタッツ保存 + 記録済みの読み取りからヒル推移を保存
   const autoRun = async () => {
     const vid = videoRef.current
