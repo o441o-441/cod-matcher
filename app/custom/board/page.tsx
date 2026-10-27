@@ -187,6 +187,39 @@ export default function ScrimBoardPage() {
   }, [toast])
   const showToast = (title: string, sub: string) => setToast({ title, sub })
 
+  // ---- 過去の交流戦 (自チームの対戦履歴。今週より前の最新10件) ----
+  const [pastMatches, setPastMatches] = useState<MatchRow[]>([])
+  const [pastTeamNames, setPastTeamNames] = useState<Record<string, string>>({})
+  useEffect(() => {
+    if (!teamInfo) { setPastMatches([]); return }
+    let cancelled = false
+    void (async () => {
+      const today = weekDateStrs()[0]
+      const { data } = await supabase
+        .from('scrim_matches')
+        .select('*')
+        .or(`host_team_id.eq.${teamInfo.id},guest_team_id.eq.${teamInfo.id}`)
+        .in('status', ['confirmed', 'completed'])
+        .lt('date', today)
+        .order('date', { ascending: false })
+        .order('slot_start', { ascending: false })
+        .limit(10)
+      if (cancelled) return
+      const rows = (data ?? []) as MatchRow[]
+      setPastMatches(rows)
+      const ids = new Set<string>()
+      rows.forEach(m => { if (m.host_team_id) ids.add(m.host_team_id); if (m.guest_team_id) ids.add(m.guest_team_id) })
+      if (ids.size > 0) {
+        const { data: trs } = await supabase.from('teams').select('id, name').in('id', [...ids])
+        if (cancelled) return
+        const nm: Record<string, string> = {}
+        for (const t of (trs ?? []) as { id: string; name: string }[]) nm[t.id] = t.name
+        setPastTeamNames(nm)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [teamInfo])
+
   const dayLabel = (d: number) => (weekDays[d] ? (d === 0 ? `今日 ${weekDays[d].label}` : weekDays[d].label) : d === 0 ? '今日' : `${d}日後`)
   const dateToDay = (dateStr: string) => weekDateStrs().indexOf(dateStr)
 
@@ -1482,6 +1515,40 @@ export default function ScrimBoardPage() {
                       <button type="button" className="btn-danger" onClick={() => setCancelId(mt.id)} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>キャンセル</button>
                     </>
                   )}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ===== 過去の交流戦 (自チーム) ===== */}
+      {teamInfo && pastMatches.length > 0 && (
+        <section style={{ position: 'relative', background: 'rgba(18,24,52,0.86)', border: `1px solid ${LINE}`, borderRadius: 14, padding: '22px 24px', backdropFilter: 'blur(14px)', marginBottom: 20 }}>
+          <div className="sec-title">過去の交流戦</div>
+          <p className="muted" style={{ fontSize: 11.5, marginTop: 0, marginBottom: 12 }}>
+            自チームの過去の対戦です。試合ページで結果・スタッツ・ヒル保持推移を確認できます。
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {pastMatches.map(mt => {
+              const nameOf = (side: 'host' | 'guest') => {
+                const tid = side === 'host' ? mt.host_team_id : mt.guest_team_id
+                const rid = side === 'host' ? mt.host_room_id : mt.guest_room_id
+                if (tid) return pastTeamNames[tid] ?? '解散済みチーム'
+                return rid ? '混成ルーム' : '不明'
+              }
+              return (
+                <div key={mt.id} style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', background: 'rgba(6,10,22,0.6)', border: `1px solid ${LINE}`, borderRadius: 10, padding: '11px 14px' }}>
+                  <div className="mono" style={{ fontSize: 12, color: 'var(--text-soft)', width: 168, flex: 'none' }}>
+                    {mt.date} {slotLabel(mt.slot_start)}–{slotLabel(mt.slot_end)}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 180, fontSize: 13.5, fontWeight: 600 }}>
+                    {nameOf('host')} <span className="muted" style={{ fontWeight: 400 }}>vs</span> {nameOf('guest')}
+                    <span className="mono muted" style={{ fontSize: 11, marginLeft: 10 }}>{matchLabel(mt)}</span>
+                  </div>
+                  <button type="button" className="btn-ghost btn-sm" onClick={() => router.push(`/custom/board/${mt.id}`)} style={{ fontSize: 11 }}>
+                    試合ページへ
+                  </button>
                 </div>
               )
             })}
