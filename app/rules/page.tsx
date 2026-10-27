@@ -42,41 +42,17 @@ export default function RulesPage() {
       <div className="section">
         <p className="sec-title">マップ &amp; モード</p>
         <div className="card-strong">
-          <div className="grid grid-3">
-            <div className="card">
-              <h3>ハードポイント</h3>
-              <ul>
-                <li>コール</li>
-                <li>シルクウォーム</li>
-                <li>ミューニション</li>
-                <li>ムンバイ</li>
-                <li>リアクター</li>
-                <li>ルーフトップ</li>
-                <li>ロータス</li>
-              </ul>
-            </div>
-
-            <div className="card">
-              <h3>サーチ&amp;デストロイ</h3>
-              <ul>
-                <li>デン</li>
-                <li>グリッドロック</li>
-                <li>レイド</li>
-                <li>フリンジ</li>
-                <li>酒</li>
-                <li>ハシエンダ</li>
-              </ul>
-            </div>
-
-            <div className="card">
-              <h3>オーバーロード</h3>
-              <ul>
-                <li>デン</li>
-                <li>エクスポージャー</li>
-                <li>スカー</li>
-                <li>グリッドロック</li>
-              </ul>
-            </div>
+          <div className="card">
+            <h3>ハードポイント</h3>
+            <ul>
+              <li>コール</li>
+              <li>シルクウォーム</li>
+              <li>ミューニション</li>
+              <li>ムンバイ</li>
+              <li>リアクター</li>
+              <li>ルーフトップ</li>
+              <li>ロータス</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -85,9 +61,7 @@ export default function RulesPage() {
         <p className="sec-title">ゲーム設定の注意点</p>
         <div className="card-strong">
           <ul>
-            <li>設定後に再度確認しようとすると設定がリセットされることがあるので注意。</li>
-            <li>試合後に設定がリセットされることがあるので注意。</li>
-            <li>チームシャッフルバグは修正済み。</li>
+            <li>試合後に設定がリセットされるので注意。</li>
           </ul>
         </div>
       </div>
@@ -103,33 +77,6 @@ export default function RulesPage() {
               <li>チームタブ → リスポーンの無効期間：<strong>3秒</strong></li>
               <li>チームタブ → 味方への誤射：<strong>処罰</strong></li>
               <li>チームタブ → 味方への誤射の処罰リミット：<strong>5キル</strong></li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div className="section">
-        <p className="sec-title">サーチ&amp;デストロイ設定</p>
-        <div className="card-strong">
-          <div className="card">
-            <h3>CDL サーチ&amp;デストロイ</h3>
-            <p>「CDL サーチアンドデストロイ」を選択。ルール設定から以下を変更してください。</p>
-            <ul>
-              <li>ゲームプレイタブ → オーバークロック無効：<strong>オフ</strong></li>
-            </ul>
-            <p className="muted">※デス後のカメラバグは修正済みです。</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="section">
-        <p className="sec-title">オーバーロード設定</p>
-        <div className="card-strong">
-          <div className="card">
-            <p>「CDL オーバーロード」を選択してください。ルール設定から以下を変更してください。</p>
-            <ul>
-              <li>ゲームプレイタブ → オーバークロック無効：<strong>オフ</strong></li>
-              <li>アドバンスタブ → エリア外でのデバイスリセット：<strong>オフ</strong></li>
             </ul>
           </div>
         </div>
