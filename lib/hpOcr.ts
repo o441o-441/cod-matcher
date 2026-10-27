@@ -25,10 +25,13 @@ export type HudCalib = {
   clockH: number // 残り時間枠の高さ (画面高さ比)
 }
 
-// 1080p観戦HUDのだいたいの初期値。UIのスライダーで調整できる
+// 観戦HUDの読み取り枠 (固定値)。1920x1080の実機スクリーンショットで実測:
+//   左スコア x=820-883 / 右スコア x=1037-1098 (y=60-89)
+//   残り時間 x=935-985 (y=36-56)。すぐ下にヒル残り時間 (y=58-115) が
+//   あるため、クロック枠の下端はそこに掛からないよう抑えてある
 export const DEFAULT_CALIB: HudCalib = {
-  cx: 0.075, y: 0.03, w: 0.06, h: 0.05,
-  clockY: 0.015, clockW: 0.065, clockH: 0.04,
+  cx: 0.056, y: 0.05, w: 0.05, h: 0.039,
+  clockY: 0.028, clockW: 0.036, clockH: 0.025,
 }
 
 const CALIB_STORAGE_KEY = 'hp_ocr_calib_v1'
