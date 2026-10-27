@@ -1613,6 +1613,37 @@ export default function MatchPage() {
             </div>
           </div>
 
+          {/* Rating card */}
+          <div className="card">
+            <div className="sec-title">レート変動</div>
+            <div className="stack-sm" style={{ fontSize: 13 }}>
+              <div className="muted">
+                <span style={{ color: 'var(--cyan)', marginRight: 6 }}>&#8226;</span>
+                チーム平均レートの差から期待勝率を計算し、勝敗で増減します（Elo方式）
+              </div>
+              <div className="muted">
+                <span style={{ color: 'var(--cyan)', marginRight: 6 }}>&#8226;</span>
+                互角の相手なら <span className="mono" style={{ color: 'var(--success)' }}>勝ち +16</span> / <span className="mono" style={{ color: 'var(--danger)' }}>負け −16</span>。格上に勝つほど大きく増え、格下に負けるほど大きく減ります
+              </div>
+              <div className="muted">
+                <span style={{ color: 'var(--cyan)', marginRight: 6 }}>&#8226;</span>
+                通算10試合未満の間は変動が1.5倍（互角で±24）。序盤は実力に早く収束します
+              </div>
+              <div className="muted">
+                <span style={{ color: 'var(--cyan)', marginRight: 6 }}>&#8226;</span>
+                レート1800未満なら、その日（日本時間）最初の敗北の減少は半分になります
+              </div>
+              <div className="muted">
+                <span style={{ color: 'var(--cyan)', marginRight: 6 }}>&#8226;</span>
+                反映タイミングは相手チームの承認時、または報告から20分の自動確定時（相手が報告画面を開くと5分に短縮）
+              </div>
+              <div className="muted">
+                <span style={{ color: 'var(--cyan)', marginRight: 6 }}>&#8226;</span>
+                マッチ成立後に準備完了を押さないと強制敗北・レートペナルティがあります
+              </div>
+            </div>
+          </div>
+
           {/* How-to card */}
           <div className="card">
             <div className="sec-title">使い方</div>
