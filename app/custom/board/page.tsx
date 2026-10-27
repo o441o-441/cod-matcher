@@ -151,8 +151,8 @@ export default function ScrimBoardPage() {
   const [confirming, setConfirming] = useState(false)
   const [cancelId, setCancelId] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState(false)
-  const [tplDays, setTplDays] = useState<boolean[]>(Array(7).fill(false))
-  const [tplSlots, setTplSlots] = useState<number[] | null>(null)
+  const [tplSaved, setTplSaved] = useState<number[][] | null>(null) // 保存済みテンプレ (dow(0=日)→スロット。null=未設定)
+  const [tplEdit, setTplEdit] = useState<number[][]>(() => Array.from({ length: 7 }, () => [])) // 編集中のテンプレ
   const [tplApplied, setTplApplied] = useState<Set<string>>(new Set()) // 自動反映済みの日付 (scrim_template_applied)
   const [webhookOpen, setWebhookOpen] = useState(false)
   const [webhookUrl, setWebhookUrl] = useState('')
@@ -330,11 +330,18 @@ export default function ScrimBoardPage() {
   // 自分のテンプレ + 今週分の自動反映済みマーカーを読み込む
   const loadTemplate = useCallback(async (uid: string) => {
     const [{ data }, { data: apRows }] = await Promise.all([
-      supabase.from('scrim_templates').select('days, slots').eq('user_id', uid).maybeSingle(),
+      supabase.from('scrim_templates').select('day_slots').eq('user_id', uid).maybeSingle(),
       supabase.from('scrim_template_applied').select('date').eq('user_id', uid).in('date', weekDateStrs()),
     ])
-    const row = data as { days: boolean[]; slots: number[] } | null
-    if (row) { setTplDays(row.days); setTplSlots(row.slots) }
+    const ds = (data as { day_slots: Record<string, number[]> } | null)?.day_slots ?? null
+    if (ds) {
+      const arr = Array.from({ length: 7 }, (_, i) => [...(ds[String(i)] ?? [])].sort((a, b) => a - b))
+      setTplSaved(arr.some(a => a.length > 0) ? arr : null)
+      setTplEdit(arr.map(a => [...a]))
+    } else {
+      setTplSaved(null)
+      setTplEdit(Array.from({ length: 7 }, () => []))
+    }
     setTplApplied(new Set(((apRows ?? []) as { date: string }[]).map(r => r.date)))
   }, [])
 
@@ -775,39 +782,15 @@ export default function ScrimBoardPage() {
     void loadBoard()
   }
 
-  // ---- 曜日テンプレ (DB保存・毎晩自動反映) ----
-  const tplHas = !!tplSlots
-  const tplDayNames = DOW.filter((_, i) => tplDays[i]).join('・')
-  const tplStatus = !tplHas ? '未設定' : `毎週 ${tplDayNames || '(曜日未選択)'} に自動反映 (${tplSlots!.length}枠)`
-  const tplSave = async () => {
-    if (targetUid) { showToast('テンプレは自分の空きのみ保存できます', '入力対象を「自分」に戻してください'); return }
-    const dateStr = weekDays[editDay]?.dateStr
-    const slots = dateStr ? (myMine[dateStr] ?? []) : []
-    if (slots.length === 0) { showToast('空き時間が選ばれていません', '先に上のチップで時間を選んでから保存してください'); return }
-    if (!tplDays.some(Boolean)) { showToast('曜日が選ばれていません', '反映したい曜日チップを選んでから保存してください'); return }
-    const { data, error } = await supabase.rpc('rpc_scrimboard_save_template', { p_days: tplDays, p_slots: slots })
-    if (error) { showToast('テンプレの保存に失敗しました', error.message); return }
-    setTplSlots(slots)
-    const applied = (data as { applied_days?: number } | null)?.applied_days ?? 0
-    showToast('曜日テンプレを保存しました', `毎週 ${tplDayNames} に自動反映します${applied ? `（未入力だった${applied}日分に今すぐ反映済み）` : ''}`)
-    if (myUserId) { void loadMine(myUserId); void loadTemplate(myUserId) }
-    void loadBoard()
-  }
-  const tplToggleDay = (i: number) => {
-    setTplDays(prev => { const d = prev.slice(); d[i] = !d[i]; return d })
-  }
-  const tplClear = async () => {
-    const { error } = await supabase.rpc('rpc_scrimboard_save_template', { p_days: tplDays, p_slots: [] })
-    if (error) { showToast('テンプレの削除に失敗しました', error.message); return }
-    setTplSlots(null)
-    setTplApplied(new Set())
-    showToast('曜日テンプレを削除しました', '自動反映を停止しました')
-  }
+  // ---- 曜日テンプレ (曜日ごとの時間をDB保存・毎晩自動反映) ----
+  const tplHas = tplSaved !== null
+  const tplSavedDayNames = tplSaved ? DOW.filter((_, i) => (tplSaved[i]?.length ?? 0) > 0).join('・') : ''
+  const tplStatus = !tplHas ? '未設定' : `毎週 ${tplSavedDayNames} に自動反映`
 
-  // テンプレのスロットを「21:00–23:30」のような連続レンジ表記に圧縮する
-  const tplRangeLabel = (() => {
-    if (!tplSlots || tplSlots.length === 0) return ''
-    const s = [...tplSlots].sort((a, b) => a - b)
+  // スロット配列を「21:00–23:30」のような連続レンジ表記に圧縮する
+  const slotsRangeLabel = (slots: number[]): string => {
+    if (slots.length === 0) return ''
+    const s = [...slots].sort((a, b) => a - b)
     const parts: string[] = []
     let start = s[0]
     let prev = s[0]
@@ -820,7 +803,42 @@ export default function ScrimBoardPage() {
       prev = v
     }
     return parts.join(' / ')
+  }
+
+  const tplToggleSlot = (dow: number, slot: number) => {
+    setTplEdit(prev => prev.map((arr, i) => i === dow
+      ? (arr.includes(slot) ? arr.filter(x => x !== slot) : [...arr, slot].sort((a, b) => a - b))
+      : arr))
+  }
+  const tplClearDay = (dow: number) => setTplEdit(prev => prev.map((arr, i) => (i === dow ? [] : arr)))
+  const tplDirty = (() => {
+    const saved = tplSaved ?? Array.from({ length: 7 }, () => [] as number[])
+    return tplEdit.some((arr, i) => arr.join(',') !== (saved[i] ?? []).join(','))
   })()
+
+  const tplSave = async () => {
+    const obj: Record<string, number[]> = {}
+    tplEdit.forEach((arr, i) => { if (arr.length > 0) obj[String(i)] = arr })
+    const { data, error } = await supabase.rpc('rpc_scrimboard_save_template_days', { p_day_slots: obj })
+    if (error) { showToast('テンプレの保存に失敗しました', error.message); return }
+    const res = data as { applied_days?: number; deleted?: boolean } | null
+    if (res?.deleted) {
+      showToast('曜日テンプレを削除しました', '自動反映を停止しました')
+    } else {
+      const applied = res?.applied_days ?? 0
+      showToast('曜日テンプレを保存しました', `設定した曜日へ毎週自動で反映します${applied ? `（未入力だった${applied}日分に今すぐ反映済み）` : ''}`)
+    }
+    if (myUserId) { void loadMine(myUserId); void loadTemplate(myUserId) }
+    void loadBoard()
+  }
+  const tplClear = async () => {
+    const { error } = await supabase.rpc('rpc_scrimboard_save_template_days', { p_day_slots: {} })
+    if (error) { showToast('テンプレの削除に失敗しました', error.message); return }
+    setTplSaved(null)
+    setTplEdit(Array.from({ length: 7 }, () => []))
+    setTplApplied(new Set())
+    showToast('曜日テンプレを削除しました', '自動反映を停止しました')
+  }
 
   // ---- Webhook 設定 ----
   const testWebhook = async () => {
@@ -1050,28 +1068,51 @@ export default function ScrimBoardPage() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M17 2v4M7 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><path d="M12 13v4M10 15h4" stroke="var(--cyan)" strokeWidth="1.6" strokeLinecap="round" /></svg>
                 曜日テンプレ
               </div>
-              <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>曜日を選んで保存すると、毎晩その曜日へ自動で反映されます（手動入力済みの日は上書きしません）</span>
+              <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>曜日ごとに空き時間を選んで保存すると、毎晩その曜日へ自動で反映されます（手動入力済みの日は上書きしません）</span>
               <span className="mono" style={{ marginLeft: 'auto', fontSize: 11, color: tplHas ? '#9df3ff' : 'var(--text-dim)' }}>{tplStatus}</span>
             </div>
+
+            {/* 曜日ごとの入力行 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
+              {DOW.map((label, dow) => {
+                const arr = tplEdit[dow] ?? []
+                return (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ width: 22, flex: 'none', fontSize: 12, fontWeight: 700, color: arr.length > 0 ? '#9df3ff' : 'var(--text-dim)' }}>{label}</span>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {Array.from({ length: 10 }, (_, s) => {
+                        const on = arr.includes(s)
+                        return (
+                          <button key={s} type="button" className="mono" aria-pressed={on}
+                            onClick={() => tplToggleSlot(dow, s)}
+                            style={{
+                              fontSize: 10.5, padding: '4px 7px', borderRadius: 6, cursor: 'pointer', transition: 'all .1s',
+                              background: on ? 'rgba(0,229,255,0.14)' : 'rgba(6,10,22,0.75)',
+                              color: on ? '#9df3ff' : 'var(--text-dim)',
+                              border: `1px solid ${on ? 'rgba(0,229,255,0.5)' : LINE}`,
+                            }}>
+                            {slotLabel(s)}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {arr.length > 0 && (
+                      <button type="button" onClick={() => tplClearDay(dow)}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', fontSize: 10.5, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, padding: '2px 4px' }}>
+                        クリア
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
-              <div style={{ display: 'flex', gap: 5 }}>
-                {DOW.map((label, i) => {
-                  const on = tplDays[i]
-                  return (
-                    <button key={label} type="button" className="sb-hoverline" aria-pressed={on}
-                      onClick={() => tplToggleDay(i)}
-                      style={{
-                        width: 34, height: 34, padding: 0, fontSize: 12, fontWeight: 700, borderRadius: 8, cursor: 'pointer', transition: 'all .12s',
-                        background: on ? 'rgba(0,229,255,0.14)' : 'rgba(6,10,22,0.75)',
-                        color: on ? '#9df3ff' : 'var(--text-dim)',
-                        border: `1px solid ${on ? 'rgba(0,229,255,0.5)' : LINE}`,
-                      }}>
-                      {label}
-                    </button>
-                  )
-                })}
-              </div>
-              <button type="button" onClick={() => void tplSave()} style={{ fontSize: 12, fontWeight: 700, padding: '8px 14px' }}>{dayLabel(editDay)}の選択で自動反映を設定</button>
+              <button type="button" onClick={() => void tplSave()} disabled={!tplDirty}
+                style={{ fontSize: 12, fontWeight: 700, padding: '8px 14px', opacity: tplDirty ? 1 : 0.5, cursor: tplDirty ? 'pointer' : 'default' }}>
+                テンプレを保存
+              </button>
+              {tplDirty && <span style={{ fontSize: 11, color: 'var(--amber)' }}>未保存の変更があります</span>}
               {tplHas && (
                 <button type="button" className="sb-link" onClick={() => void tplClear()}
                   style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', fontSize: 11.5, padding: '8px 6px', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}>
@@ -1083,12 +1124,11 @@ export default function ScrimBoardPage() {
             {/* 今週の自動反映状況 (代理入力中は myMine が他人の空きになるため非表示) */}
             {tplHas && !targetUid && weekDays.length > 0 && (
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${LINE}` }}>
-                <div style={{ fontSize: 11.5, color: 'var(--text-dim)', marginBottom: 8 }}>
-                  今週の自動反映状況 — テンプレ内容: <span className="mono" style={{ color: '#9df3ff' }}>{tplRangeLabel}</span>（{tplSlots!.length}枠）
-                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-dim)', marginBottom: 8 }}>今週の自動反映状況</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {weekDays.map((wd, di) => {
-                    const target = tplDays[wd.dow]
+                    const daySlots = tplSaved?.[wd.dow] ?? []
+                    const target = daySlots.length > 0
                     const applied = tplApplied.has(wd.dateStr)
                     const manual = (myMine[wd.dateStr]?.length ?? 0) > 0
                     const st = !target
@@ -1099,15 +1139,16 @@ export default function ScrimBoardPage() {
                           ? { text: '手動入力あり', color: 'var(--amber)', bg: 'var(--amber-soft)', border: 'rgba(255,176,32,0.4)' }
                           : { text: '反映予定', color: 'var(--text-soft)', bg: 'rgba(6,10,22,0.5)', border: LINE_STRONG }
                     return (
-                      <div key={wd.dateStr} style={{ minWidth: 86, textAlign: 'center', background: st.bg, border: `1px solid ${st.border}`, borderRadius: 8, padding: '7px 8px' }}>
+                      <div key={wd.dateStr} style={{ minWidth: 92, textAlign: 'center', background: st.bg, border: `1px solid ${st.border}`, borderRadius: 8, padding: '7px 8px' }}>
                         <div className="mono" style={{ fontSize: 10.5, color: di === 0 ? 'var(--cyan)' : 'var(--text-soft)' }}>{di === 0 ? '今日' : wd.label}</div>
                         <div style={{ fontSize: 10.5, fontWeight: 700, color: st.color, marginTop: 3 }}>{st.text}</div>
+                        {target && <div className="mono" style={{ fontSize: 9.5, color: 'var(--text-dim)', marginTop: 2 }}>{slotsRangeLabel(daySlots)}</div>}
                       </div>
                     )
                   })}
                 </div>
                 <p style={{ margin: '8px 0 0', fontSize: 10.5, color: 'var(--text-dim)' }}>
-                  「反映済み」= テンプレで空きを登録済み（その後の手動変更はそのまま残ります）。「手動入力あり」= すでに自分で入力済みのため上書きしません。対象曜日は保存時に2週間先まで即反映され、以降は毎晩自動で追加されます。
+                  「反映済み」= テンプレで空きを登録済み（その後の手動変更はそのまま残ります）。「手動入力あり」= すでに自分で入力済みのため上書きしません。設定曜日は保存時に2週間先まで即反映され、以降は毎晩自動で追加されます。
                 </p>
               </div>
             )}
