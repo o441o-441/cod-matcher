@@ -705,53 +705,97 @@ export default function MatchConfirmPage() {
             </div>
           </div>
 
-          {/* Trophy & SR & Smoke Users */}
+          {/* 試合設定 (バンピック結果 + ロール割り当てを統合。ゲーム内のチーム1→チーム2の順で表示) */}
           <div className="card-strong">
-            <h2 style={{ marginTop: 0 }}>ロール割り当て（自動選出）</h2>
-            {(["alpha", "bravo"] as const).map((side) => {
-              const team = side === "alpha" ? alphaTeam : bravoTeam;
-              const teamMembers = groupedMembers[side];
-              const trophyList: string[] = Array.isArray(team?.trophy_users) ? team.trophy_users : [];
-              const srUser = team?.sr_user ?? null;
-              const smokeUser = team?.smoke_user ?? null;
-              return (
-                <div key={side} className="card" style={{ marginTop: 12 }}>
-                  <div className="row" style={{ marginBottom: 8 }}>
-                    <span className={`side-chip ${side}`}>{side.toUpperCase()}</span>
+            <h2 style={{ marginTop: 0 }}>試合設定（マップ・サイド・ロール）</h2>
+
+            {/* マップ・BAN */}
+            <div className="stack" style={{ marginTop: 12 }}>
+              {activePhaseKeys.map((phaseKey) => {
+                const state = phaseStates[phaseKey];
+                if (!state) return null;
+                const phaseLabel = phaseKey === "hp" ? "HARDPOINT" : phaseKey === "snd" ? "SEARCH & DESTROY" : phaseKey === "ovl" ? "OVERLOAD" : phaseKey.toUpperCase();
+                return (
+                  <div key={phaseKey} className="card">
+                    <div className="row" style={{ gap: 16, alignItems: "baseline", flexWrap: "wrap" }}>
+                      <span className="stat-label" style={{ margin: 0 }}>{phaseLabel}</span>
+                      <span>
+                        <span className="muted">マップ: </span>
+                        <span className="success" style={{ fontWeight: 600 }}>{state.map ?? "-"}</span>
+                      </span>
+                      {state.bans.length > 0 && (
+                        <span className="dim" style={{ fontSize: 12 }}>BAN: {state.bans.join(", ")}</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="stack-sm">
-                    {teamMembers.map((m) => {
-                      const isTrophy = trophyList.includes(m.user_id);
-                      const isSr = srUser === m.user_id;
-                      const isSmoke = smokeUser === m.user_id;
-                      return (
-                        <div key={m.id} className="row" style={{ justifyContent: "space-between", padding: "6px 10px", borderRadius: "var(--r-sm)", background: "rgba(255,255,255,0.03)" }}>
-                          <span style={{ fontSize: 14 }}>
-                            {m.profiles?.display_name ?? m.user_id}
-                          </span>
-                          <span className="row" style={{ gap: 4 }}>
-                            {isTrophy && (
-                              <span className="badge" style={{ fontSize: 9 }}>トロフィー</span>
-                            )}
-                            {isSr && srUser !== 'none' && (
-                              <span className="badge" style={{ fontSize: 9, background: "var(--violet, #8b5cf6)" }}>SR</span>
-                            )}
-                            {isSmoke && (
-                              <span className="badge" style={{ fontSize: 9, background: "var(--amber, #f59e0b)" }}>スモーク</span>
-                            )}
-                          </span>
-                        </div>
-                      );
-                    })}
+                );
+              })}
+            </div>
+
+            {/* チームごとのサイド + メンバー + ロール */}
+            {(() => {
+              const sidedState = activePhaseKeys.map((k) => phaseStates[k]).find((s) => s?.side) ?? null;
+              const teamAIsAlpha = teamAssignment.teamA === alphaTeam?.id;
+              // 内部値は JSOC(=チーム1)/ギルド(=チーム2) のまま。表示のみ変換
+              const alphaSide = sidedState?.side
+                ? (teamAIsAlpha ? sidedState.side : (sidedState.side === "JSOC" ? "ギルド" : "JSOC"))
+                : null;
+              const teamNoOf = (side: "alpha" | "bravo"): 1 | 2 | null => {
+                if (alphaSide === null) return null;
+                const s = side === "alpha" ? alphaSide : (alphaSide === "JSOC" ? "ギルド" : "JSOC");
+                return s === "JSOC" ? 1 : 2;
+              };
+              // ゲーム内のチーム1が上に来るよう並べ替え (サイド未確定時は alpha→bravo)
+              const order: ("alpha" | "bravo")[] = teamNoOf("alpha") === 2 ? ["bravo", "alpha"] : ["alpha", "bravo"];
+              return order.map((side) => {
+                const team = side === "alpha" ? alphaTeam : bravoTeam;
+                const teamMembers = groupedMembers[side];
+                const trophyList: string[] = Array.isArray(team?.trophy_users) ? team.trophy_users : [];
+                const srUser = team?.sr_user ?? null;
+                const smokeUser = team?.smoke_user ?? null;
+                const no = teamNoOf(side);
+                return (
+                  <div key={side} className="card" style={{ marginTop: 12 }}>
+                    <div className="row" style={{ marginBottom: 8, alignItems: "center", gap: 8 }}>
+                      {no !== null && <span style={{ fontWeight: 800, fontSize: 15 }}>チーム{no}</span>}
+                      <span className={`side-chip ${side}`}>{side.toUpperCase()}</span>
+                      {no === null && <span className="dim" style={{ fontSize: 11 }}>サイド未確定</span>}
+                    </div>
+                    <div className="stack-sm">
+                      {teamMembers.map((m) => {
+                        const isTrophy = trophyList.includes(m.user_id);
+                        const isSr = srUser === m.user_id;
+                        const isSmoke = smokeUser === m.user_id;
+                        return (
+                          <div key={m.id} className="row" style={{ justifyContent: "space-between", padding: "6px 10px", borderRadius: "var(--r-sm)", background: "rgba(255,255,255,0.03)" }}>
+                            <span style={{ fontSize: 14 }}>
+                              {m.profiles?.display_name ?? m.user_id}
+                            </span>
+                            <span className="row" style={{ gap: 4 }}>
+                              {isTrophy && (
+                                <span className="badge" style={{ fontSize: 9 }}>トロフィー</span>
+                              )}
+                              {isSr && srUser !== 'none' && (
+                                <span className="badge" style={{ fontSize: 9, background: "var(--violet, #8b5cf6)" }}>SR</span>
+                              )}
+                              {isSmoke && (
+                                <span className="badge" style={{ fontSize: 9, background: "var(--amber, #f59e0b)" }}>スモーク</span>
+                              )}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="dim" style={{ fontSize: 11, marginTop: 8 }}>
+                      トロフィー: {trophyList.length}/2
+                      {srUser && srUser !== 'none' ? " ・ SR: あり" : ""}
+                      {smokeUser ? " ・ スモーク: あり" : ""}
+                    </p>
                   </div>
-                  <p className="dim" style={{ fontSize: 11, marginTop: 8 }}>
-                    トロフィー: {trophyList.length}/2
-                    {srUser && srUser !== 'none' ? " ・ SR: あり" : ""}
-                    {smokeUser ? " ・ スモーク: あり" : ""}
-                  </p>
-                </div>
-              );
-            })}
+                );
+              });
+            })()}
+
             {isAdmin && (
               <button className="btn-ghost btn-sm" style={{ marginTop: 8, fontSize: 11 }} disabled={busy} onClick={async () => {
                 setBusy(true);
@@ -763,55 +807,6 @@ export default function MatchConfirmPage() {
                 [Admin] ロール自動割当
               </button>
             )}
-          </div>
-
-          {/* Banpick Results */}
-          <div className="card-strong">
-            <h2 style={{ marginTop: 0 }}>バンピック結果</h2>
-            <div className="stack" style={{ marginTop: 12 }}>
-              {activePhaseKeys.map((phaseKey) => {
-                const state = phaseStates[phaseKey];
-                if (!state) return null;
-                const phaseLabel = phaseKey === "hp" ? "HARDPOINT" : phaseKey === "snd" ? "SEARCH & DESTROY" : phaseKey === "ovl" ? "OVERLOAD" : phaseKey.toUpperCase();
-                return (
-                  <div key={phaseKey} className="card">
-                    <div className="stat-label" style={{ marginBottom: 6 }}>
-                      {phaseLabel}
-                    </div>
-                    <div className="row" style={{ gap: 16 }}>
-                      <div>
-                        <span className="muted">マップ: </span>
-                        <span className="success" style={{ fontWeight: 600 }}>{state.map ?? "-"}</span>
-                      </div>
-                      {state.side ? (() => {
-                        const teamAIsAlpha = teamAssignment.teamA === alphaTeam?.id;
-                        const pickerIsAlpha = teamAIsAlpha;
-                        // 内部値は JSOC/ギルド のまま。表示のみ チーム1/チーム2 に変換
-                        const sideLabel = (s: string) => (s === "JSOC" ? "チーム1" : "チーム2");
-                        const alphaSide = pickerIsAlpha ? state.side : (state.side === "JSOC" ? "ギルド" : "JSOC");
-                        const bravoSide = alphaSide === "JSOC" ? "ギルド" : "JSOC";
-                        return (
-                          <div>
-                            <span className="muted">サイド: </span>
-                            <span style={{ color: "var(--cyan)", fontWeight: 600 }}>Alpha: {sideLabel(alphaSide)} / Bravo: {sideLabel(bravoSide)}</span>
-                          </div>
-                        );
-                      })() : (
-                        <div>
-                          <span className="muted">サイド: </span>
-                          <span style={{ color: "var(--cyan)", fontWeight: 600 }}>-</span>
-                        </div>
-                      )}
-                    </div>
-                    {state.bans.length > 0 && (
-                      <p className="dim" style={{ fontSize: 12, marginTop: 4 }}>
-                        BAN: {state.bans.join(", ")}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
           </div>
         </div>
 
