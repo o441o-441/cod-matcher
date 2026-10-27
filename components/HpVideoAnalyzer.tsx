@@ -89,8 +89,6 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
 
   // ヒル推移の読み取りはブラウザOCR (無料・通信なし) のみ。読み取り枠は固定値
   const calib = DEFAULT_CALIB
-  const [testResult, setTestResult] = useState<string | null>(null)
-  const [testing, setTesting] = useState(false)
   useEffect(() => () => { if (url) URL.revokeObjectURL(url) }, [url])
 
   const hpGames = games.filter(g => g.mode === 'hp')
@@ -334,7 +332,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
         t = sbT + 30 // ロビーを少し飛ばして次の試合を探す
       }
       if (msgs.length === 0 && !scanCancel.current) {
-        setError('試合を検出できませんでした。試合中の画面で「テスト読み取り」をして、残り時間とスコアが読み取れているか確認してください')
+        setError('試合を検出できませんでした。動画に試合開始 (残り5:00付近) からの映像が含まれているか確認してください')
       } else if (msgs.length > 0) {
         msgs.push(scanCancel.current ? '中断しました。保存済みのゲームはそのまま残っています' : '完了しました。間違いがあれば各ゲームの「取り消す」で削除して再提出できます')
         setResults([...msgs])
@@ -342,22 +340,6 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     } finally {
       setScanning(false)
       setScanStage('')
-    }
-  }
-
-  // 現在表示中のフレームでOCRの読み取りテスト (枠位置の調整用)
-  const testRead = async () => {
-    const vid = videoRef.current
-    if (!vid || testing || running || scanning) return
-    setTesting(true); setTestResult(null)
-    try {
-      await warmupOcr()
-      const { left, right, clock } = await readHudScores(vid, calib)
-      setTestResult(`読み取り結果 — 左: ${left ?? '×'} / 右: ${right ?? '×'} / 残り時間: ${clock !== null ? fmtT(clock) : '×'}`)
-    } catch (e) {
-      setTestResult('読み取りに失敗しました: ' + (e instanceof Error ? e.message : 'エラー'))
-    } finally {
-      setTesting(false)
     }
   }
 
@@ -437,13 +419,13 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
   ): Promise<{ n: number; anchorAt: number }> => {
     const anchorT = knownAnchorT ?? detectAnchorFromClock(readings)
     if (anchorT === null) {
-      throw new Error('ゲーム残り時間を読み取れず、試合開始位置を判定できませんでした。「テスト読み取り」で残り時間が読めるか確認してください')
+      throw new Error('ゲーム残り時間を読み取れず、試合開始位置を判定できませんでした')
     }
     // 試合開始より前 (ロビー等) の誤読を混ぜないよう、開始以降だけで導出する
     const inGame = readings.filter(r => r.t >= anchorT - 2)
     const okCount = inGame.filter(r => r.left !== null || r.right !== null).length
     if (inGame.length === 0 || okCount / inGame.length < 0.3) {
-      throw new Error('OCRでスコアをほとんど読み取れませんでした。「テスト読み取り」でスコアが読めるか確認してください')
+      throw new Error('OCRでスコアをほとんど読み取れませんでした。録画の画質や画面比率を確認してください')
     }
     const derived = deriveOriented(inGame, game, { anchorT })
     if (derived.rotations.length === 0) {
@@ -651,14 +633,6 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
               ? ' 試合の順番どおりでなくても、位置順に並べ替えて処理されます。'
               : ' 既存ゲームへの後付けでは、最初に登録した1つだけが使われます。'}
           </p>
-
-          {/* OCRの読み取り確認 (読み取り枠は固定) */}
-          <div className="row" style={{ gap: 10, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button type="button" className="btn-ghost btn-sm" onClick={() => void testRead()} disabled={running || scanning || testing}>
-              {testing ? '読み取り中...' : '🔍 この画面でテスト読み取り'}
-            </button>
-            {testResult && <span className="mono" style={{ fontSize: 12 }}>{testResult}</span>}
-          </div>
 
           <div className="row" style={{ gap: 10, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <button className="btn-primary btn-sm" onClick={() => void run()} disabled={running || scanning || sbMarks.length === 0}>
