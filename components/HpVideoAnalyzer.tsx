@@ -6,7 +6,7 @@ import {
   base64ToJpegBlob, captureJpeg, fetchYouTubeVideo, parseYouTubeId, seekTo,
 } from '@/lib/hpVideo'
 import { deriveOriented, detectAnchorFromClock, type RawFrameReading } from '@/lib/hpTimeline'
-import { loadCalib, readHudScores, saveCalib, warmupOcr, type HudCalib } from '@/lib/hpOcr'
+import { DEFAULT_CALIB, readHudScores, warmupOcr } from '@/lib/hpOcr'
 import { readScoreboardSignature } from '@/lib/sbDetect'
 
 // ============================================================
@@ -87,12 +87,10 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
   const [scanStage, setScanStage] = useState('')
   const scanCancel = useRef(false)
 
-  // ヒル推移の読み取りはブラウザOCR (無料・通信なし) のみ
-  const [calib, setCalib] = useState<HudCalib>(() => loadCalib())
+  // ヒル推移の読み取りはブラウザOCR (無料・通信なし) のみ。読み取り枠は固定値
+  const calib = DEFAULT_CALIB
   const [testResult, setTestResult] = useState<string | null>(null)
   const [testing, setTesting] = useState(false)
-
-  useEffect(() => { saveCalib(calib) }, [calib])
   useEffect(() => () => { if (url) URL.revokeObjectURL(url) }, [url])
 
   const hpGames = games.filter(g => g.mode === 'hp')
@@ -336,7 +334,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
         t = sbT + 30 // ロビーを少し飛ばして次の試合を探す
       }
       if (msgs.length === 0 && !scanCancel.current) {
-        setError('試合を検出できませんでした。試合中の画面で「テスト読み取り」をして、残り時間とスコアの枠位置が合っているか確認してください')
+        setError('試合を検出できませんでした。試合中の画面で「テスト読み取り」をして、残り時間とスコアが読み取れているか確認してください')
       } else if (msgs.length > 0) {
         msgs.push(scanCancel.current ? '中断しました。保存済みのゲームはそのまま残っています' : '完了しました。間違いがあれば各ゲームの「取り消す」で削除して再提出できます')
         setResults([...msgs])
@@ -439,13 +437,13 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
   ): Promise<{ n: number; anchorAt: number }> => {
     const anchorT = knownAnchorT ?? detectAnchorFromClock(readings)
     if (anchorT === null) {
-      throw new Error('ゲーム残り時間を読み取れず、試合開始位置を判定できませんでした。「残り時間枠」の位置を調整してください')
+      throw new Error('ゲーム残り時間を読み取れず、試合開始位置を判定できませんでした。「テスト読み取り」で残り時間が読めるか確認してください')
     }
     // 試合開始より前 (ロビー等) の誤読を混ぜないよう、開始以降だけで導出する
     const inGame = readings.filter(r => r.t >= anchorT - 2)
     const okCount = inGame.filter(r => r.left !== null || r.right !== null).length
     if (inGame.length === 0 || okCount / inGame.length < 0.3) {
-      throw new Error('OCRでスコアをほとんど読み取れませんでした。「スコア枠」の位置を調整してください')
+      throw new Error('OCRでスコアをほとんど読み取れませんでした。「テスト読み取り」でスコアが読めるか確認してください')
     }
     const derived = deriveOriented(inGame, game, { anchorT })
     if (derived.rotations.length === 0) {
@@ -563,36 +561,9 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
 
       {url && (
         <div style={{ marginTop: 10 }}>
-          <div style={{ position: 'relative' }}>
-            <video ref={videoRef} src={url} controls muted playsInline preload="metadata"
-              onLoadedMetadata={onMeta}
-              style={{ width: '100%', height: 'auto', borderRadius: 8, border: '1px solid var(--line)', background: '#000', display: 'block' }} />
-            {/* OCRの読み取り枠プレビュー (左右スコア + 中央の残り時間) */}
-            {([-1, 1] as const).map(side => (
-              <div key={side} aria-hidden style={{
-                position: 'absolute',
-                left: `${(0.5 + side * calib.cx - calib.w / 2) * 100}%`,
-                top: `${calib.y * 100}%`,
-                width: `${calib.w * 100}%`,
-                height: `${calib.h * 100}%`,
-                border: `1.5px solid ${side === -1 ? '#00e5ff' : '#ff2bd6'}`,
-                borderRadius: 3,
-                pointerEvents: 'none',
-                boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
-              }} />
-            ))}
-            <div aria-hidden style={{
-              position: 'absolute',
-              left: `${(0.5 - calib.clockW / 2) * 100}%`,
-              top: `${calib.clockY * 100}%`,
-              width: `${calib.clockW * 100}%`,
-              height: `${calib.clockH * 100}%`,
-              border: '1.5px solid #f59e0b',
-              borderRadius: 3,
-              pointerEvents: 'none',
-              boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
-            }} />
-          </div>
+          <video ref={videoRef} src={url} controls muted playsInline preload="metadata"
+            onLoadedMetadata={onMeta}
+            style={{ width: '100%', height: 'auto', borderRadius: 8, border: '1px solid var(--line)', background: '#000', display: 'block' }} />
 
           <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <select value={target} onChange={e => setTarget(e.target.value)} disabled={running} style={{ fontSize: 12 }}>
@@ -654,53 +625,12 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
               : ' 既存ゲームへの後付けでは、最初に登録した1つだけが使われます。'}
           </p>
 
-          {/* OCRの読み取り枠調整 */}
-          <div className="card" style={{ padding: 10, marginTop: 8 }}>
-              <p className="muted" style={{ fontSize: 11, margin: '0 0 8px' }}>
-                動画の上の<span style={{ color: '#00e5ff' }}>水色</span>/<span style={{ color: '#ff2bd6' }}>ピンク</span>の枠が左右チームのスコア、
-                <span style={{ color: '#f59e0b' }}>オレンジ</span>の枠が画面中央最上部のゲーム残り時間を読む範囲です。
-                試合中の画面に合わせてから、各枠が数字をぴったり囲むようスライダーで調整し、「テスト読み取り」で確認してください。
-              </p>
-              <div className="row" style={{ gap: 14, flexWrap: 'wrap', fontSize: 11, alignItems: 'center' }}>
-                <span className="stat-label" style={{ margin: 0 }}>スコア枠</span>
-                {([
-                  ['横位置', 'cx', 0.02, 0.25],
-                  ['縦位置', 'y', 0, 0.2],
-                  ['幅', 'w', 0.02, 0.15],
-                  ['高さ', 'h', 0.02, 0.12],
-                ] as const).map(([label, key, min, max]) => (
-                  <label key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    {label}
-                    <input type="range" min={min} max={max} step={0.002} value={calib[key]} disabled={running}
-                      onChange={e => setCalib(c => ({ ...c, [key]: Number(e.target.value) }))}
-                      style={{ width: 110 }} />
-                  </label>
-                ))}
-              </div>
-              <div className="row" style={{ gap: 14, flexWrap: 'wrap', fontSize: 11, alignItems: 'center', marginTop: 6 }}>
-                <span className="stat-label" style={{ margin: 0 }}>残り時間枠</span>
-                {([
-                  ['縦位置', 'clockY', 0, 0.15],
-                  ['幅', 'clockW', 0.03, 0.15],
-                  ['高さ', 'clockH', 0.02, 0.1],
-                ] as const).map(([label, key, min, max]) => (
-                  <label key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    {label}
-                    <input type="range" min={min} max={max} step={0.002} value={calib[key]} disabled={running}
-                      onChange={e => setCalib(c => ({ ...c, [key]: Number(e.target.value) }))}
-                      style={{ width: 110 }} />
-                  </label>
-                ))}
-              </div>
-              <div className="row" style={{ gap: 10, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <button type="button" className="btn-ghost btn-sm" onClick={() => void testRead()} disabled={running || testing}>
-                  {testing ? '読み取り中...' : '🔍 この画面でテスト読み取り'}
-                </button>
-                {testResult && <span className="mono" style={{ fontSize: 12 }}>{testResult}</span>}
-              </div>
-              <p className="dim" style={{ fontSize: 10.5, margin: '6px 0 0' }}>
-                初回はOCRエンジン (数MB) のダウンロードに少し時間がかかります。読み取りはすべてブラウザ内で行われ、クレジットは消費しません。
-              </p>
+          {/* OCRの読み取り確認 (読み取り枠は固定) */}
+          <div className="row" style={{ gap: 10, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button type="button" className="btn-ghost btn-sm" onClick={() => void testRead()} disabled={running || scanning || testing}>
+              {testing ? '読み取り中...' : '🔍 この画面でテスト読み取り'}
+            </button>
+            {testResult && <span className="mono" style={{ fontSize: 12 }}>{testResult}</span>}
           </div>
 
           <div className="row" style={{ gap: 10, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
