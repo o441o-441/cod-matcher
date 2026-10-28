@@ -7,6 +7,7 @@ import {
 } from '@/lib/hpVideo'
 import { deriveOriented, detectAnchorFromClock, type RawFrameReading } from '@/lib/hpTimeline'
 import { DEFAULT_CALIB, readHudScores, warmupOcr } from '@/lib/hpOcr'
+import { gtmEvent } from '@/lib/gtm'
 import { readScoreboardSignature } from '@/lib/sbDetect'
 
 // ============================================================
@@ -237,6 +238,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     const canvas = document.createElement('canvas')
     const msgs: string[] = []
     let gameNo = Math.max(0, ...games.map(g => g.game_no)) + 1
+    const startGameNo = gameNo
     try {
       setScanStage('OCRエンジンを準備中...')
       await warmupOcr()
@@ -336,6 +338,7 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
       } else if (msgs.length > 0) {
         msgs.push(scanCancel.current ? '中断しました。保存済みのゲームはそのまま残っています' : '完了しました。間違いがあれば各ゲームの「取り消す」で削除して再提出できます')
         setResults([...msgs])
+        if (!scanCancel.current) gtmEvent('lk_analyze_complete', { games: gameNo - startGameNo })
       }
     } finally {
       setScanning(false)

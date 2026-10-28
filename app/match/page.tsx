@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Tutorial } from "@/components/Tutorial";
 import { playMatchFound } from "@/lib/sounds";
+import { gtmEvent } from "@/lib/gtm";
 import { usePageView } from "@/lib/usePageView";
 import { LoadingSkeleton } from "@/components/UIState";
 import QueueRadar from '@/components/QueueRadar';
@@ -622,6 +623,7 @@ export default function MatchPage() {
       if (row?.match_id) {
         routePushedRef.current = true;
         setInfoText("マッチが成立しました。");
+        gtmEvent('match_found');
         playMatchFound();
         await loadMyState({ silent: true });
         router.push(`/match/${row.match_id}/banpick`);
@@ -640,6 +642,7 @@ export default function MatchPage() {
     if (myActiveMatch.status === "banpick") {
       routePushedRef.current = true;
       setInfoText("マッチが成立しました。バンピック画面へ移動します。");
+      gtmEvent('match_found');
       playMatchFound();
       router.push(`/match/${myActiveMatch.id}/banpick`);
     }
@@ -882,6 +885,7 @@ export default function MatchPage() {
 
       if (error) throw error;
 
+      gtmEvent('queue_join', { party_size: myPartySize });
       setInfoText("パーティを待機に入れました。自動マッチングを開始します。");
       await loadMyState();
     } catch (e) {

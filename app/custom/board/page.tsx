@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { gtmEvent } from '@/lib/gtm'
 
 // ============================================================
 // 交流戦ボード (Scrim Board) — チームの空き時間を出し合い、
@@ -718,6 +719,7 @@ export default function ScrimBoardPage() {
       return
     }
     setModal(null)
+    gtmEvent('scrim_confirmed', { as: useRoomSide ? 'room' : 'team' })
     // 成立後は試合ページへ (連絡・ロビーコード共有はそこで行う)
     const matchIdNew = (data as { match_id?: string } | null)?.match_id
     if (matchIdNew) {

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { gtmEvent } from '@/lib/gtm'
 import { useToast } from '@/components/ToastProvider'
 import LivePanel from '@/components/LivePanel'
 import { FeatureLockCard } from '@/components/FeatureGate'
@@ -190,6 +191,7 @@ export default function CustomPage() {
     const { error } = await supabase.rpc('rpc_eights_join_lobby', { p_lobby_id: lobbyId })
     setBusy(false)
     if (error) { showToast(error.message, 'error'); return }
+    gtmEvent('eights_join')
     router.push(`/custom/eights/${lobbyId}`)
   }
 

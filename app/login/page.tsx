@@ -1,9 +1,11 @@
 'use client'
 
 import { supabase } from '@/lib/supabase'
+import { gtmEvent } from '@/lib/gtm'
 
 export default function LoginPage() {
   const handleDiscordLogin = async () => {
+    gtmEvent('login_click', { method: 'discord' })
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'discord',
       options: {
