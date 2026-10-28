@@ -1,6 +1,7 @@
 import './globals.css'
 import './winstreak.css'
 import type { Metadata, Viewport } from 'next'
+import { GoogleTagManager } from '@next/third-parties/google'
 import { ToastProvider } from '@/components/ToastProvider'
 import GlobalNotificationListener from '@/components/GlobalNotificationListener'
 import AppShell from '@/components/AppShell'
@@ -51,6 +52,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
+      <GoogleTagManager gtmId="GTM-T75ZHK8C" />
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
