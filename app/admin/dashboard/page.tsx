@@ -297,6 +297,7 @@ export default function AdminDashboardPage() {
           <p className="muted">プラットフォーム統計 / KPI</p>
         </div>
         <div className="row">
+          <button onClick={() => router.push('/admin/ranked')}>ランクマ監視</button>
           <button onClick={() => router.push('/admin/reports')}>通報管理</button>
           <button onClick={() => router.push('/admin/security')}>セキュリティ</button>
           <button onClick={() => router.push('/menu')}>メニューへ戻る</button>
