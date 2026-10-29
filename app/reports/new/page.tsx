@@ -28,6 +28,8 @@ function ReportNewContent() {
 
   const reportedId = params.get('reported') || ''
   const matchId = params.get('match') || ''
+  // マッチ内の通報ボタンから渡される状況テキスト (放置経過など)。本文に自動添付する
+  const contextText = (params.get('ctx') || '').slice(0, 300)
 
   const [loading, setLoading] = useState(true)
   const [reportedName, setReportedName] = useState<string | null>(null)
@@ -96,7 +98,7 @@ function ReportNewContent() {
       return
     }
 
-    const fullDescription = `[ゲーム内ID] ${reportedGameId.trim()}\n[証拠動画] ${evidenceUrl.trim()}${description.trim() ? '\n[詳細] ' + description.trim() : ''}`
+    const fullDescription = `[ゲーム内ID] ${reportedGameId.trim()}\n[証拠動画] ${evidenceUrl.trim()}${contextText ? '\n[状況(自動)] ' + contextText : ''}${description.trim() ? '\n[詳細] ' + description.trim() : ''}`
 
     setSubmitting(true)
 
@@ -163,6 +165,11 @@ function ReportNewContent() {
               <strong>{reportedName || reportedId}</strong>
             </p>
             {matchId && <p className="dim mono mt-xs" style={{ fontSize: '0.75rem' }}>関連マッチ ID: {matchId}</p>}
+            {contextText && (
+              <p className="mt-xs" style={{ fontSize: '0.8rem', color: 'var(--amber)', margin: 0 }}>
+                状況（自動添付）: {contextText}
+              </p>
+            )}
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { playChatReceive } from "@/lib/sounds";
 import { LoadingSkeleton } from "@/components/UIState";
+import MatchAbuseReport from "@/components/MatchAbuseReport";
 
 type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
@@ -657,7 +658,30 @@ export default function MatchConfirmPage() {
         >
           再読み込み
         </button>
+        <MatchAbuseReport
+          matchId={matchId}
+          myUserId={myUserId}
+          members={members.map((m) => ({ user_id: m.user_id, name: m.profiles?.display_name ?? m.user_id.slice(0, 8) }))}
+          context={() => {
+            const notReady = members.filter((m) => !m.ready_at).map((m) => m.profiles?.display_name ?? m.user_id.slice(0, 8));
+            if (notReady.length > 0) {
+              const cd = readyCountdown != null && readyCountdown > 0 ? ` (残り${Math.floor(readyCountdown / 60)}分${readyCountdown % 60}秒で強制敗北)` : "";
+              return `試合条件確認中。未準備: ${notReady.join("・")}${cd}`;
+            }
+            return "試合条件確認〜試合中の通報";
+          }}
+        />
       </div>
+
+      {/* 試合ができない場合の案内 */}
+      {match?.status !== 'completed' && (
+        <div className="section card" style={{ padding: '12px 16px' }}>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text-soft)', lineHeight: 1.8 }}>
+            <li><strong>相手が来ない・途中で抜けた場合</strong>: そのまま自チームの勝利として結果を報告してください。相手が応答しなければ20分（相手が報告画面を開くと5分）で自動確定します。あわせて「⚠ 問題を通報」から証拠動画付きで通報できます。</li>
+            <li><strong>試合自体が成立しなかった場合</strong>: どちらかのチームが結果を報告し、相手チームが<strong>却下</strong>してください。却下が2回続くと無効試合（レート変動なし）になります。</li>
+          </ul>
+        </div>
+      )}
 
       {errorText && (
         <div className="section card" style={{ borderColor: "rgba(255, 77, 109, 0.3)", background: "var(--danger-soft)" }}>

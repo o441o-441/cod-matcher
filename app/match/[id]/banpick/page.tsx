@@ -24,6 +24,7 @@ import { Tutorial } from "@/components/Tutorial";
 import { LoadingSkeleton } from "@/components/UIState";
 import TimerRing from "@/components/TimerRing";
 import MapThumb from "@/components/MapThumb";
+import MatchAbuseReport from "@/components/MatchAbuseReport";
 
 const BANPICK_TUTORIAL = [
   { title: "バンピックとは", body: "モードはハードポイント固定です。マッププールからBAN → PICK → サイド選択を行います（BO1）。" },
@@ -1002,6 +1003,18 @@ export default function BanpickPage() {
               試合条件最終確認へ
             </button>
           )}
+          <MatchAbuseReport
+            matchId={matchId}
+            myUserId={myUserId}
+            members={members.map((m) => ({ user_id: m.user_id, name: m.profiles?.display_name ?? m.user_id.slice(0, 8) }))}
+            context={() => {
+              if (!session || session.status !== "in_progress" || !session.deadline_at) return "バンピック中の通報";
+              const remain = Math.max(0, Math.floor((new Date(session.deadline_at).getTime() - Date.now()) / 1000));
+              const elapsed = Math.max(0, 300 - remain);
+              const side = session.current_turn_match_team_id === alphaTeam?.id ? "ALPHA" : "BRAVO";
+              return `バンピック中。手番(${side})が約${Math.floor(elapsed / 60)}分${elapsed % 60}秒無操作 (残り${Math.floor(remain / 60)}分${remain % 60}秒で手番側の自動敗北)`;
+            }}
+          />
           <Tutorial pageKey="banpick" steps={BANPICK_TUTORIAL} />
           {isAdmin && session?.status === "in_progress" && (
             <button className="btn-ghost btn-sm" style={{ fontSize: 11 }} disabled={busy} onClick={async () => {

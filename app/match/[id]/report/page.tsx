@@ -25,6 +25,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import { LoadingSkeleton } from "@/components/UIState";
 import RatingDelta from "@/components/RatingDelta";
 import { triggerWinStreak } from "@/components/WinStreakCelebration";
+import MatchAbuseReport from "@/components/MatchAbuseReport";
 
 const REPORT_TUTORIAL = [
   { title: "試合結果報告", body: "試合が終わったら、勝者チームのボタンを押して結果を報告します。" },
@@ -682,6 +683,12 @@ export default function ReportPage() {
           </h1>
         </div>
         <div className="row">
+          <MatchAbuseReport
+            matchId={matchId}
+            myUserId={myUserId}
+            members={members.map((m) => ({ user_id: m.user_id, name: m.profiles?.display_name ?? m.user_id.slice(0, 8) }))}
+            context={() => "結果報告の段階での通報"}
+          />
           <button className="btn-ghost" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => router.push(`/match/${matchId}/confirm`)}>
             試合条件確認に戻る
           </button>
