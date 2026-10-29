@@ -34,12 +34,15 @@ DECLARE
   v_after integer;
   v_protected boolean;
 BEGIN
-  -- 期待勝率はマッチメイク時 (キュー参加時点 = match_team_members.rating_before) の
-  -- チーム平均で計算する。一方、各プレイヤーへの適用は「適用時点の実レート
-  -- (profiles.current_rating)」基準で行う。連戦中に前の試合の変動が挟まっても
-  -- rating_history と profiles が一致し、表示とズレない (2026-10-27修正)
-  SELECT avg(rating_before) INTO v_winner_avg FROM match_team_members WHERE match_team_id = p_winner_team_id;
-  SELECT avg(rating_before) INTO v_loser_avg FROM match_team_members WHERE match_team_id = p_loser_team_id;
+  -- 期待勝率は「実効レート (マッチメイク時のチーム平均 + パーティ人数補正)」の
+  -- チーム差で計算する (2026-10-29: match_teams.effective_avg_rating を使用。
+  -- 旧マッチ等で無い場合はメンバー平均にフォールバック)。
+  -- 各プレイヤーへの適用は「適用時点の実レート (profiles.current_rating)」基準
+  -- (連戦中に前の試合の変動が挟まっても rating_history と profiles が一致する)
+  SELECT coalesce(mt.effective_avg_rating, (SELECT avg(rating_before) FROM match_team_members WHERE match_team_id = mt.id))
+  INTO v_winner_avg FROM match_teams mt WHERE mt.id = p_winner_team_id;
+  SELECT coalesce(mt.effective_avg_rating, (SELECT avg(rating_before) FROM match_team_members WHERE match_team_id = mt.id))
+  INTO v_loser_avg FROM match_teams mt WHERE mt.id = p_loser_team_id;
   -- v_factor = 1 - 勝者チームの期待勝率 = 敗者チームの期待勝率
   v_factor := 1.0 - 1.0 / (1.0 + power(10.0, (coalesce(v_loser_avg, 1500) - coalesce(v_winner_avg, 1500)) / 400.0));
 
