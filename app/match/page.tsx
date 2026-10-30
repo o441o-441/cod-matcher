@@ -8,6 +8,8 @@ import { playMatchFound } from "@/lib/sounds";
 import { gtmEvent } from "@/lib/gtm";
 import { usePageView } from "@/lib/usePageView";
 import { LoadingSkeleton } from "@/components/UIState";
+import { FeatureLockCard } from "@/components/FeatureGate";
+import { useFeatureReleases, isReleased } from "@/lib/featureReleases";
 import QueueRadar from '@/components/QueueRadar';
 
 // 同意済みバージョンのローカルキャッシュ (正は profiles.rules_accepted_version)
@@ -208,6 +210,7 @@ export default function MatchPage() {
 
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const fr = useFeatureReleases(); // 段階公開スケジュール (ランクマ公開前のロック表示用)
 
   const queueType = "ranked" as const;
 
@@ -1066,6 +1069,15 @@ export default function MatchPage() {
   if (loading) {
     return (
       <main><LoadingSkeleton cards={3} /></main>
+    );
+  }
+
+  // 段階公開: ランクマ公開前はロック画面 (管理者は公開前も利用可)
+  if (fr && !isReleased(fr, "ranked") && !profile?.is_admin) {
+    return (
+      <main className="page">
+        <FeatureLockCard featureKey="ranked" />
+      </main>
     );
   }
 
