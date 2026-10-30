@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import { usePageView } from '@/lib/usePageView'
 import LivePanel from '@/components/LivePanel'
-import { useFeatureReleases, isReleased, isNewlyReleased, releaseLabel, type FeatureKey } from '@/lib/featureReleases'
+import { useFeatureReleases, isReleased, isNewlyReleased, isTbd, releaseLabel, type FeatureKey } from '@/lib/featureReleases'
 
 type TourneyRow = { id: string; title: string; format: string; status: string }
 type AnnouncementRow = { id: string; title: string; created_at: string }
@@ -126,7 +126,7 @@ export default function HomePage() {
           const locked = !!fr && !isReleased(fr, fkey)
           const isNew = !!fr && isNewlyReleased(fr, fkey)
           const handleClick = () => {
-            if (locked) { showToast(`${m.sub}は ${releaseLabel(fr!, fkey)} に公開予定です`, 'info'); return }
+            if (locked) { showToast(isTbd(fr!, fkey) ? `${m.sub}の公開時期は未定です（Discordでお知らせします）` : `${m.sub}は ${releaseLabel(fr!, fkey)} に公開予定です`, 'info'); return }
             if (m.id === 'tournament') { router.push(m.href); return }
             go(m.href)
           }
@@ -147,7 +147,7 @@ export default function HomePage() {
             )}
             {locked && (
               <span className="badge" style={{ position: 'absolute', top: 12, right: 12 }}>
-                🔒 {releaseLabel(fr!, fkey)} 公開
+                🔒 {isTbd(fr!, fkey) ? '公開時期未定' : `${releaseLabel(fr!, fkey)} 公開`}
               </span>
             )}
             <span className="glyph" aria-hidden="true" style={{ color: m.color }}>{m.glyph}</span>

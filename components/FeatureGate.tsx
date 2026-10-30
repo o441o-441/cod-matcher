@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { useFeatureReleases, isReleased, releaseLabel, FEATURE_META, type FeatureKey } from '@/lib/featureReleases'
+import { useFeatureReleases, isReleased, isTbd, releaseLabel, FEATURE_META, type FeatureKey } from '@/lib/featureReleases'
 
 // ============================================================
 // 機能の段階公開ゲート (ページ単位)
@@ -25,8 +25,11 @@ export function FeatureLockCard({ featureKey }: { featureKey: FeatureKey }) {
         <h2 style={{ margin: '8px 0 4px' }}>{meta.label}</h2>
         <p className="muted" style={{ fontSize: 13, margin: '0 0 14px' }}>{meta.desc}</p>
         <div className="mono" style={{ fontSize: 20, fontWeight: 800, color: 'var(--cyan)' }}>
-          {fr ? `${releaseLabel(fr, featureKey)} 公開予定` : '公開日時を確認中...'}
+          {fr ? (isTbd(fr, featureKey) ? '公開時期未定' : `${releaseLabel(fr, featureKey)} 公開予定`) : '公開日時を確認中...'}
         </div>
+        {fr && isTbd(fr, featureKey) && (
+          <p className="muted" style={{ fontSize: 12, margin: '10px 0 0' }}>再開が決まったらDiscordでお知らせします</p>
+        )}
       </div>
     </div>
   )
@@ -76,8 +79,11 @@ export default function FeatureGate() {
         <div className="card" style={{ padding: '14px 16px', marginBottom: 20, borderColor: 'rgba(0,229,255,0.35)' }}>
           <span className="stat-label">公開予定</span>
           <div className="mono" style={{ fontSize: 22, fontWeight: 800, color: 'var(--cyan)', marginTop: 4 }}>
-            {releaseLabel(fr, gate.key)}
+            {isTbd(fr, gate.key) ? '時期未定' : releaseLabel(fr, gate.key)}
           </div>
+          {isTbd(fr, gate.key) && (
+            <p className="muted" style={{ fontSize: 12, margin: '8px 0 0' }}>再開が決まったらDiscordでお知らせします</p>
+          )}
         </div>
         <button className="btn-primary" style={{ width: '100%' }} onClick={() => router.push('/')}>トップへ戻る</button>
       </div>

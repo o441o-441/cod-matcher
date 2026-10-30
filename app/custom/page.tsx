@@ -7,7 +7,7 @@ import { gtmEvent } from '@/lib/gtm'
 import { useToast } from '@/components/ToastProvider'
 import LivePanel from '@/components/LivePanel'
 import { FeatureLockCard } from '@/components/FeatureGate'
-import { useFeatureReleases, isReleased, isNewlyReleased, releaseLabel, type FeatureKey } from '@/lib/featureReleases'
+import { useFeatureReleases, isReleased, isNewlyReleased, isTbd, releaseLabel, type FeatureKey } from '@/lib/featureReleases'
 
 type LobbyRow = {
   id: string; title: string; host_user_id: string; status: string
@@ -52,7 +52,7 @@ export default function CustomPage() {
   const featureLocked = (key: FeatureKey) => !!fr && !isReleased(fr, key) && !isAdmin
   const featureCaption = (key: FeatureKey) => {
     if (!fr) return null
-    if (!isReleased(fr, key)) return <span className="badge" style={{ marginTop: 8 }}>🔒 {releaseLabel(fr, key)} 公開</span>
+    if (!isReleased(fr, key)) return <span className="badge" style={{ marginTop: 8 }}>🔒 {isTbd(fr, key) ? '公開時期未定' : `${releaseLabel(fr, key)} 公開`}</span>
     if (isNewlyReleased(fr, key)) return <span className="badge amber" style={{ marginTop: 8, fontWeight: 800 }}><span className="badge-dot" />NEW 公開中</span>
     return null
   }

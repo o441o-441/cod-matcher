@@ -65,6 +65,13 @@ export const isReleased = (fr: FeatureReleases, key: FeatureKey) => {
   return at == null || at <= serverNow(fr)
 }
 
+// 公開日時が180日以上先 = 凍結中 (時期未定) として扱う。
+// 凍結はDB側で feature_release_* を遠い未来 (例: 2099年) にするだけ
+export const isTbd = (fr: FeatureReleases, key: FeatureKey) => {
+  const at = fr.releases[key]
+  return at != null && at - serverNow(fr) > 180 * 24 * 60 * 60 * 1000
+}
+
 // 公開から5日間は true (未公開は false)
 export const isNewlyReleased = (fr: FeatureReleases, key: FeatureKey) => {
   const at = fr.releases[key]
