@@ -45,10 +45,8 @@ export default function RulesPage() {
           <div className="card">
             <h3>ハードポイント</h3>
             <ul>
-              <li>コール</li>
               <li>シルクウォーム</li>
               <li>ミューニション</li>
-              <li>ムンバイ</li>
               <li>リアクター</li>
               <li>ルーフトップ</li>
               <li>ロータス</li>

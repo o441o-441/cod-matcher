@@ -76,7 +76,7 @@ DECLARE
   v_alpha_id uuid;
   v_bravo_id uuid;
   v_mode text := 'hp'; -- ランクマッチはハードポイント固定
-  v_hp_maps text[] := ARRAY['コール','シルクウォーム','ミューニション','ムンバイ','リアクター','ルーフトップ','ロータス'];
+  v_hp_maps text[] := ARRAY['シルクウォーム','ミューニション','リアクター','ルーフトップ','ロータス'];
   v_map text;
   v_selected jsonb;
   v_existing_session_id uuid;
