@@ -13,7 +13,7 @@
 // 取得する。以降はブラウザキャッシュが効く。
 // ============================================================
 
-import type { Worker as TesseractWorker } from 'tesseract.js'
+import type { Scheduler } from 'tesseract.js'
 
 export type HudCalib = {
   cx: number // スコア枠中心の、画面中央からの横オフセット (画面幅比)
@@ -53,26 +53,33 @@ export function saveCalib(c: HudCalib) {
   try { localStorage.setItem(CALIB_STORAGE_KEY, JSON.stringify(c)) } catch { /* ignore */ }
 }
 
-let workerPromise: Promise<TesseractWorker> | null = null
+// 左スコア・右スコア・残り時間の3枠を並列に読むため、ワーカーを
+// 3つ持つスケジューラで回す (1枠=1ジョブ。直列だと1フレームに3回待つ)
+const OCR_WORKERS = 3
+let schedulerPromise: Promise<Scheduler> | null = null
 
-async function getWorker(): Promise<TesseractWorker> {
-  if (!workerPromise) {
-    workerPromise = (async () => {
+async function getScheduler(): Promise<Scheduler> {
+  if (!schedulerPromise) {
+    schedulerPromise = (async () => {
       const mod = await import('tesseract.js')
-      const w = await mod.createWorker('eng')
-      await w.setParameters({
-        tessedit_char_whitelist: '0123456789:.', // 残り時間 "4:59" の区切りも読む
-        tessedit_pageseg_mode: mod.PSM.SINGLE_LINE,
-      })
-      return w
+      const scheduler = mod.createScheduler()
+      await Promise.all(Array.from({ length: OCR_WORKERS }, async () => {
+        const w = await mod.createWorker('eng')
+        await w.setParameters({
+          tessedit_char_whitelist: '0123456789:.', // 残り時間 "4:59" の区切りも読む
+          tessedit_pageseg_mode: mod.PSM.SINGLE_LINE,
+        })
+        scheduler.addWorker(w)
+      }))
+      return scheduler
     })()
   }
-  return workerPromise
+  return schedulerPromise
 }
 
 // OCRエンジン (WASM/言語データのダウンロード含む) を先に温めておく
 export async function warmupOcr(): Promise<void> {
-  await getWorker()
+  await getScheduler()
 }
 
 // 指定枠を切り出し、拡大 + 二値化 (明るい文字 → 白地に黒文字) したcanvasを返す
@@ -123,11 +130,12 @@ function parseClock(text: string): number | null {
 }
 
 // 現在表示中のフレームから左右チームのスコアとゲーム残り時間をOCRで読み取る
+// (3枠はワーカープールで並列認識)
 export async function readHudScores(
   video: HTMLVideoElement,
   calib: HudCalib
 ): Promise<{ left: number | null; right: number | null; clock: number | null }> {
-  const worker = await getWorker()
+  const scheduler = await getScheduler()
   const boxFor = (side: -1 | 1) => ({
     x: 0.5 + side * calib.cx - calib.w / 2,
     y: calib.y,
@@ -135,12 +143,26 @@ export async function readHudScores(
     h: calib.h,
   })
   const clockBox = { x: 0.5 - calib.clockW / 2, y: calib.clockY, w: calib.clockW, h: calib.clockH }
-  const l = await worker.recognize(cropForOcr(video, boxFor(-1)))
-  const r = await worker.recognize(cropForOcr(video, boxFor(1)))
-  const c = await worker.recognize(cropForOcr(video, clockBox))
+  // クロップは同期処理なので先に3枠ぶん取ってから並列でOCRする
+  const lCanvas = cropForOcr(video, boxFor(-1))
+  const rCanvas = cropForOcr(video, boxFor(1))
+  const cCanvas = cropForOcr(video, clockBox)
+  const [l, r, c] = await Promise.all([
+    scheduler.addJob('recognize', lCanvas),
+    scheduler.addJob('recognize', rCanvas),
+    scheduler.addJob('recognize', cCanvas),
+  ])
   return {
     left: parseScore(l.data.text ?? ''),
     right: parseScore(r.data.text ?? ''),
     clock: parseClock(c.data.text ?? ''),
   }
+}
+
+// 残り時間だけを読む軽量版 (試合開始の探索用 — スコア2枠のOCRを省く)
+export async function readHudClock(video: HTMLVideoElement, calib: HudCalib): Promise<number | null> {
+  const scheduler = await getScheduler()
+  const clockBox = { x: 0.5 - calib.clockW / 2, y: calib.clockY, w: calib.clockW, h: calib.clockH }
+  const c = await scheduler.addJob('recognize', cropForOcr(video, clockBox))
+  return parseClock(c.data.text ?? '')
 }

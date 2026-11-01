@@ -6,7 +6,7 @@ import {
   base64ToJpegBlob, captureJpeg, fetchYouTubeVideo, parseYouTubeId, seekTo,
 } from '@/lib/hpVideo'
 import { deriveOriented, detectAnchorFromClock, type RawFrameReading } from '@/lib/hpTimeline'
-import { DEFAULT_CALIB, readHudScores, warmupOcr } from '@/lib/hpOcr'
+import { DEFAULT_CALIB, readHudClock, readHudScores, warmupOcr } from '@/lib/hpOcr'
 import { gtmEvent } from '@/lib/gtm'
 import { readScoreboardSignature } from '@/lib/sbDetect'
 
@@ -56,6 +56,9 @@ const SCAN_REFINE_MAX_STEPS = 5 // 表示は0.3秒程度なので端探りは片
 const SB_HUNT_WINDOW_SEC = 60 // 試合終了を検知してからスコアボードを探す範囲 (秒)
 const START_CLOCK_MIN = 270 // 残り時間がこれ以上 (4:30〜4:59) 読めたら試合開始直後とみなす
 const START_CLOCK_MAX = 299
+// 試合開始探索の間隔 (秒)。検出窓 (4:30〜4:59) は30秒幅あるので粗くても
+// 窓内を複数回サンプルできる。探索中は残り時間だけOCRするため高速
+const START_SCAN_STEP_SEC = 6
 const END_SCORE = 250 // どちらかがここに達したら試合終了
 const END_CONFIRM_READS = 2 // 250到達 / 残り0:00 は連続n回読めたら確定 (単発の誤読対策)
 const END_NULL_STREAK = 5 // スコアと残り時間が全て読めない状態がn秒続いたら試合終了
@@ -222,9 +225,10 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
   }
 
   // ---- 全自動解析 ----
-  // 1) 1秒間隔で残り時間 (4:30〜4:59) を探して試合開始を検出
-  //    (誤読対策: 2秒後にもう一度読んで残り時間が約2秒進んでいるか検証)
-  // 2) 試合中は1秒間隔でスコアと残り時間を記録 (そのままヒル推移の元データ)
+  // 1) 残り時間 (4:30〜4:59) を粗い間隔 (6秒) で探して試合開始を検出
+  //    (探索中は残り時間だけOCR。誤読対策: 2秒後にもう一度読んで検証)
+  // 2) 試合中は逆算した開始位置から1秒間隔でスコアと残り時間を記録
+  //    (そのままヒル推移の元データ。3枠のOCRはワーカープールで並列)
   // 3) どちらかが250 / 残り0:00 (各連続2回) か、3値とも読めない状態が
   //    5秒続いたら試合終了
   // 4) 最後にHUDが読めた時点から1分間を0.2秒刻みでスコアボードを探索し、
@@ -246,37 +250,37 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
       let t = 0
       let step = 0
       while (t <= end && !scanCancel.current) {
-        // --- 1) 試合開始 (残り4:59) を探す ---
-        if (step % 10 === 0) setScanStage(`試合開始を探しています... ${fmtT(t)} / ${fmtT(end)}`)
+        // --- 1) 試合開始 (残り4:30〜4:59) を探す ---
+        // 検出窓は30秒幅あるため粗い間隔で、残り時間だけをOCRする (高速化)。
+        // 検出後に開始位置へ逆算で戻って1秒刻みで読み直すので精度は落ちない
+        if (step % 2 === 0) setScanStage(`試合開始を探しています... ${fmtT(t)} / ${fmtT(end)}`)
         step += 1
-        let first: { left: number | null; right: number | null; clock: number | null }
+        let firstClock: number | null = null
         try {
           await seekTo(vid, t)
-          first = await readHudScores(vid, calib)
-        } catch { t += 1; continue }
-        if (first.clock === null || first.clock < START_CLOCK_MIN || first.clock > START_CLOCK_MAX) { t += 1; continue }
-        let second: { left: number | null; right: number | null; clock: number | null }
+          firstClock = await readHudClock(vid, calib)
+        } catch { t += START_SCAN_STEP_SEC; continue }
+        if (firstClock === null || firstClock < START_CLOCK_MIN || firstClock > START_CLOCK_MAX) { t += START_SCAN_STEP_SEC; continue }
+        let secondClock: number | null = null
         try {
           await seekTo(vid, t + 2)
-          second = await readHudScores(vid, calib)
-        } catch { t += 1; continue }
-        if (second.clock === null || Math.abs(first.clock - 2 - second.clock) > 3) { t += 1; continue }
+          secondClock = await readHudClock(vid, calib)
+        } catch { t += START_SCAN_STEP_SEC; continue }
+        if (secondClock === null || Math.abs(firstClock - 2 - secondClock) > 3) { t += START_SCAN_STEP_SEC; continue }
         // 試合開始位置 (残り時間が4:59だった瞬間) を検出フレームから逆算する。
         // 残り時間は地点保持中に停止するため、停止がまだ蓄積していない
         // 開始直後のこの2フレームからの逆算が最も正確 (早い方の候補を採用)
-        const anchorT = Math.max(0, Math.min(t + first.clock - 299, t + 2 + second.clock - 299))
+        const anchorT = Math.max(0, Math.min(t + firstClock - 299, t + 2 + secondClock - 299))
 
-        // --- 2) 試合中: スコアと残り時間を記録 ---
-        const gameStartT = t
-        const readings: RawFrameReading[] = [
-          { t, left: first.left, right: first.right, clock: first.clock, hill: null },
-          { t: t + 2, left: second.left, right: second.right, clock: second.clock, hill: null },
-        ]
-        let lastOkT = t + 2
+        // --- 2) 試合中: 逆算した開始位置から1秒刻みでスコアと残り時間を記録 ---
+        const gameStartT = Math.max(0, Math.floor(anchorT))
+        const readings: RawFrameReading[] = []
+        let lastOkT = gameStartT
+        let sawAny = false
         let nullStreak = 0
         let scoreEndStreak = 0
         let clockEndStreak = 0
-        let tb = t + 3
+        let tb = gameStartT
         while (tb <= end && !scanCancel.current) {
           let r: { left: number | null; right: number | null; clock: number | null } = { left: null, right: null, clock: null }
           try {
@@ -285,13 +289,13 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
           } catch { /* 読めないフレームとして扱う */ }
           readings.push({ t: tb, left: r.left, right: r.right, clock: r.clock, hill: null })
           const anyVal = r.left !== null || r.right !== null || r.clock !== null
-          if (anyVal) lastOkT = tb
+          if (anyVal) { lastOkT = tb; sawAny = true }
           nullStreak = anyVal ? 0 : nullStreak + 1
           scoreEndStreak = (r.left ?? 0) >= END_SCORE || (r.right ?? 0) >= END_SCORE ? scoreEndStreak + 1 : 0
           clockEndStreak = r.clock === 0 ? clockEndStreak + 1 : 0
           setScanStage(`試合を記録中... ${fmtT(tb)} (${r.left ?? '?'} - ${r.right ?? '?'} / 残り ${r.clock !== null ? fmtT(r.clock) : '?'})`)
-          // --- 3) 試合終了の判定 ---
-          if (scoreEndStreak >= END_CONFIRM_READS || clockEndStreak >= END_CONFIRM_READS || nullStreak >= END_NULL_STREAK) break
+          // --- 3) 試合終了の判定 (HUD未出現のうちはnull連続では打ち切らない) ---
+          if (scoreEndStreak >= END_CONFIRM_READS || clockEndStreak >= END_CONFIRM_READS || (sawAny && nullStreak >= END_NULL_STREAK)) break
           if (tb - gameStartT > GAME_LOOKBACK_SEC) break // 保険: 想定最長を超えたら打ち切り
           tb += 1
         }
