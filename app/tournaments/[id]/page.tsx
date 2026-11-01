@@ -7,6 +7,7 @@ import { useToast } from '@/components/ToastProvider'
 import { LoadingSkeleton } from '@/components/UIState'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import TournamentSchedule from '@/components/TournamentSchedule'
+import TournamentSeedEditor from '@/components/TournamentSeedEditor'
 
 type TournamentRow = {
   id: string; title: string; description: string | null; format: string; entry_mode: string
@@ -22,6 +23,7 @@ type TournamentRow = {
 type EntryRow = {
   id: string; tournament_id: string; team_id: string | null; user_id: string | null
   weapon_class: string | null; rating_at_entry: number | null; status: string
+  seed_number: number | null
   display_name?: string; team_name?: string
 }
 
@@ -39,6 +41,7 @@ export default function TournamentDetailPage() {
   const [hostName, setHostName] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   // エントリーフォーム
   const [weaponClass, setWeaponClass] = useState('ar')
@@ -129,7 +132,7 @@ export default function TournamentDetailPage() {
     }
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tournamentId])
+  }, [tournamentId, reloadKey])
 
   const handleEntry = async () => {
     if (!tournamentId || !myUserId || !tournament) return
@@ -440,6 +443,28 @@ export default function TournamentDetailPage() {
         </div>
       )}
 
+      {/* 組み合わせ調整 (シード確定後・大会開始前) */}
+      {tournament.status === 'seeding' && tournament.format === 'tournament' && (
+        isHost ? (
+          <TournamentSeedEditor
+            key={reloadKey}
+            tournamentId={tournament.id}
+            initialEntries={entries
+              .filter(e => e.status !== 'excluded')
+              .slice()
+              .sort((a, b) => (a.seed_number ?? 9999) - (b.seed_number ?? 9999))
+              .map(e => ({ id: e.id, label: e.team_name ?? e.display_name ?? '不明', rating: e.rating_at_entry }))}
+            onStarted={() => router.push(`/tournaments/${tournamentId}/bracket`)}
+          />
+        ) : (
+          <div className="section card" style={{ borderColor: 'rgba(255,176,32,0.4)', background: 'var(--amber-soft)' }}>
+            <p style={{ margin: 0, color: 'var(--amber)', fontSize: 13, fontWeight: 600 }}>
+              エントリーは締め切られました。主催者が組み合わせを調整中です — まもなく大会が開始されます
+            </p>
+          </div>
+        )
+      )}
+
       {/* 主催者アクション */}
       {isHost && (
         <div className="section card-strong">
@@ -448,22 +473,33 @@ export default function TournamentDetailPage() {
             {tournament.status === 'recruit' && (
               <button className="btn-primary" onClick={async () => {
                 setBusy(true)
-                const { data, error } = await supabase.rpc('rpc_tournament_execute_seeding', { p_tournament_id: tournamentId })
+                const { error } = await supabase.rpc('rpc_tournament_execute_seeding', { p_tournament_id: tournamentId })
                 if (error) { showToast(error.message, 'error'); setBusy(false); return }
-                showToast('シードを実行しました', 'success')
-                // ブラケット or リーグ初期化
                 if (tournament.format === 'tournament') {
-                  const { error: e2 } = await supabase.rpc('rpc_tournament_generate_bracket', { p_tournament_id: tournamentId })
-                  if (e2) showToast(e2.message, 'error')
-                  else { showToast('ブラケットを生成しました', 'success'); router.push(`/tournaments/${tournamentId}/bracket`) }
+                  // トーナメント形式: シード実行後に組み合わせ確認画面を挟む
+                  showToast('エントリーを締め切りました。組み合わせを確認してください', 'success')
+                  setBusy(false)
+                  setReloadKey(k => k + 1)
                 } else {
                   const { error: e2 } = await supabase.rpc('rpc_tournament_init_league', { p_tournament_id: tournamentId })
-                  if (e2) showToast(e2.message, 'error')
+                  setBusy(false)
+                  if (e2) { showToast(e2.message, 'error'); setReloadKey(k => k + 1) }
                   else { showToast('リーグを開始しました', 'success'); router.push(`/tournaments/${tournamentId}/standings`) }
                 }
-                setBusy(false)
               }} disabled={busy}>
-                {busy ? '処理中...' : 'エントリー締切 → 大会開始'}
+                {busy ? '処理中...' : tournament.format === 'tournament' ? 'エントリー締切 → 組み合わせ決定へ' : 'エントリー締切 → 大会開始'}
+              </button>
+            )}
+            {tournament.status === 'seeding' && tournament.format === 'league' && (
+              <button className="btn-primary" onClick={async () => {
+                setBusy(true)
+                const { error } = await supabase.rpc('rpc_tournament_init_league', { p_tournament_id: tournamentId })
+                setBusy(false)
+                if (error) { showToast(error.message, 'error'); return }
+                showToast('リーグを開始しました', 'success')
+                router.push(`/tournaments/${tournamentId}/standings`)
+              }} disabled={busy}>
+                {busy ? '処理中...' : 'リーグを開始'}
               </button>
             )}
             {tournament.format === 'league' && tournament.block_count >= 2 && tournament.group_phase_status === 'completed' && (

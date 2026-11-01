@@ -76,6 +76,8 @@ $$;
 
 -- ------------------------------------------------------------
 -- シード実行本体
+-- ※ この定義は tournament_manual_seeding.sql で上書き済み
+--   (manual シード対応)。変更はそちらで。
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.rpc_tournament_execute_seeding(p_tournament_id uuid)
 RETURNS json
