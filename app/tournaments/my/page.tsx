@@ -110,7 +110,7 @@ export default function MyTournamentsPage() {
                     <div className="row" style={{ gap: 8, marginTop: 4 }}>
                       <span className="badge" style={{ fontSize: 9 }}>{t.format === 'league' ? 'LEAGUE' : 'TOURNAMENT'}</span>
                       <span className="badge" style={{ fontSize: 9 }}>{t.entry_mode === 'team' ? 'TEAM' : 'SOLO'}</span>
-                      {t.event_start && <span className="muted mono" style={{ fontSize: 11 }}>{new Date(t.event_start).toLocaleDateString('ja-JP')}</span>}
+                      {t.event_start && <span className="muted mono" style={{ fontSize: 11 }}>{new Date(t.event_start).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })}</span>}
                     </div>
                   </div>
                   <span className="badge" style={{ fontSize: 10, color: statusColor(t.status), borderColor: statusColor(t.status) + '44', background: statusColor(t.status) + '11' }}>

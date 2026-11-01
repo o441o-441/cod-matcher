@@ -246,11 +246,11 @@ export default function TournamentDetailPage() {
             <div className="grid grid-2" style={{ marginTop: 8 }}>
               <div className="card" style={{ textAlign: 'center' }}>
                 <p className="muted" style={{ fontSize: 11 }}>エントリー締切</p>
-                <p style={{ fontSize: 13 }}>{tournament.entry_deadline ? new Date(tournament.entry_deadline).toLocaleString('ja-JP') : '未定'}</p>
+                <p style={{ fontSize: 13 }}>{tournament.entry_deadline ? new Date(tournament.entry_deadline).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '未定'}</p>
               </div>
               <div className="card" style={{ textAlign: 'center' }}>
                 <p className="muted" style={{ fontSize: 11 }}>開始日時</p>
-                <p style={{ fontSize: 13 }}>{tournament.event_start ? new Date(tournament.event_start).toLocaleString('ja-JP') : '未定'}</p>
+                <p style={{ fontSize: 13 }}>{tournament.event_start ? new Date(tournament.event_start).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '未定'}</p>
               </div>
             </div>
             <p className="muted" style={{ fontSize: 12, marginTop: 12 }}>主催: {hostName ?? '不明'}</p>
@@ -269,7 +269,7 @@ export default function TournamentDetailPage() {
           {tournament.status === 'recruit' && !myEntry && entryDeadlinePassed && (
             <div className="card" style={{ borderColor: 'rgba(255,176,32,0.4)', background: 'var(--amber-soft)' }}>
               <p style={{ margin: 0, color: 'var(--amber)', fontSize: 13, fontWeight: 600 }}>
-                エントリー締切を過ぎています（{new Date(tournament.entry_deadline!).toLocaleString('ja-JP')} 締切）
+                エントリー締切を過ぎています（{new Date(tournament.entry_deadline!).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })} 締切）
               </p>
             </div>
           )}

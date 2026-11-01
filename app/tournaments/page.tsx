@@ -198,7 +198,7 @@ function TournamentCard({ t, onClick }: { t: TournamentRow; onClick: () => void 
       <div className="row" style={{ gap: 12, fontSize: 12, color: 'var(--text-soft)' }}>
         <span><strong>{t.entry_count ?? 0}</strong>/{t.capacity} {t.entry_mode === 'team' ? 'teams' : 'players'}</span>
         {t.rate_cap && <span style={{ color: 'var(--amber, #f59e0b)' }}>≤ {t.rate_cap}</span>}
-        {t.event_start && <span>{new Date(t.event_start).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
+        {t.event_start && <span>{new Date(t.event_start).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tokyo' })}</span>}
       </div>
 
       {t.status === 'recruit' && (

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
+import { localInputToJst } from '@/lib/tournamentSchedule'
 
 export default function TournamentCreatePage() {
   const router = useRouter()
@@ -58,8 +59,9 @@ export default function TournamentCreatePage() {
       capacity,
       rate_cap: rateCapOn ? rateCap : null,
       seeding_method: seedingMethod,
-      entry_deadline: entryDeadline || null,
-      event_start: eventStart || null,
+      // datetime-local はタイムゾーンなしなので +09:00 を明示 (素通しだとUTC解釈で9時間ズレる)
+      entry_deadline: entryDeadline ? localInputToJst(entryDeadline) : null,
+      event_start: eventStart ? localInputToJst(eventStart) : null,
       host_user_id: session.user.id,
       prize: prize.trim() || null,
       rules: rules.trim() || null,
