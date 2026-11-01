@@ -29,14 +29,25 @@ type TournamentLike = {
   metadata: { round_formats?: RoundFormats; schedule?: ScheduleBlock[] } | null
 }
 
-export default function TournamentSchedule({ tournament, isHost }: { tournament: TournamentLike; isHost: boolean }) {
+export default function TournamentSchedule({
+  tournament,
+  isHost,
+  entryCount = 0,
+}: {
+  tournament: TournamentLike
+  isHost: boolean
+  // 実エントリー数 (ソロは4人=1チーム換算済みの値)。0 = まだ不明 → 定員で計算
+  entryCount?: number
+}) {
   const { showToast } = useToast()
   const meta = (tournament.metadata ?? {}) as { round_formats?: RoundFormats; schedule?: ScheduleBlock[] }
   const rf = meta.round_formats ?? null
 
+  // ラウンド数は実エントリー数基準 (定員基準だとエントリーが少ない時に食い違う)
+  const baseCount = entryCount >= 2 ? entryCount : tournament.capacity
   const shape = useMemo(
-    () => bracketShape(tournament.capacity, tournament.elimination_type, tournament.gf_reset),
-    [tournament.capacity, tournament.elimination_type, tournament.gf_reset]
+    () => bracketShape(baseCount, tournament.elimination_type, tournament.gf_reset),
+    [baseCount, tournament.elimination_type, tournament.gf_reset]
   )
 
   const [editing, setEditing] = useState(false)
@@ -46,6 +57,13 @@ export default function TournamentSchedule({ tournament, isHost }: { tournament:
   const est = useMemo(
     () => estimateSchedule(blocks, shape, tournament.match_format, rf),
     [blocks, shape, tournament.match_format, rf]
+  )
+
+  // 保存済みスケジュールが現在のラウンド数を超えている (エントリー数が
+  // 想定より少ない等でブラケットが縮んだ) 場合の注意表示
+  const stale = useMemo(
+    () => blocks.some(b => b.wb_until > shape.wbRounds || b.lb_until > shape.lbRounds),
+    [blocks, shape]
   )
 
   if (tournament.format !== 'tournament') return null
@@ -97,6 +115,13 @@ export default function TournamentSchedule({ tournament, isHost }: { tournament:
       <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>
         所要時間の目安: BO1=20分 / BO3=40分 / BO5=70分（同時進行の試合は並行、ラウンド進行は直列で計算）
       </p>
+      {stale && (
+        <p className="danger" style={{ fontSize: 12, marginTop: 4 }}>
+          ⚠️ エントリー数 ({baseCount}チーム) に対してラウンド数が変わっています
+          （現在: 勝者側{shape.wbRounds}回戦{shape.lbRounds > 0 ? `・敗者側${shape.lbRounds}回戦` : ''}）。
+          スケジュールの「どこまで消化」を見直してください
+        </p>
+      )}
 
       {!editing ? (
         blocks.length === 0 ? (
@@ -204,7 +229,7 @@ export default function TournamentSchedule({ tournament, isHost }: { tournament:
             </p>
           )}
           <p className="muted" style={{ fontSize: 11, margin: 0 }}>
-            ブラケットは定員{tournament.capacity}チーム想定（勝者側{shape.wbRounds}回戦
+            ブラケットは{entryCount >= 2 ? `現在のエントリー${baseCount}チーム基準` : `定員${tournament.capacity}チーム想定`}（勝者側{shape.wbRounds}回戦
             {shape.lbRounds > 0 ? `・敗者側${shape.lbRounds}回戦・GF${shape.gfReset ? '+リセット' : ''}` : ''}）。
             BO: 基本{tournament.match_format.toUpperCase()}
             {rf?.wf ? ` / ${shape.hasGf ? '勝者側決勝' : '決勝'} ${rf.wf.toUpperCase()}` : ''}

@@ -135,6 +135,9 @@ DECLARE
   v_mention_ids jsonb;
   v_link text;
   v_body text;
+  v_max_wb int;
+  v_max_lb int;
+  v_n int;
 BEGIN
   FOR t IN
     SELECT * FROM tournaments
@@ -146,6 +149,10 @@ BEGIN
 
     -- 通知対象ユーザー (全エントリーの全メンバー + 主催者)
     v_user_ids := NULL;
+
+    -- 実ブラケットのラウンド数 (ラベルのクランプ用。未生成なら NULL)
+    SELECT max(round) INTO v_max_wb FROM tournament_matches WHERE tournament_id = t.id AND bracket_side = 'winners';
+    SELECT max(round) INTO v_max_lb FROM tournament_matches WHERE tournament_id = t.id AND bracket_side = 'losers';
 
     IF v_blocks IS NOT NULL AND jsonb_typeof(v_blocks) = 'array' AND jsonb_array_length(v_blocks) > 0 THEN
       -- ── スケジュールブロックごとの通知 ──
@@ -164,13 +171,20 @@ BEGIN
           CONTINUE;
         END IF;
 
-        -- 対象ラウンドのラベル
+        -- 対象ラウンドのラベル (実ブラケットが小さい場合はクランプ)
         v_parts := ARRAY[]::text[];
         IF coalesce(nullif(v_b->>'wb_until', '')::int, 0) > 0 THEN
-          v_parts := array_append(v_parts, '勝者側' || (v_b->>'wb_until') || '回戦まで');
+          v_n := least(nullif(v_b->>'wb_until', '')::int, coalesce(v_max_wb, 999));
+          v_parts := array_append(v_parts,
+            CASE WHEN v_max_wb IS NOT NULL AND v_n = v_max_wb THEN '勝者側決勝まで'
+                 ELSE '勝者側' || v_n || '回戦まで' END);
         END IF;
-        IF coalesce(nullif(v_b->>'lb_until', '')::int, 0) > 0 THEN
-          v_parts := array_append(v_parts, '敗者側' || (v_b->>'lb_until') || '回戦まで');
+        IF coalesce(nullif(v_b->>'lb_until', '')::int, 0) > 0
+           AND (v_max_wb IS NULL OR v_max_lb IS NOT NULL) THEN
+          v_n := least(nullif(v_b->>'lb_until', '')::int, coalesce(v_max_lb, 999));
+          v_parts := array_append(v_parts,
+            CASE WHEN v_max_lb IS NOT NULL AND v_n = v_max_lb THEN '敗者側決勝まで'
+                 ELSE '敗者側' || v_n || '回戦まで' END);
         END IF;
         IF coalesce((v_b->>'gf')::boolean, false) THEN
           v_parts := array_append(v_parts, 'グランドファイナル');

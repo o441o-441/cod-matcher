@@ -265,8 +265,15 @@ export default function TournamentDetailPage() {
             )}
           </div>
 
-          {/* スケジュール (主催者は編集可) */}
-          <TournamentSchedule tournament={tournament} isHost={isHost} />
+          {/* スケジュール (主催者は編集可)。ラウンド数は実エントリー数基準 (ソロは4人=1チーム換算) */}
+          <TournamentSchedule
+            tournament={tournament}
+            isHost={isHost}
+            entryCount={(() => {
+              const n = entries.filter(e => e.status !== 'excluded').length
+              return tournament.entry_mode === 'solo' ? Math.floor(n / 4) : n
+            })()}
+          />
 
           {/* 締切済みの案内 */}
           {tournament.status === 'recruit' && !myEntry && entryDeadlinePassed && (
