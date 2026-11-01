@@ -45,7 +45,7 @@ type Props = {
 type ParseResponse = {
   ok: boolean; mode: string | null; map: string | null; duration_seconds: number | null
   team_a_score: number | null; team_b_score: number | null; a_is_host: boolean | null
-  players: { team: 'A' | 'B'; name: string; kills: number | null; deaths: number | null; assists: number | null; damage: number | null; stats: Record<string, unknown>; side: 'host' | 'guest' | null; matched_user_id: string | null }[]
+  players: { team: 'A' | 'B'; name: string; kills: number | null; deaths: number | null; assists: number | null; damage: number | null; stats: Record<string, unknown>; side: 'host' | 'guest' | null; matched_user_id: string | null; matched_guest_name: string | null }[]
 }
 
 const fmtT = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
@@ -372,7 +372,9 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
       p_host_slot: aIsHost ? 'team1' : 'team2',
       p_players: (r.players ?? []).map(p => ({
         side: p.side ?? (((p.team === 'A') === aIsHost) ? 'host' : 'guest'),
-        raw_name: p.name,
+        // ゲスト (代表者のみ型チームのゲームID登録メンバー) に一致した場合は
+        // 登録済みの正規IDで保存し、累積集計でOCR表記ゆれの影響を受けないようにする
+        raw_name: p.matched_guest_name ?? p.name,
         user_id: p.matched_user_id,
         kills: p.kills, deaths: p.deaths, assists: p.assists, damage: p.damage,
         stats: p.stats ?? {},

@@ -23,6 +23,13 @@ import {
 const MODE_LABEL: Record<string, string> = { hp: 'ハードポイント', snd: 'サーチ&デストロイ', ovl: 'オーバーロード' }
 const MODE_SHORT: Record<string, string> = { hp: 'HP', snd: 'SND', ovl: 'OVL' }
 
+// scoreboard-parse (Edge Function) の normName と同一ロジック
+const normName = (s: string) => s
+  .toLowerCase()
+  .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+  .replace(/\s+/g, '')
+  .trim()
+
 type GameRow = {
   id: string
   match_id: string
@@ -97,6 +104,8 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
   const [games, setGames] = useState<Game[]>([])
   const [statRows, setStatRows] = useState<StatRow[]>([])
   const [nameMap, setNameMap] = useState<Record<string, string>>({})
+  // 代表者のみ型チームのゲスト (ゲームIDのみ登録)。members型は空
+  const [guestIds, setGuestIds] = useState<string[]>([])
 
   const [fOpp, setFOpp] = useState('all')
   const [fSide, setFSide] = useState('all')
@@ -110,10 +119,15 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
       setLoading(true)
       // このチームが「チーム枠」で参加した試合をすべて集計対象にする。
       // 相手が混成ルームの試合も含む (混成側はチームではないのでどこにも累計されない)
-      const { data: matchData } = await supabase
-        .from('scrim_matches')
-        .select('id, date, host_team_id, guest_team_id, host_room_id, guest_room_id')
-        .or(`host_team_id.eq.${teamId},guest_team_id.eq.${teamId}`)
+      const [{ data: matchData }, { data: teamRow }] = await Promise.all([
+        supabase
+          .from('scrim_matches')
+          .select('id, date, host_team_id, guest_team_id, host_room_id, guest_room_id')
+          .or(`host_team_id.eq.${teamId},guest_team_id.eq.${teamId}`),
+        supabase.from('teams').select('roster_mode, guest_game_ids').eq('id', teamId).maybeSingle(),
+      ])
+      const teamInfo = teamRow as { roster_mode?: string; guest_game_ids?: string[] } | null
+      if (!cancelled) setGuestIds(teamInfo?.roster_mode === 'solo' ? (teamInfo.guest_game_ids ?? []) : [])
       const matches = (matchData ?? []) as {
         id: string; date: string
         host_team_id: string | null; guest_team_id: string | null
@@ -230,17 +244,35 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
     }
   }, [filtered, ownStats])
 
-  // プレイヤー集計はASCENTユーザーに紐付いた行のみ (ゲームID不一致・助っ人は対象外)
+  // プレイヤー集計の対象: ASCENTユーザーに紐付いた行 + 代表者のみ型チームの
+  // 登録ゲストに一致した行 (ゲームID不一致・助っ人は従来どおり対象外)
+  const guestKeyMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const g of guestIds) {
+      const k = normName(g.split('#')[0])
+      if (k) m.set(k, g)
+    }
+    return m
+  }, [guestIds])
+
+  const resolveStatKey = useMemo(() => (s: StatRow): { key: string; name: string; linked: boolean } | null => {
+    if (s.user_id) return { key: s.user_id, name: nameMap[s.user_id] ?? s.raw_name, linked: true }
+    const gid = guestKeyMap.get(normName(s.raw_name.split('#')[0]))
+    if (gid) return { key: `g:${gid}`, name: gid, linked: false }
+    return null
+  }, [guestKeyMap, nameMap])
+
   const players = useMemo(() => {
     const map = new Map<string, PlayerAgg>()
     for (const s of ownStats) {
-      if (!s.user_id) continue
+      const resolved = resolveStatKey(s)
+      if (!resolved) continue
       const g = gameById.get(s.game_id)!
-      const key = s.user_id
+      const key = resolved.key
       let p = map.get(key)
       if (!p) {
         p = {
-          key, name: nameMap[s.user_id] ?? s.raw_name, linked: true,
+          key, name: resolved.name, linked: resolved.linked,
           games: 0, wins: 0, losses: 0, k: 0, d: 0, a: 0, dmg: 0,
           objTimeSum: 0, objTimeN: 0, objKillsSum: 0, objKillsN: 0, onesidedSum: 0, onesidedN: 0,
           maxStreak: 0, plants: 0, defuses: 0, firstBloods: 0,
@@ -265,7 +297,7 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
       p.firstBloods += num(st['first_bloods']) ?? 0
     }
     return [...map.values()].sort((x, y) => y.games - x.games || (kd(y.k, y.d) ?? 0) - (kd(x.k, x.d) ?? 0))
-  }, [ownStats, gameById, nameMap])
+  }, [ownStats, gameById, resolveStatKey])
 
   // グループ別集計 (マップ / モード / 対戦相手で共用)
   const groupStats = useMemo(() => {
@@ -307,9 +339,10 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
     const cols = players.slice(0, 8)
     const acc = new Map<string, Map<string, { k: number; d: number }>>()
     for (const s of ownStats) {
-      if (!s.user_id) continue
+      const resolved = resolveStatKey(s)
+      if (!resolved) continue
       const g = gameById.get(s.game_id)!
-      const pkey = s.user_id
+      const pkey = resolved.key
       if (!acc.has(g.map)) acc.set(g.map, new Map())
       const row = acc.get(g.map)!
       if (!row.has(pkey)) row.set(pkey, { k: 0, d: 0 })
@@ -320,7 +353,7 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
       .map(([mapName, row]) => ({ mapName, cells: cols.map(p => { const e = row.get(p.key); return e ? kd(e.k, e.d) : null }) }))
       .sort((a, b) => a.mapName.localeCompare(b.mapName))
     return { cols, rows }
-  }, [players, ownStats, gameById])
+  }, [players, ownStats, gameById, resolveStatKey])
 
   // プレイヤー比較の列ごとの値一覧 (相対ヒートマップ用)
   const pvals = useMemo(() => {
@@ -492,7 +525,7 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
                 const onesided = p.onesidedN ? p.onesidedSum / p.onesidedN : null
                 return (
                   <tr key={p.key} style={{ borderBottom: '1px solid var(--line)' }}>
-                    <td style={{ ...tdLeft, fontWeight: 600 }}>{p.name}</td>
+                    <td style={{ ...tdLeft, fontWeight: 600 }}>{p.name}{!p.linked && <span className="dim" title="ゲームID登録メンバー (ASCENT未登録)"> *</span>}</td>
                     <td style={tdStyle} className="mono">{p.games}</td>
                     <td style={{ ...tdStyle, ...heatBg(relT(pvals.avgK, p.k / p.games)) }} className="mono">{fmt(p.k / p.games, 1)}</td>
                     <td style={{ ...tdStyle, ...heatBg(relT(pvals.avgD, p.d / p.games, true)) }} className="mono">{fmt(p.d / p.games, 1)}</td>

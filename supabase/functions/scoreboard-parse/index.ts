@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
       allIds.length ? admin.from('profiles').select('id, display_name').in('id', allIds) : Promise.resolve({ data: [] }),
       allIds.length ? admin.from('users').select('auth_user_id, activision_id').in('auth_user_id', allIds) : Promise.resolve({ data: [] }),
     ])
-    type Roster = { user_id: string; display_name: string; keys: string[] }
+    type Roster = { user_id: string | null; display_name: string; keys: string[]; guest_id?: string }
     const buildRoster = (ids: string[]): Roster[] => ids.map(id => {
       const p = (profs as { id: string; display_name: string | null }[] | null)?.find(x => x.id === id)
       const u = (usersRows as { auth_user_id: string; activision_id: string | null }[] | null)?.find(x => x.auth_user_id === id)
@@ -158,8 +158,20 @@ Deno.serve(async (req) => {
       if (p?.display_name) keys.push(normName(p.display_name))
       return { user_id: id, display_name: p?.display_name ?? '(名前未設定)', keys: keys.filter(Boolean) }
     })
-    const hostRoster = buildRoster(hostIds)
-    const guestRoster = buildRoster(guestIds)
+    // 代表者のみ型チームのゲスト (ゲームIDのみ登録・ASCENT未登録) も名寄せ対象。
+    // 一致したら matched_guest_name に正規の登録IDを返す (user_id は null のまま)
+    const soloGuestEntries = async (teamId: string | null): Promise<Roster[]> => {
+      if (!teamId) return []
+      const { data } = await admin.from('teams').select('roster_mode, guest_game_ids').eq('id', teamId).maybeSingle()
+      const t = data as { roster_mode?: string; guest_game_ids?: string[] } | null
+      if (t?.roster_mode !== 'solo') return []
+      return (t.guest_game_ids ?? []).map(g => ({
+        user_id: null, display_name: g, guest_id: g,
+        keys: [normName(g.split('#')[0])].filter(Boolean),
+      }))
+    }
+    const hostRoster = [...buildRoster(hostIds), ...await soloGuestEntries(match.host_team_id)]
+    const guestRoster = [...buildRoster(guestIds), ...await soloGuestEntries(match.guest_team_id)]
 
     const matchUser = (name: string, roster: Roster[]) => {
       const n = normName(name)
@@ -182,7 +194,12 @@ Deno.serve(async (req) => {
       const inferredSide = aIsHost === null ? null : ((pl.team === 'A') === aIsHost ? 'host' : 'guest')
       const roster = inferredSide === 'host' ? hostRoster : inferredSide === 'guest' ? guestRoster : [...hostRoster, ...guestRoster]
       const m = matchUser(pl.name, roster)
-      return { ...pl, side: inferredSide, matched_user_id: m?.user_id ?? null, matched_name: m?.display_name ?? null }
+      return {
+        ...pl, side: inferredSide,
+        matched_user_id: m?.user_id ?? null,
+        matched_name: m?.display_name ?? null,
+        matched_guest_name: m?.guest_id ?? null,
+      }
     })
 
     return json(200, {
