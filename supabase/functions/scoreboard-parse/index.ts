@@ -173,11 +173,21 @@ Deno.serve(async (req) => {
     const hostRoster = [...buildRoster(hostIds), ...await soloGuestEntries(match.host_team_id)]
     const guestRoster = [...buildRoster(guestIds), ...await soloGuestEntries(match.guest_team_id)]
 
+    // OCR/AIが混同しやすい文字を同一視する (o↔0, l/i↔1 など)。
+    // "o441o" を "o4410" と誤読しても本人に紐付くように、
+    // 通常一致で見つからない時だけこの折りたたみ比較へフォールバックする
+    const foldConfusables = (s: string) => s.replace(/0/g, 'o').replace(/[1li]/g, 'l')
     const matchUser = (name: string, roster: Roster[]) => {
       const n = normName(name)
       if (!n) return null
+      const nf = foldConfusables(n)
       return roster.find(r => r.keys.includes(n))
         ?? roster.find(r => r.keys.some(k => k.length >= 3 && (k.startsWith(n) || n.startsWith(k))))
+        ?? roster.find(r => r.keys.some(k => foldConfusables(k) === nf))
+        ?? roster.find(r => r.keys.some(k => {
+          const kf = foldConfusables(k)
+          return kf.length >= 3 && (kf.startsWith(nf) || nf.startsWith(kf))
+        }))
         ?? null
     }
 

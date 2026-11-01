@@ -23,12 +23,14 @@ import {
 const MODE_LABEL: Record<string, string> = { hp: 'ハードポイント', snd: 'サーチ&デストロイ', ovl: 'ハイジャック' }
 const MODE_SHORT: Record<string, string> = { hp: 'HP', snd: 'SND', ovl: 'HJK' }
 
-// scoreboard-parse (Edge Function) の normName と同一ロジック
+// scoreboard-parse (Edge Function) の normName / foldConfusables と同一ロジック
 const normName = (s: string) => s
   .toLowerCase()
   .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
   .replace(/\s+/g, '')
   .trim()
+// OCR/AIが混同しやすい文字の同一視 (o↔0, l/i↔1)
+const foldConfusables = (s: string) => s.replace(/0/g, 'o').replace(/[1li]/g, 'l')
 
 type GameRow = {
   id: string
@@ -248,16 +250,18 @@ export default function ScrimStatsDashboard({ teamId }: { teamId: string }) {
   // 登録ゲストに一致した行 (ゲームID不一致・助っ人は従来どおり対象外)
   const guestKeyMap = useMemo(() => {
     const m = new Map<string, string>()
+    const folded = new Map<string, string>()
     for (const g of guestIds) {
       const k = normName(g.split('#')[0])
-      if (k) m.set(k, g)
+      if (k) { m.set(k, g); folded.set(foldConfusables(k), g) }
     }
-    return m
+    return { exact: m, folded }
   }, [guestIds])
 
   const resolveStatKey = useMemo(() => (s: StatRow): { key: string; name: string; linked: boolean } | null => {
     if (s.user_id) return { key: s.user_id, name: nameMap[s.user_id] ?? s.raw_name, linked: true }
-    const gid = guestKeyMap.get(normName(s.raw_name.split('#')[0]))
+    const n = normName(s.raw_name.split('#')[0])
+    const gid = guestKeyMap.exact.get(n) ?? guestKeyMap.folded.get(foldConfusables(n))
     if (gid) return { key: `g:${gid}`, name: gid, linked: false }
     return null
   }, [guestKeyMap, nameMap])

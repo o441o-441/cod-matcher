@@ -360,6 +360,16 @@ export default function HpVideoAnalyzer({ matchId, games, hostName, guestName, o
     const { data, error: fnErr } = await supabase.functions.invoke('scoreboard-parse', { body: { image_path: path, match_id: matchId } })
     if (fnErr) throw new Error('スコアボードのAI解析に失敗しました。位置がリザルト画面に合っているか確認してください')
     const r = data as ParseResponse
+    // スコアボード誤検出ガード: ゲーム内画面等を誤ってAI解析した場合、
+    // 「試合時間が極端に短い」「HPなのにスコアが異常に低い」結果になる。
+    // そのまま保存すると偽ゲームが混ざるため弾く (リトライ→スキップされる)
+    const maxScore = Math.max(r.team_a_score ?? 0, r.team_b_score ?? 0)
+    if (r.duration_seconds !== null && r.duration_seconds < 120) {
+      throw new Error(`読み取り結果が試合として不自然なため保存しません (試合時間${r.duration_seconds}秒)`)
+    }
+    if ((r.mode === 'snd' || r.mode === 'ovl' ? r.mode : 'hp') === 'hp' && maxScore > 0 && maxScore < 50) {
+      throw new Error(`読み取り結果が試合として不自然なため保存しません (スコア ${r.team_a_score ?? '?'}-${r.team_b_score ?? '?'})`)
+    }
     const aIsHost = r.a_is_host !== false
     const hostScore = aIsHost ? r.team_a_score : r.team_b_score
     const guestScore = aIsHost ? r.team_b_score : r.team_a_score
