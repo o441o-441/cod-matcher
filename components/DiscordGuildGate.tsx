@@ -20,6 +20,7 @@ export default function DiscordGuildGate({ uid }: { uid: string }) {
   const [blocked, setBlocked] = useState(false)
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const runCheck = useCallback(async (force: boolean) => {
     if (!force) {
@@ -44,8 +45,13 @@ export default function DiscordGuildGate({ uid }: { uid: string }) {
       if (r.member === false) {
         sessionStorage.removeItem(CACHE_KEY)
         setBlocked(true)
+        // 手動チェック時は結果をフィードバック (無反応に見えないように)
+        if (force) {
+          setNotice('まだ参加が確認できませんでした。上のボタンからDiscordサーバーに参加した後、もう一度お試しください。参加したのに進めない場合は、ASCENTにログインしているDiscordアカウントで参加しているか確認してください')
+        }
       } else {
         setBlocked(false)
+        setNotice(null)
         if (r.member === true) {
           sessionStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), uid }))
         }
@@ -56,6 +62,17 @@ export default function DiscordGuildGate({ uid }: { uid: string }) {
       setChecking(false)
     }
   }, [uid])
+
+  // Discordで再ログイン → 新しい guilds.join トークンで自動参加させる
+  const reauth = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'discord',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        scopes: 'identify email guilds.join',
+      },
+    })
+  }
 
   useEffect(() => { void runCheck(false) }, [runCheck])
 
@@ -88,6 +105,12 @@ export default function DiscordGuildGate({ uid }: { uid: string }) {
           )}
           <button className="btn-ghost btn-block" onClick={() => void runCheck(true)} disabled={checking}>
             {checking ? '確認中...' : '参加を確認'}
+          </button>
+          {notice && (
+            <p style={{ fontSize: 12, lineHeight: 1.7, margin: 0, color: 'var(--amber)' }}>{notice}</p>
+          )}
+          <button className="btn-ghost btn-block" onClick={() => void reauth()}>
+            Discordで再ログインして自動参加
           </button>
           <button type="button" onClick={() => void logout()}
             style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3, padding: 6 }}>
