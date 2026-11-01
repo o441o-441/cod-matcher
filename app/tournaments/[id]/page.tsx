@@ -43,6 +43,8 @@ export default function TournamentDetailPage() {
   const [myTeamName, setMyTeamName] = useState<string | null>(null)
   const [myTeamMemberCount, setMyTeamMemberCount] = useState(0)
   const [myTeamMembers, setMyTeamMembers] = useState<{ display_name: string; current_rating: number | null }[]>([])
+  const [myTeamRosterMode, setMyTeamRosterMode] = useState<'members' | 'solo'>('members')
+  const [myTeamGuestIds, setMyTeamGuestIds] = useState<string[]>([])
   const [myRating, setMyRating] = useState<number>(1500)
   const [myPeakRating, setMyPeakRating] = useState<number>(1500)
 
@@ -87,11 +89,8 @@ export default function TournamentDetailPage() {
 
       setEntries(entryRows)
 
-      // 自分のエントリー確認
+      // 自分のエントリー確認・自分のチーム
       if (uid) {
-        const mine = entryRows.find(e => e.user_id === uid || (e.team_id && teamIds.includes(e.team_id)))
-        setMyEntry(mine ?? null)
-
         // 自分の情報
         const { data: prof } = await supabase.from('profiles').select('current_rating, peak_rating').eq('id', uid).maybeSingle()
         if (prof) {
@@ -101,19 +100,26 @@ export default function TournamentDetailPage() {
 
         // 自分のチーム
         const { data: tm } = await supabase.from('team_members').select('team_id').eq('user_id', uid).maybeSingle()
-        if (tm) {
-          const tid = (tm as { team_id: string }).team_id
-          setMyTeamId(tid)
+        const myTid = (tm as { team_id: string } | null)?.team_id ?? null
+        if (myTid) {
+          setMyTeamId(myTid)
           const [{ data: teamRow }, { data: membersData }] = await Promise.all([
-            supabase.from('teams').select('name').eq('id', tid).maybeSingle(),
-            supabase.from('team_members').select('user_id, profiles!inner(display_name, current_rating)').eq('team_id', tid),
+            supabase.from('teams').select('name, roster_mode, guest_game_ids').eq('id', myTid).maybeSingle(),
+            supabase.from('team_members').select('user_id, profiles!inner(display_name, current_rating)').eq('team_id', myTid),
           ])
-          setMyTeamName((teamRow as { name: string } | null)?.name ?? null)
+          const teamInfo = teamRow as { name: string; roster_mode?: 'members' | 'solo'; guest_game_ids?: string[] } | null
+          setMyTeamName(teamInfo?.name ?? null)
+          setMyTeamRosterMode(teamInfo?.roster_mode ?? 'members')
+          setMyTeamGuestIds(teamInfo?.guest_game_ids ?? [])
           const members = ((membersData ?? []) as unknown as { user_id: string; profiles: { display_name: string | null; current_rating: number | null } }[])
             .map(m => ({ display_name: m.profiles?.display_name ?? '不明', current_rating: m.profiles?.current_rating ?? null }))
           setMyTeamMemberCount(members.length)
           setMyTeamMembers(members)
         }
+
+        // 自分のエントリー: 自分名義 or 自分のチーム名義のみ
+        const mine = entryRows.find(e => e.user_id === uid || (e.team_id && e.team_id === myTid))
+        setMyEntry(mine ?? null)
       }
 
       setLoading(false)
@@ -144,7 +150,11 @@ export default function TournamentDetailPage() {
       insertData.weapon_class = weaponClass
     } else {
       if (!myTeamId) { showToast('チームに所属していません', 'error'); setBusy(false); return }
-      if (myTeamMemberCount < 4) { showToast(`チームメンバーが4人以上必要です（現在${myTeamMemberCount}人）`, 'error'); setBusy(false); return }
+      if (myTeamRosterMode === 'solo') {
+        if (myTeamGuestIds.length < 3) { showToast(`メンバーのゲームIDが3人分以上必要です（現在${myTeamGuestIds.length}人）。チーム編集で登録してください`, 'error'); setBusy(false); return }
+      } else {
+        if (myTeamMemberCount < 4) { showToast(`チームメンバーが4人以上必要です（現在${myTeamMemberCount}人）`, 'error'); setBusy(false); return }
+      }
       insertData.team_id = myTeamId
       insertData.user_id = myUserId
 
@@ -153,8 +163,16 @@ export default function TournamentDetailPage() {
         .from('team_members')
         .select('user_id, profiles!inner(display_name, current_rating)')
         .eq('team_id', myTeamId)
-      const snapshot = ((memberData ?? []) as unknown as { user_id: string; profiles: { display_name: string | null; current_rating: number | null } }[])
-        .map(m => ({ user_id: m.user_id, display_name: m.profiles?.display_name ?? '不明', rating: m.profiles?.current_rating ?? 1500 }))
+      const snapshot: { user_id: string | null; display_name: string; rating: number | null }[] =
+        ((memberData ?? []) as unknown as { user_id: string; profiles: { display_name: string | null; current_rating: number | null } }[])
+          .map(m => ({ user_id: m.user_id as string | null, display_name: m.profiles?.display_name ?? '不明', rating: m.profiles?.current_rating ?? 1500 }))
+      if (myTeamRosterMode === 'solo') {
+        // ゲスト (ゲームIDのみ登録のメンバー) もスナップショットに含める。
+        // user_id は null なので通知・実績の対象にはならない
+        for (const gid of myTeamGuestIds) {
+          snapshot.push({ user_id: null, display_name: gid, rating: null })
+        }
+      }
       insertData.member_snapshot = snapshot
     }
 
@@ -265,7 +283,14 @@ export default function TournamentDetailPage() {
                 <div className="stack">
                   {myTeamId ? (
                     <>
-                      <p>チーム: <strong>{myTeamName}</strong> <span className="muted" style={{ fontSize: 12 }}>（{myTeamMemberCount}人）</span></p>
+                      <p>
+                        チーム: <strong>{myTeamName}</strong>{' '}
+                        <span className="muted" style={{ fontSize: 12 }}>
+                          {myTeamRosterMode === 'solo'
+                            ? `（代表者のみ型・${1 + myTeamGuestIds.length}人）`
+                            : `（${myTeamMemberCount}人）`}
+                        </span>
+                      </p>
                       <div className="card" style={{ padding: '10px 14px', marginTop: 4 }}>
                         <div className="stat-label" style={{ marginBottom: 6 }}>エントリーされるメンバー</div>
                         <div className="stack-sm">
@@ -275,17 +300,37 @@ export default function TournamentDetailPage() {
                               <span className="mono" style={{ fontSize: 11, color: 'var(--cyan)' }}>SR {m.current_rating ?? '---'}</span>
                             </div>
                           ))}
+                          {myTeamRosterMode === 'solo' && myTeamGuestIds.map((gid) => (
+                            <div key={`g-${gid}`} className="row" style={{ justifyContent: 'space-between', fontSize: 13 }}>
+                              <span style={{ fontWeight: 600 }}>{gid}</span>
+                              <span className="mono muted" style={{ fontSize: 11 }}>ゲームID登録</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                       <p className="muted" style={{ fontSize: 12 }}>あなたのレート: {myRating} / ピーク: {myPeakRating}</p>
-                      {myTeamMemberCount < 4 && (
-                        <p className="danger" style={{ fontSize: 12 }}>チームメンバーが4人以上必要です（現在{myTeamMemberCount}人）</p>
+                      {myTeamRosterMode === 'solo' ? (
+                        myTeamGuestIds.length < 3 && (
+                          <p className="danger" style={{ fontSize: 12 }}>メンバーのゲームIDが3人分以上必要です（現在{myTeamGuestIds.length}人）。チーム編集で登録してください</p>
+                        )
+                      ) : (
+                        myTeamMemberCount < 4 && (
+                          <p className="danger" style={{ fontSize: 12 }}>チームメンバーが4人以上必要です（現在{myTeamMemberCount}人）</p>
+                        )
                       )}
                       {tournament.rate_cap && myPeakRating > tournament.rate_cap && (
                         <p className="danger" style={{ fontSize: 12 }}>ピークレートが制限を超えています</p>
                       )}
                       <p className="muted" style={{ fontSize: 11, marginTop: 4 }}>エントリー時点のチームメンバーが大会参加者として登録されます</p>
-                      <button className="btn-primary" onClick={handleEntry} disabled={busy || myTeamMemberCount < 4 || (!!tournament.rate_cap && myPeakRating > tournament.rate_cap)}>
+                      <button
+                        className="btn-primary"
+                        onClick={handleEntry}
+                        disabled={
+                          busy ||
+                          (myTeamRosterMode === 'solo' ? myTeamGuestIds.length < 3 : myTeamMemberCount < 4) ||
+                          (!!tournament.rate_cap && myPeakRating > tournament.rate_cap)
+                        }
+                      >
                         {busy ? 'エントリー中...' : 'チームでエントリー'}
                       </button>
                     </>

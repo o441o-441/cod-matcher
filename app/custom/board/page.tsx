@@ -112,7 +112,7 @@ export default function ScrimBoardPage() {
 
   const [loading, setLoading] = useState(true)
   const [myUserId, setMyUserId] = useState<string | null>(null)
-  const [teamInfo, setTeamInfo] = useState<{ id: string; name: string; isOwner: boolean } | null>(null)
+  const [teamInfo, setTeamInfo] = useState<{ id: string; name: string; isOwner: boolean; isSolo: boolean } | null>(null)
   const [roster, setRoster] = useState<{ uid: string; name: string }[]>([]) // 自分以外のメンバー
   const [targetUid, setTargetUid] = useState<string | null>(null) // 代理入力の対象 (null = 自分)
 
@@ -367,13 +367,13 @@ export default function ScrimBoardPage() {
           const teamId = (tm as { team_id: string } | null)?.team_id
           if (teamId) {
             const [{ data: teamRow }, { data: members }, { data: st }] = await Promise.all([
-              supabase.from('teams').select('id, name, owner_user_id').eq('id', teamId).maybeSingle(),
+              supabase.from('teams').select('id, name, owner_user_id, roster_mode').eq('id', teamId).maybeSingle(),
               supabase.from('team_members').select('user_id, profiles!inner(display_name)').eq('team_id', teamId),
               supabase.from('team_settings').select('discord_webhook_url').eq('team_id', teamId).maybeSingle(),
             ])
             if (teamRow) {
-              const tr = teamRow as { id: string; name: string; owner_user_id: string }
-              setTeamInfo({ id: tr.id, name: tr.name, isOwner: tr.owner_user_id === uid })
+              const tr = teamRow as { id: string; name: string; owner_user_id: string; roster_mode?: string }
+              setTeamInfo({ id: tr.id, name: tr.name, isOwner: tr.owner_user_id === uid, isSolo: tr.roster_mode === 'solo' })
             }
             const names = ((members ?? []) as unknown as { user_id: string; profiles: { display_name: string | null } }[])
               .map(m => ({ uid: m.user_id, name: m.profiles?.display_name ?? '(名前未設定)' }))
@@ -660,10 +660,11 @@ export default function ScrimBoardPage() {
     const next = on ? cur.filter(s => s !== slot) : [...cur, slot]
     setMyMine(prev => ({ ...prev, [dateStr]: next }))
     // 自チームの集計も楽観更新 (ポーリングで正値に収束)
+    // 代表者のみ型は代表の入力がそのまま4人分 (サーバーのビューと同じ扱い)
     setCounts(prev => {
       const key = `${teamInfo.id}|${dateStr}`
       const arr = (prev[key] ?? Array(10).fill(0)).slice()
-      arr[slot] = Math.max(0, arr[slot] + (on ? -1 : 1))
+      arr[slot] = teamInfo.isSolo ? (on ? 0 : 4) : Math.max(0, arr[slot] + (on ? -1 : 1))
       return { ...prev, [key]: arr }
     })
     persistDay(dateStr, next)
@@ -1074,7 +1075,11 @@ export default function ScrimBoardPage() {
             })}
           </div>
           <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--text-dim)' }}>
-            日付タブで日を切り替えて、押した時間があなたの空きになります。チームで <span style={{ color: 'var(--cyan)', fontWeight: 700 }}>4人</span> 揃った枠だけが下のボードに募集として公開されます。枠ごとに同じ4人である必要はありません（途中交代OK）。
+            {teamInfo.isSolo ? (
+              <>日付タブで日を切り替えて、押した時間があなたの空きになります。代表者のみ型チームなので、<span style={{ color: 'var(--cyan)', fontWeight: 700 }}>あなたの入力がそのまま4人分</span>として下のボードに募集公開されます。</>
+            ) : (
+              <>日付タブで日を切り替えて、押した時間があなたの空きになります。チームで <span style={{ color: 'var(--cyan)', fontWeight: 700 }}>4人</span> 揃った枠だけが下のボードに募集として公開されます。枠ごとに同じ4人である必要はありません（途中交代OK）。</>
+            )}
           </p>
 
           {/* 曜日テンプレ */}
@@ -1222,7 +1227,7 @@ export default function ScrimBoardPage() {
           <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
             {myUserId ? 'チームに所属すると空き時間を入力できます' : 'ログインしてチームに所属すると空き時間を入力できます'}
           </p>
-          <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>ボードの閲覧は誰でもできます。対戦を組むには4人以上のチーム、または下の<span style={{ color: '#c9b8ff', fontWeight: 700 }}>混成ルーム</span>(チーム不要・誰でも参加可)が必要です。</p>
+          <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>ボードの閲覧は誰でもできます。対戦を組むには4人以上のチーム (代表者のみ型なら代表1人でOK)、または下の<span style={{ color: '#c9b8ff', fontWeight: 700 }}>混成ルーム</span>(チーム不要・誰でも参加可)が必要です。</p>
           <div className="row" style={{ marginTop: 12 }}>
             {myUserId ? (
               <>
@@ -1416,7 +1421,7 @@ export default function ScrimBoardPage() {
         {visibleTeams.length === 0 && boardRooms.length === 0 ? (
           <div className="empty" style={{ marginTop: 16 }}>
             <p className="muted" style={{ marginBottom: 8 }}>{dayLabel(viewDay)} に募集中のチームはまだありません</p>
-            <p className="dim" style={{ fontSize: 12 }}>STEP1 で空き時間を入力すると、4人揃った枠が自動でここに公開されます</p>
+            <p className="dim" style={{ fontSize: 12 }}>STEP1 で空き時間を入力すると、4人揃った枠（代表者のみ型チームは代表の入力だけ）が自動でここに公開されます</p>
           </div>
         ) : (
           <div style={{ overflowX: 'auto', padding: '28px 0 4px' }}>

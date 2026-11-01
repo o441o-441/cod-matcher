@@ -12,6 +12,7 @@ type TeamRow = {
   wins: number
   losses: number
   matches_played: number
+  roster_mode?: 'members' | 'solo'
 }
 
 const MAX_MEMBERS = 5
@@ -53,7 +54,7 @@ function TeamJoinInner() {
     const [{ data, error }, { count }] = await Promise.all([
       supabase
         .from('teams')
-        .select('id, name, rating, wins, losses, matches_played')
+        .select('id, name, rating, wins, losses, matches_played, roster_mode')
         .eq('id', trimmed)
         .eq('is_disbanded', false)
         .maybeSingle(),
@@ -306,10 +307,17 @@ function TeamJoinInner() {
                   </p>
                 )}
 
+                {previewTeam.roster_mode === 'solo' && (
+                  <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
+                    このチームは代表者のみ型のため、ASCENT上での参加はできません。
+                    メンバーになるには代表にゲームIDの登録を依頼してください
+                  </p>
+                )}
+
                 <button
                   className="btn-primary btn-block"
                   onClick={handleJoinTeam}
-                  disabled={joining || isFull}
+                  disabled={joining || isFull || previewTeam.roster_mode === 'solo'}
                 >
                   {joining ? '参加中...' : 'このチームに参加'}
                 </button>

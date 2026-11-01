@@ -178,7 +178,7 @@ function TournamentCard({ t, onClick }: { t: TournamentRow; onClick: () => void 
         <span className="badge" style={{ fontSize: 9, background: t.format === 'tournament' ? 'var(--cyan-dim)' : 'var(--violet-dim, rgba(139,92,246,0.15))', color: t.format === 'tournament' ? 'var(--cyan)' : 'var(--violet, #8b5cf6)' }}>
           {t.format === 'tournament' ? 'TOURNAMENT' : 'LEAGUE'}
         </span>
-        <span className="badge" style={{ fontSize: 9 }} title={t.entry_mode === 'team' ? '参加には4人以上のチームが必要です' : 'ソロで参加できます'}>
+        <span className="badge" style={{ fontSize: 9 }} title={t.entry_mode === 'team' ? '参加にはチームが必要です (メンバー4人登録、または代表者のみ型)' : 'ソロで参加できます'}>
           {t.entry_mode === 'team' ? 'TEAM 4v4 · 要チーム' : 'SOLO → 4v4'}
         </span>
         <span style={{ fontSize: 11, fontWeight: 700, color: STATUS_COLOR[t.status] ?? 'var(--text-soft)' }}>

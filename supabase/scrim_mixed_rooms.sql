@@ -226,6 +226,8 @@ $$;
 -- ------------------------------------------------------------
 -- 5) 成立 RPC v2 (チーム/ルーム両対応)
 --    旧シグネチャは削除してクライアントと同時切替
+--    ※ この定義は team_roster_modes.sql で上書き済み (soloチーム対応)。
+--      変更する場合はそちらを編集すること。
 -- ------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.rpc_scrimboard_confirm(uuid, date, smallint, integer, integer, integer);
 

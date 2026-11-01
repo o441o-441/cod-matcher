@@ -6,11 +6,15 @@ import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 
 const MAX_NAME_LEN = 30
+const MAX_GUEST_IDS = 6
+const MAX_GUEST_ID_LEN = 40
 
 export default function CreateTeamPage() {
   const router = useRouter()
   const { showToast } = useToast()
   const [teamName, setTeamName] = useState('')
+  const [rosterMode, setRosterMode] = useState<'members' | 'solo'>('members')
+  const [guestIds, setGuestIds] = useState<string[]>(['', '', ''])
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
   const [myUserId, setMyUserId] = useState<string | null>(null)
@@ -67,21 +71,43 @@ export default function CreateTeamPage() {
       return
     }
 
+    const cleanGuests = guestIds.map(g => g.trim()).filter(Boolean)
+    if (rosterMode === 'solo') {
+      if (cleanGuests.length < 3) {
+        showToast('メンバーのゲームIDを3人分以上入力してください', 'error')
+        return
+      }
+      if (new Set(cleanGuests).size !== cleanGuests.length) {
+        showToast('同じゲームIDが重複しています', 'error')
+        return
+      }
+    }
+
     setLoading(true)
 
-    const { data, error } = await supabase.rpc('create_team_atomic', {
-      p_team_name: trimmed,
-      p_owner_user_id: myUserId,
-    })
+    const { data, error } = rosterMode === 'solo'
+      ? await supabase.rpc('rpc_create_solo_team', {
+          p_team_name: trimmed,
+          p_guest_ids: cleanGuests,
+        })
+      : await supabase.rpc('create_team_atomic', {
+          p_team_name: trimmed,
+          p_owner_user_id: myUserId,
+        })
 
     if (error) {
-      console.error('create_team_atomic error:', error)
+      console.error('create team error:', error)
       showToast(error.message || 'チーム作成に失敗しました', 'error')
       setLoading(false)
       return
     }
 
-    showToast('チームを作成しました！次はメンバーを招待しましょう', 'success')
+    showToast(
+      rosterMode === 'solo'
+        ? 'チームを作成しました！あなたの予定入力だけで交流戦・大会に参加できます'
+        : 'チームを作成しました！次はメンバーを招待しましょう',
+      'success'
+    )
     const teamId = (data as { team_id?: string } | null)?.team_id
     router.push(teamId ? `/team/${teamId}` : '/menu')
   }
@@ -132,7 +158,7 @@ export default function CreateTeamPage() {
       <h1 className="display" style={{ marginBottom: 8 }}>
         <em>Create</em> Team
       </h1>
-      <p className="muted">新しいチームを作成します（メンバーは最大5人）</p>
+      <p className="muted">新しいチームを作成します</p>
 
       <div className="section" style={{ maxWidth: 600, margin: '0 auto' }}>
         <form className="card-strong" onSubmit={handleCreateTeam}>
@@ -155,6 +181,97 @@ export default function CreateTeamPage() {
                 style={{ marginTop: 6 }}
               />
             </div>
+
+            <div>
+              <div className="stat-label">運用方法</div>
+              <div className="stack" style={{ marginTop: 6, gap: 8 }}>
+                <label
+                  className="card"
+                  style={{ cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start', borderColor: rosterMode === 'members' ? 'var(--accent)' : undefined }}
+                >
+                  <input
+                    type="radio"
+                    name="roster-mode"
+                    checked={rosterMode === 'members'}
+                    onChange={() => setRosterMode('members')}
+                    style={{ marginTop: 3 }}
+                  />
+                  <span>
+                    <b>メンバー登録型</b>（最大5人）
+                    <span className="muted" style={{ display: 'block', fontSize: 12 }}>
+                      メンバーをASCENTに招待して登録。各自が交流戦の空き時間を入力します
+                    </span>
+                  </span>
+                </label>
+                <label
+                  className="card"
+                  style={{ cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start', borderColor: rosterMode === 'solo' ? 'var(--accent)' : undefined }}
+                >
+                  <input
+                    type="radio"
+                    name="roster-mode"
+                    checked={rosterMode === 'solo'}
+                    onChange={() => setRosterMode('solo')}
+                    style={{ marginTop: 3 }}
+                  />
+                  <span>
+                    <b>代表者のみ型</b>
+                    <span className="muted" style={{ display: 'block', fontSize: 12 }}>
+                      ASCENTに登録するのは代表のあなただけ。メンバーはゲームIDを登録するだけでOK（ASCENT登録不要）。
+                      あなた1人の予定入力が4人分として扱われ、交流戦・大会に参加できます
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {rosterMode === 'solo' && (
+              <div>
+                <div className="rowx">
+                  <div className="stat-label">メンバーのゲームID（3人分以上）</div>
+                  {guestIds.length < MAX_GUEST_IDS && (
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      style={{ fontSize: 12, padding: '2px 10px' }}
+                      onClick={() => setGuestIds([...guestIds, ''])}
+                    >
+                      ＋ 追加
+                    </button>
+                  )}
+                </div>
+                <div className="stack" style={{ marginTop: 6, gap: 6 }}>
+                  {guestIds.map((g, i) => (
+                    <div key={i} className="row" style={{ gap: 6 }}>
+                      <input
+                        value={g}
+                        onChange={(e) => {
+                          const next = [...guestIds]
+                          next[i] = e.target.value
+                          setGuestIds(next)
+                        }}
+                        placeholder={`メンバー${i + 2}のゲームID`}
+                        maxLength={MAX_GUEST_ID_LEN}
+                        style={{ flex: 1 }}
+                      />
+                      {guestIds.length > 3 && (
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          style={{ padding: '2px 10px' }}
+                          onClick={() => setGuestIds(guestIds.filter((_, j) => j !== i))}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="muted" style={{ fontSize: 12, marginTop: 6, marginBottom: 0 }}>
+                  あなた＋ここに登録したメンバーでチームのロスターになります。後から変更できます
+                </p>
+              </div>
+            )}
 
             <button
               type="submit"

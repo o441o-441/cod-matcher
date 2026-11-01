@@ -16,6 +16,8 @@ type TeamRow = {
   wins?: number
   losses?: number
   matches_played?: number
+  roster_mode?: 'members' | 'solo'
+  guest_game_ids?: string[]
 }
 
 type UserRow = {
@@ -540,7 +542,7 @@ export default function TeamDetailPage() {
             </div>
 
             <div className="row" style={{ marginTop: 16 }}>
-              {myTeamId === teamId && (
+              {myTeamId === teamId && team?.roster_mode !== 'solo' && (
                 <button
                   className="btn-primary btn-sm"
                   onClick={async () => {
@@ -575,7 +577,7 @@ export default function TeamDetailPage() {
               {canManageTeam && (
                 <>
                   <button className="btn-sm" onClick={() => router.push('/team/edit')}>
-                    チーム名を編集
+                    チームを編集
                   </button>
                   <button className="btn-sm btn-danger" onClick={() => setDisbandDialogOpen(true)}>
                     チームを解散
@@ -601,7 +603,18 @@ export default function TeamDetailPage() {
         {/* Members */}
         <div className="section">
           <div className="card-strong">
-            <div className="sec-title">メンバー ({members.length}/{MAX_MEMBERS})</div>
+            <div className="sec-title">
+              {team?.roster_mode === 'solo'
+                ? `メンバー (代表1人 + ゲームID ${(team?.guest_game_ids || []).length}人)`
+                : `メンバー (${members.length}/${MAX_MEMBERS})`}
+            </div>
+
+            {team?.roster_mode === 'solo' && (
+              <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
+                このチームは<b>代表者のみ型</b>です。ASCENTに登録しているのは代表のみで、
+                他のメンバーはゲームIDのみ登録されています。代表の予定入力が4人分として扱われます
+              </p>
+            )}
 
             {members.length === 0 ? (
               <p className="muted">メンバーがいません</p>
@@ -661,13 +674,37 @@ export default function TeamDetailPage() {
                     </div>
                   )
                 })}
+
+                {team?.roster_mode === 'solo' &&
+                  (team?.guest_game_ids || []).map((gid) => (
+                    <div key={`guest-${gid}`} className="card">
+                      <div className="row">
+                        <div className="avatar">{gid[0]?.toUpperCase() || '?'}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700 }}>{gid}</div>
+                          <span className="badge" style={{ marginTop: 4 }}>
+                            <span className="badge-dot" />
+                            ゲームID登録
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {team?.roster_mode === 'solo' && canManageTeam && (
+              <div className="row" style={{ marginTop: 12 }}>
+                <button className="btn-sm" onClick={() => router.push('/team/edit')}>
+                  ゲームIDを編集
+                </button>
               </div>
             )}
           </div>
         </div>
 
         {/* Add member */}
-        {canManageTeam && (
+        {canManageTeam && team?.roster_mode !== 'solo' && (
           <div className="section">
             <div className="card-strong">
               <div className="sec-title">メンバー招待</div>
