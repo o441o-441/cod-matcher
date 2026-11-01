@@ -9,39 +9,22 @@ import { getCache, setCache } from '@/lib/cache'
 import { LoadingSkeleton } from '@/components/UIState'
 
 const MENU_TUTORIAL = [
-  { title: 'メニュー画面', body: 'ここがメインメニューです。対戦開始やフレンド管理など、すべての機能にここからアクセスできます。' },
-  { title: '対戦を始める', body: '「対戦開始」ボタンを押すとマッチング画面に移動します。ソロでもチームでも参加できます。' },
-  { title: 'レートと戦績', body: '対戦開始ボタンの横にあなたの個人レートと戦績が表示されます。試合結果が承認されるとレートが変動します。' },
+  { title: 'メニュー画面', body: 'ここがメインメニューです。交流戦ボードと大会に、ここからアクセスできます。' },
+  { title: '交流戦を組む', body: 'チームを作って空き時間を入力すると、交流戦ボードで対戦相手が見つかります。' },
+  { title: '大会に参加', body: '「大会」から開催中の大会へのエントリーや、大会の開催ができます。' },
   { title: 'マイページ', body: '右上の「マイページ」からプロフィール編集や自己紹介の設定ができます。' },
 ]
-
-function getTierInfo(r: number | null): { label: string; color: string } {
-  if (r == null) return { label: '—', color: 'var(--text-dim)' }
-  if (r >= 2200) return { label: 'ASCENDANT', color: 'var(--tier-ascendant)' }
-  if (r >= 2000) return { label: 'RAINBOW', color: 'var(--tier-crimson)' }
-  if (r >= 1800) return { label: 'CRIMSON', color: 'var(--tier-crimson)' }
-  if (r >= 1600) return { label: 'DIAMOND', color: 'var(--tier-diamond)' }
-  if (r >= 1400) return { label: 'PLATINUM', color: 'var(--tier-platinum)' }
-  if (r >= 1200) return { label: 'GOLD', color: 'var(--tier-gold)' }
-  if (r >= 1000) return { label: 'SILVER', color: 'var(--tier-silver)' }
-  return { label: 'BRONZE', color: 'var(--tier-bronze)' }
-}
 
 export default function MenuPage() {
   const router = useRouter()
 
-  type MenuCache = { hasTeam: boolean; isAdmin: boolean; rating: number | null; peakRating: number | null; wins: number | null; losses: number | null }
+  type MenuCache = { hasTeam: boolean; isAdmin: boolean }
   const cached = typeof window !== 'undefined' ? getCache<MenuCache>('menu_data') : null
 
   const [loading, setLoading] = useState(!cached)
   const [hasTeam, setHasTeam] = useState(cached?.hasTeam ?? false)
   const [teamId, setTeamId] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(cached?.isAdmin ?? false)
-  const [rating, setRating] = useState<number | null>(cached?.rating ?? null)
-  const [peakRating, setPeakRating] = useState<number | null>(cached?.peakRating ?? null)
-  const [wins, setWins] = useState<number | null>(cached?.wins ?? null)
-  const [losses, setLosses] = useState<number | null>(cached?.losses ?? null)
-  const [winStreak, setWinStreak] = useState(0)
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [notifications, setNotifications] = useState<{ id: string; type: string; body: string; link: string | null; created_at: string }[]>([])
 
@@ -85,7 +68,7 @@ export default function MenuPage() {
       const [userRes, memberRes, profileRes, notifRes] = await Promise.all([
         supabase.from('users').select('is_profile_complete').eq('auth_user_id', session.user.id).maybeSingle<{ is_profile_complete: boolean | null }>(),
         supabase.from('team_members').select('team_id').eq('user_id', session.user.id).maybeSingle<{ team_id: string | null }>(),
-        supabase.from('profiles').select('is_admin, current_rating, peak_rating, wins, losses, win_streak').eq('id', session.user.id).maybeSingle<{ is_admin: boolean | null; current_rating: number | null; peak_rating: number | null; wins: number | null; losses: number | null; win_streak: number | null }>(),
+        supabase.from('profiles').select('is_admin').eq('id', session.user.id).maybeSingle<{ is_admin: boolean | null }>(),
         supabase.from('notifications').select('id, type, body, link, created_at').eq('user_id', session.user.id).eq('is_read', false).order('created_at', { ascending: false }).limit(10),
       ])
 
@@ -119,11 +102,6 @@ export default function MenuPage() {
 
       const profileRow = profileRes.data
       setIsAdmin(!!profileRow?.is_admin)
-      setRating(profileRow?.current_rating ?? null)
-      setPeakRating(profileRow?.peak_rating ?? null)
-      setWinStreak(profileRow?.win_streak ?? 0)
-      setWins(profileRow?.wins ?? null)
-      setLosses(profileRow?.losses ?? null)
 
       setMyUserId(session.user.id)
       setNotifications((notifRes.data ?? []) as { id: string; type: string; body: string; link: string | null; created_at: string }[])
@@ -131,10 +109,6 @@ export default function MenuPage() {
       setCache('menu_data', {
         hasTeam: !!memberRes.data?.team_id,
         isAdmin: !!profileRow?.is_admin,
-        rating: profileRow?.current_rating ?? null,
-        peakRating: profileRow?.peak_rating ?? null,
-        wins: profileRow?.wins ?? null,
-        losses: profileRow?.losses ?? null,
       })
 
       setLoading(false)
@@ -172,10 +146,6 @@ export default function MenuPage() {
     )
   }
 
-  const totalGames = (wins ?? 0) + (losses ?? 0)
-  const winRate = totalGames > 0 ? Math.round(((wins ?? 0) / totalGames) * 100) : 0
-  const tier = getTierInfo(rating)
-
   return (
     <main>
       <div className="eyebrow">MAIN / MENU</div>
@@ -184,143 +154,37 @@ export default function MenuPage() {
       </h1>
       <Tutorial pageKey="menu" steps={MENU_TUTORIAL} />
 
-      {/* ── Primary CTA ── */}
-      <div className="card-strong mt-l" style={{ padding: 0, overflow: 'hidden' }}>
+      {/* ── Primary CTA: 交流戦ボード / 大会 ── */}
+      <div className="card-strong mt-l" style={{ padding: 32 }}>
+        <div className="eyebrow">PRIMARY ACTION</div>
         <div
           style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr auto',
-            gap: 32,
-            alignItems: 'center',
-            padding: 32,
+            fontFamily: 'var(--font-display)',
+            fontSize: 44,
+            fontWeight: 800,
+            lineHeight: 1.1,
+            marginTop: 8,
           }}
         >
-          {/* Left: text + stats */}
-          <div>
-            <div className="eyebrow">PRIMARY ACTION</div>
-            <div
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 44,
-                fontWeight: 800,
-                lineHeight: 1.1,
-                marginTop: 8,
-              }}
-            >
-              対戦を<span style={{ color: 'var(--cyan)', textShadow: '0 0 24px rgba(0,229,255,0.5)' }}>開始</span>。
-            </div>
-            <p className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-              ソロまたはチームでマッチメイキングに参加します
-            </p>
-
-            <div className="row" style={{ marginTop: 20, gap: 16, flexWrap: 'wrap' }}>
-              <button
-                className="btn-primary btn-xl"
-                onClick={() => router.push('/match')}
-              >
-                対戦開始
-              </button>
-
-              <div className="row" style={{ gap: 20 }}>
-                <div className="stack-sm">
-                  <span className="stat-label">SR</span>
-                  <span className="mono tabular" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' }}>
-                    {rating ?? '—'}
-                  </span>
-                </div>
-                <div className="stack-sm">
-                  <span className="stat-label">戦績</span>
-                  <span className="mono tabular" style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-strong)' }}>
-                    {wins ?? 0}W {losses ?? 0}L
-                  </span>
-                </div>
-                <div className="stack-sm">
-                  <span className="stat-label">勝率</span>
-                  <span className="mono tabular" style={{ fontSize: 18, fontWeight: 700, color: winRate >= 50 ? 'var(--success)' : 'var(--text-strong)' }}>
-                    {winRate}%
-                  </span>
-                </div>
-                <div className="stack-sm">
-                  <span className="stat-label">連勝</span>
-                  <span className="mono tabular" style={{ fontSize: 18, fontWeight: 700, color: winStreak >= 3 ? 'var(--amber)' : 'var(--text-strong)' }}>
-                    {winStreak > 0 ? `${winStreak}連勝中` : '—'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right: circular rating display */}
-          <div style={{ position: 'relative', width: 220, height: 220, flexShrink: 0 }}>
-            {/* Conic-gradient blur ring */}
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                borderRadius: '50%',
-                background: `conic-gradient(from 180deg, ${tier.color}, var(--violet), ${tier.color})`,
-                opacity: 0.35,
-                filter: 'blur(20px)',
-              }}
-            />
-            {/* Outer ring */}
-            <div
-              style={{
-                position: 'absolute',
-                inset: 4,
-                borderRadius: '50%',
-                background: `conic-gradient(from 180deg, ${tier.color}, var(--violet), ${tier.color})`,
-                opacity: 0.6,
-              }}
-            />
-            {/* Inner circle */}
-            <div
-              style={{
-                position: 'absolute',
-                inset: 8,
-                borderRadius: '50%',
-                background: 'var(--bg)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 2,
-              }}
-            >
-              {/* Tier badge */}
-              <span
-                className="badge"
-                style={{
-                  color: tier.color,
-                  borderColor: tier.color,
-                  background: 'rgba(0,0,0,0.4)',
-                  fontSize: 9,
-                  padding: '3px 8px',
-                }}
-              >
-                <span className="badge-dot" style={{ background: tier.color, boxShadow: `0 0 10px ${tier.color}` }} />
-                {tier.label}
-              </span>
-              {/* Rating number */}
-              <span
-                className="mono tabular"
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 42,
-                  fontWeight: 800,
-                  color: 'var(--text-strong)',
-                  lineHeight: 1,
-                  marginTop: 4,
-                }}
-              >
-                {rating ?? '—'}
-              </span>
-              {/* Peak */}
-              <span className="muted" style={{ fontSize: 10, letterSpacing: '0.1em' }}>
-                PEAK {peakRating ?? rating ?? '—'}
-              </span>
-            </div>
-          </div>
+          交流戦を<span style={{ color: 'var(--magenta)', textShadow: '0 0 24px rgba(255,43,214,0.5)' }}>組む</span>。
+        </div>
+        <p className="muted" style={{ marginTop: 8, fontSize: 13 }}>
+          {hasTeam
+            ? 'チームの空き時間を入力して、ボードから対戦相手を見つけましょう'
+            : 'まずはチームを作成（または参加）して、交流戦ボードで対戦相手を見つけましょう'}
+        </p>
+        <div className="row" style={{ marginTop: 20, gap: 12, flexWrap: 'wrap' }}>
+          <button className="btn-primary btn-xl" onClick={() => router.push('/custom/board')}>
+            交流戦ボードへ
+          </button>
+          <button className="btn-ghost btn-xl" onClick={() => router.push('/tournaments')}>
+            大会一覧
+          </button>
+          {!hasTeam && (
+            <button className="btn-ghost btn-xl" onClick={() => router.push('/team/create')}>
+              チームを作成
+            </button>
+          )}
         </div>
       </div>
 
@@ -389,7 +253,7 @@ export default function MenuPage() {
             </svg>
           </div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>コミュニティ</div>
-          <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>フレンド・DM・ランキング</div>
+          <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>フレンド・DM</div>
           <div className="stack" style={{ marginTop: 16 }}>
             <button className="btn-ghost btn-block" onClick={() => router.push('/friends')}>
               フレンド管理
@@ -397,18 +261,6 @@ export default function MenuPage() {
             </button>
             <button className="btn-ghost btn-block" onClick={() => router.push('/dm')}>
               DM
-              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-            <button className="btn-ghost btn-block" onClick={() => router.push('/blog')}>
-              レビュー
-              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-            <button className="btn-ghost btn-block" onClick={() => router.push('/ranking')}>
-              ランキング
-              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-            <button className="btn-ghost btn-block" onClick={() => router.push('/history')}>
-              マッチ履歴
               <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           </div>
@@ -428,16 +280,6 @@ export default function MenuPage() {
               ルール一覧
               <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
-            <button className="btn-ghost btn-block" onClick={() => router.push('/tiers')}>
-              ティア一覧
-              <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-            {isAdmin && (
-              <button className="btn-ghost btn-block" onClick={() => router.push('/winstreak-dev')}>
-                ▸ DEV: 連勝演出プレビュー
-                <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              </button>
-            )}
             <button className="btn-ghost btn-block" onClick={() => router.push('/reports')}>
               通報履歴
               <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>

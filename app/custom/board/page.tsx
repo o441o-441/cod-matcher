@@ -1920,7 +1920,7 @@ export default function ScrimBoardPage() {
       )}
 
       <div style={{ marginTop: 8 }}>
-        <button type="button" className="btn-ghost btn-sm" onClick={() => router.push('/custom')}>カスタムに戻る</button>
+        <button type="button" className="btn-ghost btn-sm" onClick={() => router.push('/menu')}>メニューに戻る</button>
       </div>
     </main>
   )

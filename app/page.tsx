@@ -10,17 +10,9 @@ import { useFeatureReleases, isReleased, isNewlyReleased, isTbd, releaseLabel, t
 
 type TourneyRow = { id: string; title: string; format: string; status: string }
 type AnnouncementRow = { id: string; title: string; created_at: string }
-type ReviewRow = { id: string; slug: string; title: string; excerpt: string | null; controller_name: string | null }
 
+// 交流戦ボード・大会に絞った構成 (ランクマ・8sは凍結中のためカードごと非表示)
 const MODES = [
-  { id: 'ranked', name: 'RANKED', sub: 'ランクマッチ', color: 'var(--cyan)', border: 'rgba(0,229,255,0.3)', soft: 'rgba(0,229,255,0.06)', glyph: 'R',
-    headline: 'Eloレート 4v4', desc: 'BAN/PICK制でマップとサイドを選択。勝敗でレートが変動するメインモード。',
-    bullets: ['Eloレート制', 'BAN/PICK', 'シーズン集計'], cta: 'マッチング開始', href: '/match',
-    icon: <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.5"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg> },
-  { id: 'eights', name: '8s', sub: '8人カスタム', color: 'var(--violet)', border: 'rgba(139,92,246,0.3)', soft: 'rgba(139,92,246,0.06)', glyph: '8',
-    headline: '即席カスタム', desc: '8人ロビーで即席4v4。レート + 武器ロールを考慮した自動振り分け。レート変動なし。',
-    bullets: ['自動振り分け', 'レート変動なし', '気軽に集まれる'], cta: 'ロビーへ', href: '/custom',
-    icon: <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="2" fill="currentColor"/><circle cx="12" cy="6" r="2" fill="currentColor"/><circle cx="18" cy="6" r="2" fill="currentColor"/><circle cx="6" cy="12" r="2" fill="currentColor"/><circle cx="18" cy="12" r="2" fill="currentColor"/><circle cx="6" cy="18" r="2" fill="currentColor"/><circle cx="12" cy="18" r="2" fill="currentColor"/><circle cx="18" cy="18" r="2" fill="currentColor"/></svg> },
   { id: 'scrim', name: 'SCRIM', sub: '交流戦ボード', color: 'var(--magenta)', border: 'rgba(255,43,214,0.3)', soft: 'rgba(255,43,214,0.06)', glyph: 'S',
     headline: 'チームの空きで即マッチ', desc: 'チームの空き時間を出し合い、ボードから相手を選んでその場で確定。成立はDiscordに通知。',
     bullets: ['週間ボード', 'モード自由', 'チーム前提'], cta: 'ボードを見る', href: '/custom/board',
@@ -33,7 +25,7 @@ const MODES = [
 
 // モードカード → 段階公開の機能キー
 const MODE_FEATURE: Record<string, FeatureKey> = {
-  ranked: 'ranked', eights: '8s', scrim: 'scrim', tournament: 'tournament',
+  scrim: 'scrim', tournament: 'tournament',
 }
 
 export default function HomePage() {
@@ -45,7 +37,6 @@ export default function HomePage() {
   const [displayName, setDisplayName] = useState<string | null>(null)
   const [tourneys, setTourneys] = useState<TourneyRow[]>([])
   const [announcements, setAnnouncements] = useState<AnnouncementRow[]>([])
-  const [reviews, setReviews] = useState<ReviewRow[]>([])
 
   usePageView('/')
 
@@ -56,14 +47,12 @@ export default function HomePage() {
     if (uid) {
       const { data: prof } = await supabase.from('profiles').select('display_name').eq('id', uid).maybeSingle()
       setDisplayName((prof as { display_name: string | null } | null)?.display_name ?? null)
-      const [{ data: tData }, { data: aData }, { data: rData }] = await Promise.all([
+      const [{ data: tData }, { data: aData }] = await Promise.all([
         supabase.from('tournaments').select('id,title,format,status').in('status', ['recruit', 'live']).order('created_at', { ascending: false }).limit(3),
         supabase.from('announcements').select('id,title,created_at').order('created_at', { ascending: false }).limit(3),
-        supabase.from('posts').select('id,slug,title,excerpt,controller_name').eq('status', 'published').order('published_at', { ascending: false }).limit(2),
       ])
       setTourneys((tData ?? []) as TourneyRow[])
       setAnnouncements((aData ?? []) as AnnouncementRow[])
-      setReviews((rData ?? []) as ReviewRow[])
     } else {
       const { data: tData } = await supabase.from('tournaments').select('id,title,format,status').in('status', ['recruit', 'live']).order('created_at', { ascending: false }).limit(3)
       setTourneys((tData ?? []) as TourneyRow[])
@@ -97,21 +86,21 @@ export default function HomePage() {
             <img src="/logo_yoko.png" alt="ASCENT — GA Compliant CoD 4v4 Platform" />
           </div>
           <p className="muted" style={{ fontSize: 15, maxWidth: 580, lineHeight: 1.65, margin: 0 }}>
-            ランクマッチ・カスタム・スクリム・大会まで。CoDの競技シーンを1つにまとめた、4v4プレイヤーのためのプラットフォーム。
+            チームの空き時間を出し合って交流戦を組み、大会で勝ち上がる。CoD 4v4チームのための対戦プラットフォーム。
           </p>
           <div className="hero-cta" style={{ justifyContent: 'center' }}>
             {signedIn ? (
-              <><button type="button" className="btn-primary btn-xl" onClick={() => router.push('/match')}>対戦開始 →</button>
-              <button type="button" className="btn-ghost btn-xl" onClick={() => router.push('/mypage')}>マイページ</button></>
+              <><button type="button" className="btn-primary btn-xl" onClick={() => router.push('/custom/board')}>交流戦を組む →</button>
+              <button type="button" className="btn-ghost btn-xl" onClick={() => router.push('/tournaments')}>大会を見る</button></>
             ) : (
               <><button type="button" className="btn-primary btn-xl" onClick={() => router.push('/login')}>無料で始める →</button>
-              <button type="button" className="btn-ghost btn-xl" onClick={() => router.push('/rules')}>ルールを読む</button></>
+              <button type="button" className="btn-ghost btn-xl" onClick={() => router.push('/tournaments')}>大会を見る</button></>
             )}
           </div>
           <div className="row" style={{ gap: 18, marginTop: 4, justifyContent: 'center' }}>
-            <span className="badge"><span className="badge-dot" />Elo Rating</span>
-            <span className="badge amber"><span className="badge-dot" />BAN/PICK</span>
-            <span className="badge violet"><span className="badge-dot" />SR Season</span>
+            <span className="badge magenta"><span className="badge-dot" />週間ボード</span>
+            <span className="badge amber"><span className="badge-dot" />大会開催</span>
+            <span className="badge"><span className="badge-dot" />Discord連携</span>
           </div>
         </div>
       </section>
@@ -186,7 +175,7 @@ export default function HomePage() {
           </section>
         )
       ) : (
-        <section className="grid-3" style={{ marginTop: 14 }}>
+        <section className="grid-2" style={{ marginTop: 14 }}>
           <div className="feed-card">
             <div className="feed-head"><span className="feed-eyebrow">運営からのお知らせ</span><span className="muted mono" style={{ fontSize: 10 }}>{announcements.length} 件</span></div>
             {announcements.length === 0 ? <p className="muted" style={{ fontSize: 12 }}>お知らせはありません</p> : (
@@ -205,17 +194,6 @@ export default function HomePage() {
                 <div key={t.id} role="button" tabIndex={0} style={{ paddingTop: i === 0 ? 0 : 10, borderTop: i === 0 ? 'none' : '1px solid var(--line)', cursor: 'pointer' }} onClick={() => router.push(`/tournaments/${t.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/tournaments/${t.id}`) } }}>
                   <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-strong)' }}>{t.title}</div>
                   <div className="muted mono" style={{ fontSize: 10, marginTop: 2 }}>{t.format === 'league' ? 'リーグ' : 'トーナメント'} · {t.status === 'recruit' ? '募集中' : '開催中'}</div>
-                </div>
-              ))}</div>
-            )}
-          </div>
-          <div className="feed-card violet">
-            <div className="feed-head"><span className="feed-eyebrow violet">新着レビュー</span><span className="muted mono" style={{ fontSize: 10 }}>{reviews.length} 件</span></div>
-            {reviews.length === 0 ? <p className="muted" style={{ fontSize: 12 }}>レビューはまだありません</p> : (
-              <div className="stack-sm">{reviews.map((r, i) => (
-                <div key={r.id} role="button" tabIndex={0} style={{ paddingTop: i === 0 ? 0 : 10, borderTop: i === 0 ? 'none' : '1px solid var(--line)', cursor: 'pointer' }} onClick={() => router.push(`/blog/${r.slug}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/blog/${r.slug}`) } }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-strong)' }}>{r.controller_name ?? r.title}</div>
-                  {r.excerpt && <p className="muted" style={{ margin: '4px 0 0', fontSize: 11, lineHeight: 1.5 }}>{r.excerpt.slice(0, 60)}</p>}
                 </div>
               ))}</div>
             )}

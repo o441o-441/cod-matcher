@@ -11,7 +11,7 @@ export default function Footer() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo_yoko.png" alt="ASCENT" style={{ height: 38, marginBottom: 16, filter: 'drop-shadow(0 0 12px rgba(0,229,255,0.25))' }} />
             <p className="muted" style={{ fontSize: 12.5, lineHeight: 1.7, margin: 0, maxWidth: 320 }}>
-              Call of Dutyの4v4競技シーンを1つに。ランクマッチ・カスタム・スクリム・大会運営をワンストップで提供。
+              Call of Dutyの4v4競技シーンを1つに。交流戦マッチングと大会運営をワンストップで提供。
             </p>
             <div className="foot-social" style={{ marginTop: 18 }}>
               <a href="https://discord.gg/J4nzQVYpXW" target="_blank" rel="noopener noreferrer" aria-label="Discord">
@@ -25,26 +25,16 @@ export default function Footer() {
           <div className="foot-col">
             <h4>Play</h4>
             <ul>
-              <li><Link href="/match">ランクマッチ</Link></li>
-              <li><Link href="/custom">8人カスタム</Link></li>
               <li><Link href="/custom/board">交流戦ボード</Link></li>
               <li><Link href="/tournaments">大会一覧</Link></li>
-            </ul>
-          </div>
-          <div className="foot-col">
-            <h4>Compete</h4>
-            <ul>
-              <li><Link href="/ranking">ランキング</Link></li>
-              <li><Link href="/tiers">ティア表</Link></li>
+              <li><Link href="/team">チーム</Link></li>
               <li><Link href="/mypage">マイページ</Link></li>
-              <li><Link href="/history">対戦履歴</Link></li>
             </ul>
           </div>
           <div className="foot-col">
             <h4>About</h4>
             <ul>
               <li><Link href="/rules">ルール</Link></li>
-              <li><Link href="/blog">コントローラーレビュー</Link></li>
               <li><Link href="/terms">利用規約</Link></li>
               <li><Link href="/privacy">プライバシー</Link></li>
             </ul>

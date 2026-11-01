@@ -10,22 +10,19 @@ type ProfileData = {
   current_rating: number | null
 }
 
+// 交流戦ボード・大会に機能を絞った構成 (ランクマ・8s等は凍結中のため導線ごと非表示)
 const NAV_LINKS = [
   { id: '/', label: 'HOME', auth: false },
   { id: '/menu', label: 'MENU', auth: true },
-  { id: '/match', label: 'MATCH', auth: true },
-  { id: '/custom', label: 'CUSTOM', auth: true },
-  { id: '/timeline', label: 'TIMELINE', auth: true },
+  { id: '/custom/board', label: 'SCRIM BOARD', auth: false },
   { id: '/tournaments', label: 'TOURNAMENTS', auth: false },
-  { id: '/ranking', label: 'RANKING', auth: false },
-  { id: '/blog', label: 'REVIEWS', auth: false },
+  { id: '/team', label: 'TEAM', auth: true },
   { id: '/mypage', label: 'MY PAGE', auth: true },
 ]
 
 // 公開から5日間、ナビに NEW バッジを出す対象 (ナビ先 → 機能キー)
 const NAV_FEATURES: Record<string, FeatureKey[]> = {
-  '/match': ['ranked'],
-  '/custom': ['8s', 'scrim'],
+  '/custom/board': ['scrim'],
   '/tournaments': ['tournament'],
 }
 
