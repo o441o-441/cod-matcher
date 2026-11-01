@@ -82,7 +82,7 @@ function matchLabel(m: { hp_maps: number; snd_maps: number; ovl_maps: number }) 
   const parts: string[] = []
   if (m.hp_maps > 0) parts.push(`ハーポ${m.hp_maps}`)
   if (m.snd_maps > 0) parts.push(`サーチ${m.snd_maps}`)
-  if (m.ovl_maps > 0) parts.push(`オバロ${m.ovl_maps}`)
+  if (m.ovl_maps > 0) parts.push(`ハイジャック${m.ovl_maps}`)
   return parts.join(' + ')
 }
 
@@ -442,10 +442,10 @@ export default function ScrimBoardPage() {
     const parts: string[] = []
     if (combo.hp > 0) parts.push(`ハーポ${combo.hp}`)
     if (combo.snd > 0) parts.push(`サーチ${combo.snd}`)
-    if (combo.ovl > 0) parts.push(`オバロ${combo.ovl}`)
+    if (combo.ovl > 0) parts.push(`ハイジャック${combo.ovl}`)
     return parts.join(' + ')
   }
-  const currentModeLabel = () => (mode === 'custom' ? `複合 (${comboLabel() || '未選択'})` : mode === 'hp' ? 'ハーポ回し' : mode === 'snd' ? `サーチ ${sndMaps}マップ` : mode === 'ovl' ? `オバロ ${ovlMaps}マップ` : 'すべて')
+  const currentModeLabel = () => (mode === 'custom' ? `複合 (${comboLabel() || '未選択'})` : mode === 'hp' ? 'ハーポ回し' : mode === 'snd' ? `サーチ ${sndMaps}マップ` : mode === 'ovl' ? `ハイジャック ${ovlMaps}マップ` : 'すべて')
   const currentMaps = () => (
     mode === 'hp' ? { hp: 6, snd: 0, ovl: 0 }
     : mode === 'snd' ? { hp: 0, snd: sndMaps, ovl: 0 }
@@ -923,7 +923,7 @@ export default function ScrimBoardPage() {
     ? (isMySide(cancelMatch, 'host') ? sideName(cancelMatch, 'guest') : sideName(cancelMatch, 'host'))
     : ''
 
-  const modeDefs: [Mode, string][] = [['hp', 'ハーポ回し · 90分'], ['snd', 'サーチ'], ['ovl', 'オバロ'], ['custom', '複合'], ['all', 'すべて (俯瞰)']]
+  const modeDefs: [Mode, string][] = [['hp', 'ハーポ回し · 90分'], ['snd', 'サーチ'], ['ovl', 'ハイジャック'], ['custom', '複合'], ['all', 'すべて (俯瞰)']]
   const showMaps = mode === 'snd' || mode === 'ovl'
 
   // 日付タブ
@@ -1203,7 +1203,7 @@ export default function ScrimBoardPage() {
               })}
               <span style={{ width: 1, height: 18, background: LINE_STRONG }} />
               <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>受けられるモード:</span>
-              {([['hp', 'ハーポ'], ['snd', 'サーチ'], ['ovl', 'オバロ']] as ['hp' | 'snd' | 'ovl', string][]).map(([k, label]) => {
+              {([['hp', 'ハーポ'], ['snd', 'サーチ'], ['ovl', 'ハイジャック']] as ['hp' | 'snd' | 'ovl', string][]).map(([k, label]) => {
                 const on = myPrefs[k]
                 return (
                   <button key={k} type="button" aria-pressed={on}
@@ -1390,7 +1390,7 @@ export default function ScrimBoardPage() {
             {([
               ['hp', `ハーポ (${formats.hp}分/マップ)`, HP_MAP_OPTIONS],
               ['snd', `サーチ (${formats.snd}分/マップ)`, SND_MAP_OPTIONS],
-              ['ovl', `オバロ (${formats.ovl}分/マップ)`, OVL_MAP_OPTIONS],
+              ['ovl', `ハイジャック (${formats.ovl}分/マップ)`, OVL_MAP_OPTIONS],
             ] as ['hp' | 'snd' | 'ovl', string, number[]][]).map(([key, label, options]) => (
               <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 11.5, color: 'var(--text-soft)' }}>{label}</span>
@@ -1720,7 +1720,7 @@ export default function ScrimBoardPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}><span style={{ color: 'var(--text-soft)' }}>交流戦実績</span><span>{modalStats.games ? `${modalStats.games} 戦 / キャンセル ${modalStats.cancels}` : 'なし (新規チーム)'}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}>
                     <span style={{ color: 'var(--text-soft)' }}>受付モード</span>
-                    <span>{([['hp', 'ハーポ'], ['snd', 'サーチ'], ['ovl', 'オバロ']] as ['hp' | 'snd' | 'ovl', string][]).filter(([k]) => modalPrefs[k]).map(([, l]) => l).join('・') || 'なし'}</span>
+                    <span>{([['hp', 'ハーポ'], ['snd', 'サーチ'], ['ovl', 'ハイジャック']] as ['hp' | 'snd' | 'ovl', string][]).filter(([k]) => modalPrefs[k]).map(([, l]) => l).join('・') || 'なし'}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '6px 0' }}>
                     <span style={{ color: 'var(--text-soft)' }}>受付範囲</span>

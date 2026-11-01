@@ -20,8 +20,8 @@ import {
   WinBar, StatTable, thStyle, thLeft, tdStyle, tdLeft,
 } from '@/components/scrimStatsUtils'
 
-const MODE_LABEL: Record<string, string> = { hp: 'ハードポイント', snd: 'サーチ&デストロイ', ovl: 'オーバーロード' }
-const MODE_SHORT: Record<string, string> = { hp: 'HP', snd: 'SND', ovl: 'OVL' }
+const MODE_LABEL: Record<string, string> = { hp: 'ハードポイント', snd: 'サーチ&デストロイ', ovl: 'ハイジャック' }
+const MODE_SHORT: Record<string, string> = { hp: 'HP', snd: 'SND', ovl: 'HJK' }
 
 // scoreboard-parse (Edge Function) の normName と同一ロジック
 const normName = (s: string) => s

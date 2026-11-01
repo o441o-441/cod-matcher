@@ -456,7 +456,7 @@ export default function CustomPage() {
             <div className="stack-sm" style={{ fontSize: 13 }}>
               <div className="muted"><span style={{ color: 'var(--magenta)', marginRight: 8, fontWeight: 700 }}>1.</span>メンバーが空き時間を入力（曜日テンプレで自動反映も可）</div>
               <div className="muted"><span style={{ color: 'var(--magenta)', marginRight: 8, fontWeight: 700 }}>2.</span>4人揃った枠が自動でボードに公開される（代表者のみ型チームは代表の入力だけでOK）</div>
-              <div className="muted"><span style={{ color: 'var(--magenta)', marginRight: 8, fontWeight: 700 }}>3.</span>モード（ハーポ回し / サーチ / オバロ / 複合）を選んで相手の ▶ を押すだけ</div>
+              <div className="muted"><span style={{ color: 'var(--magenta)', marginRight: 8, fontWeight: 700 }}>3.</span>モード（ハーポ回し / サーチ / ハイジャック / 複合）を選んで相手の ▶ を押すだけ</div>
               <div className="muted"><span style={{ color: 'var(--violet)', marginRight: 8, fontWeight: 700 }}>+</span>チームがなくても「混成ルーム」で日時を決めて4人集めれば参加できます（他チームの人との混合もOK）</div>
             </div>
           </div>
@@ -480,7 +480,7 @@ export default function CustomPage() {
             <ul>
               <li>チーム単位で参加（メンバー4人登録、または代表者のみ型チーム）</li>
               <li>各枠30分（20:00〜25:00）。同じ枠に4人以上揃うと募集として公開</li>
-              <li>モード: ハーポ回し / サーチ / オバロ / 複合（マップ数選択可）</li>
+              <li>モード: ハーポ回し / サーチ / ハイジャック / 複合（マップ数選択可）</li>
               <li>成立と同時に両チームの Discord に通知（キャンセル時も通知）</li>
               <li>キャンセル回数は相手チームから見えます</li>
               <li>レート変動なし</li>

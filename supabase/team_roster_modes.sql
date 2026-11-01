@@ -383,7 +383,7 @@ BEGIN
     IF v_prefs IS NOT NULL THEN
       IF p_hp_maps > 0 AND NOT v_prefs.accept_hp THEN RAISE EXCEPTION '相手チームはハーポを受け付けていません'; END IF;
       IF p_snd_maps > 0 AND NOT v_prefs.accept_snd THEN RAISE EXCEPTION '相手チームはサーチを受け付けていません'; END IF;
-      IF p_ovl_maps > 0 AND NOT v_prefs.accept_ovl THEN RAISE EXCEPTION '相手チームはオバロを受け付けていません'; END IF;
+      IF p_ovl_maps > 0 AND NOT v_prefs.accept_ovl THEN RAISE EXCEPTION '相手チームはハイジャックを受け付けていません'; END IF;
     END IF;
   END IF;
 

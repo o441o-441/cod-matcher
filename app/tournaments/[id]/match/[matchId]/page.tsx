@@ -6,13 +6,16 @@ import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import { LoadingSkeleton } from '@/components/UIState'
 
+// 全モード共通の5マッププール (2026-11-01 改定)
+// ※ 'ovl' は旧オーバーロードの内部キー。表示はハイジャック
+const SHARED_POOL = ['シルクウォーム', 'ミューニション', 'リアクター', 'ルーフトップ', 'ロータス']
 const PHASE_POOLS: Record<string, string[]> = {
-  hp: ['酒', 'コロッサス', 'デン', 'スカー', 'グリッドロック'],
-  snd: ['プラザ', 'デン', 'グリッドロック', 'レイド', 'スカー', 'フリンジ'],
-  ovl: ['デン', 'エクスポージャー', 'スカー'],
+  hp: SHARED_POOL,
+  snd: SHARED_POOL,
+  ovl: SHARED_POOL,
 }
 
-const MODE_LABEL: Record<string, string> = { hp: 'HARDPOINT', snd: 'SEARCH & DESTROY', ovl: 'OVERLOAD' }
+const MODE_LABEL: Record<string, string> = { hp: 'HARDPOINT', snd: 'SEARCH & DESTROY', ovl: 'HIJACK' }
 
 type GameRecord = { game: number; mode: string; map: string; bans: string[]; side: string }
 

@@ -288,7 +288,7 @@ export default function TournamentCreatePage() {
                   { value: 'random', label: 'ランダム', desc: 'HP:67% SND:22% OVL:11%' },
                   { value: 'hp', label: 'HARDPOINT', desc: '固定' },
                   { value: 'snd', label: 'S&D', desc: '固定' },
-                  { value: 'ovl', label: 'OVERLOAD', desc: '固定' },
+                  { value: 'ovl', label: 'HIJACK', desc: '固定' },
                 ].map(opt => (
                   <button
                     key={opt.value}

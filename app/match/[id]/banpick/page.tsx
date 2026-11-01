@@ -131,29 +131,31 @@ type MatchMessageRow = {
   } | null;
 };
 
+// 全モード共通の5マッププール (2026-11-01 改定)
+const SHARED_POOL = ["シルクウォーム", "ミューニション", "リアクター", "ルーフトップ", "ロータス"];
 const PHASE_POOLS: Record<"hp" | "snd" | "ovl", string[]> = {
-  hp: ["シルクウォーム", "ミューニション", "リアクター", "ルーフトップ", "ロータス"],
-  snd: ["デン", "グリッドロック", "レイド", "フリンジ", "酒", "ハシエンダ"],
-  ovl: ["デン", "エクスポージャー", "スカー", "グリッドロック"],
+  hp: SHARED_POOL,
+  snd: SHARED_POOL,
+  ovl: SHARED_POOL,
 };
 
 const PHASE_LABEL: Record<BanpickPhase, string> = {
   hp: "Phase 1 ハードポイント",
   snd: "Phase 2 サーチ&デストロイ",
-  ovl: "Phase 3 オーバーロード",
+  ovl: "Phase 3 ハイジャック",
   completed: "バンピック完了",
 };
 
 const PHASE_SHORT: Record<"hp" | "snd" | "ovl", string> = {
   hp: "HP",
   snd: "SND",
-  ovl: "OVL",
+  ovl: "HJK",
 };
 
 const PHASE_NAME: Record<"hp" | "snd" | "ovl", string> = {
   hp: "ハードポイント",
   snd: "サーチ&デストロイ",
-  ovl: "オーバーロード",
+  ovl: "ハイジャック",
 };
 
 // サイドの内部値 (DB保存値)。過去データとの互換のため値は変えず、表示は SIDE_LABELS で変換する

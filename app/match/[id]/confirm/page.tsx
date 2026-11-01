@@ -506,7 +506,7 @@ export default function MatchConfirmPage() {
                 プレイヤーがロビーに揃い、ルール設定が完了したら試合を開始してください。
               </p>
               <p style={{ lineHeight: 1.8 }}>
-                HARDPOINT, SEARCH&amp;DESTROY, OVERLOADの順に行い、先に2勝したチームが勝者となります。
+                HARDPOINT, SEARCH&amp;DESTROY, HIJACKの順に行い、先に2勝したチームが勝者となります。
               </p>
               <p className="muted" style={{ fontSize: 13, lineHeight: 1.8, marginTop: 12 }}>
                 ※プレイヤーにカーソルを合わせてリロードボタンでチームを移動できます。
@@ -738,7 +738,7 @@ export default function MatchConfirmPage() {
               {activePhaseKeys.map((phaseKey) => {
                 const state = phaseStates[phaseKey];
                 if (!state) return null;
-                const phaseLabel = phaseKey === "hp" ? "HARDPOINT" : phaseKey === "snd" ? "SEARCH & DESTROY" : phaseKey === "ovl" ? "OVERLOAD" : phaseKey.toUpperCase();
+                const phaseLabel = phaseKey === "hp" ? "HARDPOINT" : phaseKey === "snd" ? "SEARCH & DESTROY" : phaseKey === "ovl" ? "HIJACK" : phaseKey.toUpperCase();
                 return (
                   <div key={phaseKey} className="card">
                     <div className="row" style={{ gap: 16, alignItems: "baseline", flexWrap: "wrap" }}>

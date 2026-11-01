@@ -54,7 +54,7 @@ const SLOT_LABEL: Record<string, string> = { team1: 'チーム1', team2: 'チー
 const otherSlot = (s: 'team1' | 'team2' | null): 'team1' | 'team2' | null =>
   s === 'team1' ? 'team2' : s === 'team2' ? 'team1' : null
 
-const GAME_MODE_LABEL: Record<string, string> = { hp: 'ハードポイント', snd: 'サーチ&デストロイ', ovl: 'オーバーロード' }
+const GAME_MODE_LABEL: Record<string, string> = { hp: 'ハードポイント', snd: 'サーチ&デストロイ', ovl: 'ハイジャック' }
 
 const DOW = ['日', '月', '火', '水', '木', '金', '土']
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -66,7 +66,7 @@ function matchLabel(m: { hp_maps: number; snd_maps: number; ovl_maps: number }) 
   const parts: string[] = []
   if (m.hp_maps > 0) parts.push(`ハーポ${m.hp_maps}`)
   if (m.snd_maps > 0) parts.push(`サーチ${m.snd_maps}`)
-  if (m.ovl_maps > 0) parts.push(`オバロ${m.ovl_maps}`)
+  if (m.ovl_maps > 0) parts.push(`ハイジャック${m.ovl_maps}`)
   return parts.join(' + ')
 }
 

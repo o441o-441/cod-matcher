@@ -37,7 +37,7 @@ type ParsedPlayer = {
 const PROMPT = `これはCall of Duty (Modern Warfare 4) の試合終了時スコアボードのスクリーンショットです(配信画面の切り抜きの場合があります)。UI言語は日本語・英語・韓国語のいずれかです。以下のJSONだけを出力してください(説明文・コードフェンス不要):
 
 {
-  "mode": "hp" | "snd" | "ovl" | null,  // CDLハードポイント=hp, サーチ&デストロイ=snd, オーバーロード=ovl
+  "mode": "hp" | "snd" | "ovl" | null,  // CDLハードポイント=hp, サーチ&デストロイ=snd, ハイジャック(旧オーバーロード)=ovl
   "map": string | null,                  // マップ名。日本語の通称があれば日本語で (例: コール, シルクウォーム, ミューニション, ムンバイ, リアクター, ルーフトップ, ロータス)。不明ならそのままの表記
   "duration_seconds": number | null,     // 総プレイ時間を秒に換算
   "team_a_score": number | null,         // 上のチーム(A)のスコア (画面上部の左側の数字)
@@ -53,7 +53,7 @@ const PROMPT = `これはCall of Duty (Modern Warfare 4) の試合終了時ス�
       "stats": {                         // モード固有のその他の列。読めたものだけ。キーは以下に正規化:
         // HP: obj_time_sec(ハードポイント占拠時間を秒), avg_obj_time_sec, obj_kills(目標キル), contested_time_sec(競合中占拠時間), onesided_kills(ワンサイドキル), max_streak(最大ストリーク)
         // SND: plants(設置), defuses(解除), first_bloods, onesided_kills, max_streak
-        // OVL: obj_kills, onesided_kills, max_streak など読めた列
+        // OVL(ハイジャック): obj_kills, onesided_kills, max_streak など読めた列
       }
     }
   ]
