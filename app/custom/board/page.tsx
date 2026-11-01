@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
+import { SCRIM_CANCEL_REASONS } from '@/lib/scrimCancelReasons'
 import { supabase } from '@/lib/supabase'
 import { gtmEvent } from '@/lib/gtm'
 
@@ -152,6 +153,8 @@ export default function ScrimBoardPage() {
   const [confirming, setConfirming] = useState(false)
   const [cancelId, setCancelId] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelNote, setCancelNote] = useState('')
   const [tplSaved, setTplSaved] = useState<number[][] | null>(null) // 保存済みテンプレ (dow(0=日)→スロット。null=未設定)
   const [tplEdit, setTplEdit] = useState<number[][]>(() => Array.from({ length: 7 }, () => [])) // 編集中のテンプレ
   const [tplApplied, setTplApplied] = useState<Set<string>>(new Set()) // 自動反映済みの日付 (scrim_template_applied)
@@ -790,11 +793,21 @@ export default function ScrimBoardPage() {
 
   const doCancel = async () => {
     if (!cancelId || cancelling) return
+    if (!cancelReason) { showToast('キャンセル理由を選択してください', ''); return }
     setCancelling(true)
-    const { error } = await supabase.rpc('rpc_scrimboard_cancel', { p_match_id: cancelId })
+    const { error } = await supabase.rpc('rpc_scrimboard_cancel', {
+      p_match_id: cancelId,
+      p_reason: cancelReason,
+      p_note: cancelNote.trim() || null,
+    })
     setCancelling(false)
     setCancelId(null)
     if (error) { showToast('キャンセルできませんでした', error.message); return }
+    if (cancelReason === 'conduct') {
+      showToast('対戦をキャンセルしました', '通報ページへ移動します。相手の問題行動の内容を報告してください')
+      router.push('/reports/new')
+      return
+    }
     showToast('対戦をキャンセルしました', '枠はボードに戻り、相手チームに通知されました')
     void loadBoard()
   }
@@ -1647,7 +1660,7 @@ export default function ScrimBoardPage() {
                   {mine && (
                     <>
                       <button type="button" className="btn-primary" onClick={() => router.push(`/custom/board/${mt.id}`)} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>試合ページ・チャット</button>
-                      <button type="button" className="btn-danger" onClick={() => setCancelId(mt.id)} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>キャンセル</button>
+                      <button type="button" className="btn-danger" onClick={() => { setCancelId(mt.id); setCancelReason(''); setCancelNote('') }} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>キャンセル</button>
                     </>
                   )}
                 </div>
@@ -1780,9 +1793,36 @@ export default function ScrimBoardPage() {
               {cancelOppName} との {dateToDay(cancelMatch.date) >= 0 ? dayLabel(dateToDay(cancelMatch.date)) : cancelMatch.date} {slotLabel(cancelMatch.slot_start)} – {slotLabel(cancelMatch.slot_end)} の対戦を取り消します。相手の参加メンバーにキャンセル通知が送られ、枠はボードに戻ります。
             </p>
             <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--danger)' }}>キャンセル回数は相手チームから見えるようになります。</p>
+
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-dim)', textTransform: 'uppercase' }}>キャンセル理由 (必須)</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                {SCRIM_CANCEL_REASONS.map(r => (
+                  <label key={r.value} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+                    <input type="radio" name="cancel-reason" checked={cancelReason === r.value} onChange={() => setCancelReason(r.value)} />
+                    {r.label}
+                  </label>
+                ))}
+              </div>
+              {cancelReason === 'other' && (
+                <input
+                  value={cancelNote}
+                  onChange={e => setCancelNote(e.target.value)}
+                  placeholder="理由 (任意・相手への通知に記載されます)"
+                  maxLength={200}
+                  style={{ marginTop: 8 }}
+                />
+              )}
+              {cancelReason === 'conduct' && (
+                <p style={{ margin: '8px 0 0', fontSize: 11.5, color: 'var(--amber)', lineHeight: 1.6 }}>
+                  この理由は相手への通知には記載されず、運営への記録として保存されます。キャンセル後に通報ページへ移動するので、問題行動の内容を報告してください。
+                </p>
+              )}
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
               <button type="button" className="btn-ghost" onClick={() => setCancelId(null)} disabled={cancelling}>戻る</button>
-              <button type="button" className="btn-danger" onClick={() => void doCancel()} disabled={cancelling}>{cancelling ? 'キャンセル中...' : 'キャンセルする'}</button>
+              <button type="button" className="btn-danger" onClick={() => void doCancel()} disabled={cancelling || !cancelReason}>{cancelling ? 'キャンセル中...' : 'キャンセルする'}</button>
             </div>
           </div>
         </div>

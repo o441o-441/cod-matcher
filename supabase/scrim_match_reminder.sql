@@ -11,6 +11,8 @@
 ALTER TABLE public.scrim_matches ADD COLUMN IF NOT EXISTS reminded_at timestamptz;
 
 -- _scrimboard_notify に 'reminder' イベントを追加
+-- ※ この定義は scrim_cancel_reason.sql で上書き済み (キャンセル理由の記載)。
+--   変更はそちらで。
 CREATE OR REPLACE FUNCTION public._scrimboard_notify(p_match_id uuid, p_event text)
 RETURNS void
 LANGUAGE plpgsql

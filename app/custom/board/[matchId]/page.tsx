@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import { SCRIM_CANCEL_REASONS } from '@/lib/scrimCancelReasons'
 import MatchPlayerCompare from '@/components/MatchPlayerCompare'
 import HpVideoAnalyzer from '@/components/HpVideoAnalyzer'
 import HpTimelinePanel from '@/components/HpTimelinePanel'
@@ -95,6 +96,8 @@ export default function ScrimMatchPage() {
   const [lobbyCode, setLobbyCode] = useState('')
   const [sending, setSending] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelNote, setCancelNote] = useState('')
   const [cancelling, setCancelling] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -295,11 +298,20 @@ export default function ScrimMatchPage() {
 
   const doCancel = async () => {
     if (cancelling) return
+    if (!cancelReason) { setToast('キャンセル理由を選択してください'); return }
     setCancelling(true)
-    const { error } = await supabase.rpc('rpc_scrimboard_cancel', { p_match_id: matchId })
+    const { error } = await supabase.rpc('rpc_scrimboard_cancel', {
+      p_match_id: matchId,
+      p_reason: cancelReason,
+      p_note: cancelNote.trim() || null,
+    })
     setCancelling(false)
     setCancelOpen(false)
     if (error) { setToast(error.message); return }
+    if (cancelReason === 'conduct') {
+      router.push('/reports/new')
+      return
+    }
     void loadMatch()
   }
 
@@ -359,7 +371,7 @@ export default function ScrimMatchPage() {
         <button className="btn-ghost btn-sm" onClick={() => router.push('/custom/board')}>← ボードに戻る</button>
         <button className="btn-ghost btn-sm" onClick={() => router.push('/rules')}>ルールを確認</button>
         {isMember && !isCancelled && (
-          <button className="btn-danger btn-sm" onClick={() => setCancelOpen(true)}>対戦をキャンセル</button>
+          <button className="btn-danger btn-sm" onClick={() => { setCancelOpen(true); setCancelReason(''); setCancelNote('') }}>対戦をキャンセル</button>
         )}
       </div>
 
@@ -567,15 +579,49 @@ export default function ScrimMatchPage() {
         </div>
       </div>
 
-      <ConfirmDialog
-        open={cancelOpen}
-        title="対戦をキャンセルしますか？"
-        message={`${oppName} との対戦を取り消します。相手の参加メンバーにキャンセル通知が送られ、枠はボードに戻ります。キャンセル回数は相手から見えるようになります。`}
-        confirmText={cancelling ? 'キャンセル中...' : 'キャンセルする'}
-        cancelText="戻る"
-        onConfirm={doCancel}
-        onCancel={() => { if (!cancelling) setCancelOpen(false) }}
-      />
+      {cancelOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2500, display: 'grid', placeItems: 'center', padding: 24 }} role="dialog" aria-modal="true" aria-label="キャンセル確認">
+          <div onClick={() => { if (!cancelling) setCancelOpen(false) }} style={{ position: 'absolute', inset: 0, background: 'rgba(5,8,14,0.72)', backdropFilter: 'blur(8px)' }} />
+          <div style={{ position: 'relative', width: '100%', maxWidth: 400, background: 'rgba(22,28,58,0.96)', border: '1px solid rgba(255,77,109,0.4)', borderRadius: 14, boxShadow: '0 24px 80px rgba(0,0,0,0.6)', padding: 22 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>対戦をキャンセルしますか？</div>
+            <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--text-soft)', lineHeight: 1.7 }}>
+              {oppName} との対戦を取り消します。相手の参加メンバーにキャンセル通知が送られ、枠はボードに戻ります。
+            </p>
+            <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--danger)' }}>キャンセル回数は相手から見えるようになります。</p>
+
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-dim)', textTransform: 'uppercase' }}>キャンセル理由 (必須)</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                {SCRIM_CANCEL_REASONS.map(r => (
+                  <label key={r.value} style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer', fontSize: 13 }}>
+                    <input type="radio" name="match-cancel-reason" checked={cancelReason === r.value} onChange={() => setCancelReason(r.value)} />
+                    {r.label}
+                  </label>
+                ))}
+              </div>
+              {cancelReason === 'other' && (
+                <input
+                  value={cancelNote}
+                  onChange={e => setCancelNote(e.target.value)}
+                  placeholder="理由 (任意・相手への通知に記載されます)"
+                  maxLength={200}
+                  style={{ marginTop: 8 }}
+                />
+              )}
+              {cancelReason === 'conduct' && (
+                <p style={{ margin: '8px 0 0', fontSize: 11.5, color: 'var(--amber)', lineHeight: 1.6 }}>
+                  この理由は相手への通知には記載されず、運営への記録として保存されます。キャンセル後に通報ページへ移動するので、問題行動の内容を報告してください。
+                </p>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
+              <button type="button" className="btn-ghost" onClick={() => setCancelOpen(false)} disabled={cancelling}>戻る</button>
+              <button type="button" className="btn-danger" onClick={() => void doCancel()} disabled={cancelling || !cancelReason}>{cancelling ? 'キャンセル中...' : 'キャンセルする'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={!!deleteGameTarget}

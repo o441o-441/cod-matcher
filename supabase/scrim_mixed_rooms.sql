@@ -534,6 +534,7 @@ $$;
 
 -- ------------------------------------------------------------
 -- 7) キャンセル v2 (ルーム対応: ルームを open に戻す)
+--    ※ この定義は scrim_cancel_reason.sql で上書き済み (理由必須のv3)。
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.rpc_scrimboard_cancel(p_match_id uuid)
 RETURNS json
