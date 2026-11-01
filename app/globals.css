@@ -535,6 +535,21 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 textarea { min-height: 110px; resize: vertical; }
 
+/* ラジオ・チェックボックスはテキスト入力用の一括スタイルから除外 */
+input[type='radio'], input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  padding: 0;
+  border: none;
+  background: none;
+  accent-color: var(--cyan);
+  cursor: pointer;
+}
+input[type='radio']:focus, input[type='checkbox']:focus {
+  box-shadow: none;
+}
+
 select option, select optgroup {
   background: #0a0d1a;
   color: var(--text);
