@@ -21,6 +21,9 @@ ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS deadline_reminder_stage 
 -- ------------------------------------------------------------
 -- 共有ヘルパー: 大会用 Discord Webhook へ送信 (ベストエフォート)
 -- p_key で送信先 (app_settings のキー) を切り替えられる
+-- app_settings.discord_tournament_mention_mute = 'true' のとき、
+-- allowed_mentions を強制的に空にして誰にも ping が飛ばないようにする
+-- (メッセージ・embed 自体は送られる。テスト運用向け)
 -- ------------------------------------------------------------
 DROP FUNCTION IF EXISTS public._tournament_webhook_post(jsonb);
 CREATE OR REPLACE FUNCTION public._tournament_webhook_post(p_payload jsonb, p_key text DEFAULT 'discord_tournament_webhook')
@@ -31,10 +34,17 @@ SET search_path TO 'public'
 AS $$
 DECLARE
   v_url text;
+  v_payload jsonb := p_payload;
+  v_mute text;
 BEGIN
   SELECT value INTO v_url FROM app_settings WHERE key = p_key;
   IF v_url IS NOT NULL AND v_url LIKE 'https://discord.com/api/webhooks/%' THEN
-    PERFORM net.http_post(url := v_url, body := p_payload);
+    SELECT value INTO v_mute FROM app_settings WHERE key = 'discord_tournament_mention_mute';
+    IF coalesce(v_mute, '') = 'true' THEN
+      v_payload := jsonb_set(v_payload, '{allowed_mentions}',
+        jsonb_build_object('parse', jsonb_build_array()));
+    END IF;
+    PERFORM net.http_post(url := v_url, body := v_payload);
   END IF;
 EXCEPTION WHEN OTHERS THEN
   NULL;
