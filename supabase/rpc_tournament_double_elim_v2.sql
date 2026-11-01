@@ -146,6 +146,8 @@ $$;
 
 -- ============================================================
 -- rpc_tournament_generate_bracket (rewritten)
+-- ※ この定義は tournament_round_formats.sql で上書き済み
+--   (ラウンド別BO対応)。変更する場合はそちらを編集すること。
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.rpc_tournament_generate_bracket(p_tournament_id uuid)
 RETURNS json

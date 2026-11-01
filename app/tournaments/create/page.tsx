@@ -26,10 +26,18 @@ export default function TournamentCreatePage() {
   const [prize, setPrize] = useState('')
   const [rules, setRules] = useState('')
   const [gfReset, setGfReset] = useState(true)
+  // 終盤ラウンドのBO上書き ('' = 基本と同じ)
+  const [wfFormat, setWfFormat] = useState('')
+  const [lfFormat, setLfFormat] = useState('')
+  const [gfFormat, setGfFormat] = useState('')
   // Block league
   const [blockCount, setBlockCount] = useState(1)
   const [playoffAdvance, setPlayoffAdvance] = useState<number | null>(null)
   const [playoffElimType, setPlayoffElimType] = useState<'single' | 'double'>('single')
+
+  // ブラケットが生成される大会か (単発トナメ or ブロックリーグの決勝トナメ)
+  const hasBracket = format === 'tournament' || (format === 'league' && blockCount >= 2)
+  const bracketIsDouble = format === 'tournament' ? eliminationType === 'double' : playoffElimType === 'double'
 
   const handleCreate = async () => {
     if (!title.trim()) { showToast('タイトルを入力してください', 'error'); return }
@@ -59,6 +67,18 @@ export default function TournamentCreatePage() {
       block_count: format === 'league' ? blockCount : 1,
       playoff_advance_count: format === 'league' && blockCount >= 2 ? playoffAdvance : null,
       playoff_elimination_type: format === 'league' && blockCount >= 2 ? playoffElimType : 'single',
+      metadata: (() => {
+        // 終盤ラウンドのBO上書き (基本と同じ値・ブラケット無し大会は保存しない)
+        const rf: Record<string, string> = {}
+        if (hasBracket) {
+          if (wfFormat && wfFormat !== matchFormat) rf.wf = wfFormat
+          if (bracketIsDouble) {
+            if (lfFormat && lfFormat !== matchFormat) rf.lf = lfFormat
+            if (gfFormat && gfFormat !== matchFormat) rf.gf = gfFormat
+          }
+        }
+        return Object.keys(rf).length > 0 ? { round_formats: rf } : {}
+      })(),
     }).select('id').single()
 
     setLoading(false)
@@ -280,6 +300,48 @@ export default function TournamentCreatePage() {
                     <div className="muted" style={{ fontSize: 10, marginTop: 2 }}>{opt.desc}</div>
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* 終盤ラウンドのBO上書き */}
+          {hasBracket && (
+            <div>
+              <div className="stat-label">終盤ラウンドの試合形式{format === 'league' ? '（決勝トーナメント）' : ''}</div>
+              <p className="muted" style={{ fontSize: 11, margin: '4px 0 0' }}>
+                基本は上の試合形式。決勝ラウンドだけBOを変えられます（例: 基本BO3・決勝だけBO5）
+              </p>
+              <div className="grid grid-2" style={{ marginTop: 8, gap: 8 }}>
+                <div>
+                  <label htmlFor="t-wf" className="stat-label" style={{ fontSize: 10 }}>
+                    {bracketIsDouble ? '勝者側決勝' : '決勝'}
+                  </label>
+                  <select id="t-wf" value={wfFormat} onChange={e => setWfFormat(e.target.value)} style={{ marginTop: 4 }}>
+                    <option value="">基本と同じ（{matchFormat.toUpperCase()}）</option>
+                    <option value="bo3">BO3</option>
+                    <option value="bo5">BO5</option>
+                  </select>
+                </div>
+                {bracketIsDouble && (
+                  <div>
+                    <label htmlFor="t-lf" className="stat-label" style={{ fontSize: 10 }}>敗者側決勝</label>
+                    <select id="t-lf" value={lfFormat} onChange={e => setLfFormat(e.target.value)} style={{ marginTop: 4 }}>
+                      <option value="">基本と同じ（{matchFormat.toUpperCase()}）</option>
+                      <option value="bo3">BO3</option>
+                      <option value="bo5">BO5</option>
+                    </select>
+                  </div>
+                )}
+                {bracketIsDouble && (
+                  <div>
+                    <label htmlFor="t-gf" className="stat-label" style={{ fontSize: 10 }}>グランドファイナル{gfReset ? '（リセット含む）' : ''}</label>
+                    <select id="t-gf" value={gfFormat} onChange={e => setGfFormat(e.target.value)} style={{ marginTop: 4 }}>
+                      <option value="">基本と同じ（{matchFormat.toUpperCase()}）</option>
+                      <option value="bo3">BO3</option>
+                      <option value="bo5">BO5</option>
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
           )}

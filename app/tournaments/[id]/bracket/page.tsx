@@ -12,6 +12,7 @@ type MatchRow = {
   entry_a_id: string | null; entry_b_id: string | null
   winner_entry_id: string | null; score_a: number; score_b: number
   status: string; bracket_side: string
+  match_format: string | null
 }
 
 type TeamInfo = {
@@ -52,6 +53,7 @@ export default function BracketPage() {
   const [entryMode, setEntryMode] = useState('team')
   const [maxRound, setMaxRound] = useState(0)
   const [eliminationType, setEliminationType] = useState('single')
+  const [baseFormat, setBaseFormat] = useState('bo1')
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [isHost, setIsHost] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -70,13 +72,14 @@ export default function BracketPage() {
     setMyUserId(uid)
 
     const [{ data: t }, { data: matchData }, { data: entries }] = await Promise.all([
-      supabase.from('tournaments').select('title, entry_mode, elimination_type, playoff_elimination_type, host_user_id, format, block_count').eq('id', tournamentId).maybeSingle(),
+      supabase.from('tournaments').select('title, entry_mode, elimination_type, playoff_elimination_type, host_user_id, format, block_count, match_format').eq('id', tournamentId).maybeSingle(),
       supabase.from('tournament_matches').select('*').eq('tournament_id', tournamentId).order('round').order('match_number'),
       supabase.from('tournament_entries').select('id, team_id, user_id, assigned_team_name, assigned_team_index, seed_number, weapon_class, rating_at_entry').eq('tournament_id', tournamentId),
     ])
 
-    const tData = t as { title: string; entry_mode: string; elimination_type: string; playoff_elimination_type: string; host_user_id: string; format: string; block_count: number } | null
+    const tData = t as { title: string; entry_mode: string; elimination_type: string; playoff_elimination_type: string; host_user_id: string; format: string; block_count: number; match_format: string } | null
     setTournamentTitle(tData?.title ?? '')
+    setBaseFormat(tData?.match_format ?? 'bo1')
     setEntryMode(tData?.entry_mode ?? 'team')
     // For block league playoff, use playoff_elimination_type
     setEliminationType(tData?.format === 'league' ? (tData?.playoff_elimination_type ?? 'single') : (tData?.elimination_type ?? 'single'))
@@ -239,9 +242,14 @@ export default function BracketPage() {
           boxShadow: isFinal ? '0 0 16px rgba(255,215,0,0.15)' : m.status === 'live' ? '0 0 12px var(--magenta)' : undefined,
         }}
       >
-        {/* ステータスバッジ */}
+        {/* ステータスバッジ (基本BOと異なる試合はBOを明示) */}
         <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
-          <span className="muted" style={{ fontSize: 10 }}>MATCH {m.match_number}</span>
+          <span className="muted" style={{ fontSize: 10 }}>
+            MATCH {m.match_number}
+            {m.match_format && m.match_format !== baseFormat && (
+              <span className="badge amber" style={{ fontSize: 9, marginLeft: 6 }}>{m.match_format.toUpperCase()}</span>
+            )}
+          </span>
           {m.status === 'completed' && <span className="badge success" style={{ fontSize: 9 }}>完了</span>}
           {m.status === 'live' && <span className="badge" style={{ fontSize: 9, background: 'var(--magenta)', color: '#fff' }}>LIVE</span>}
           {m.status === 'pending' && <span className="badge" style={{ fontSize: 9 }}>待機中</span>}

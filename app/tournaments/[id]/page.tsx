@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import { LoadingSkeleton } from '@/components/UIState'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import TournamentSchedule from '@/components/TournamentSchedule'
 
 type TournamentRow = {
   id: string; title: string; description: string | null; format: string; entry_mode: string
@@ -14,6 +15,8 @@ type TournamentRow = {
   host_user_id: string; prize: string | null; rules: string | null
   winner_info: { name?: string } | null; created_at: string
   block_count: number; group_phase_status: string | null
+  elimination_type: string; gf_reset: boolean
+  metadata: { round_formats?: { wf?: string; lf?: string; gf?: string }; schedule?: { start: string; wb_until: number; lb_until: number; gf: boolean }[] } | null
 }
 
 type EntryRow = {
@@ -208,7 +211,18 @@ export default function TournamentDetailPage() {
       <div className="section row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <span className="badge" style={{ fontSize: 10 }}>{tournament.format === 'tournament' ? 'TOURNAMENT' : 'LEAGUE'}</span>
         <span className="badge" style={{ fontSize: 10 }}>{tournament.entry_mode === 'team' ? 'TEAM 4v4' : 'SOLO → 4v4'}</span>
-        <span className="badge" style={{ fontSize: 10 }}>{tournament.match_format.toUpperCase()}</span>
+        <span className="badge" style={{ fontSize: 10 }}>
+          {tournament.match_format.toUpperCase()}
+          {(() => {
+            const rf = tournament.metadata?.round_formats
+            if (!rf) return null
+            const parts: string[] = []
+            if (rf.wf) parts.push(`${tournament.elimination_type === 'double' ? '勝者側決勝' : '決勝'} ${rf.wf.toUpperCase()}`)
+            if (rf.lf) parts.push(`敗者側決勝 ${rf.lf.toUpperCase()}`)
+            if (rf.gf) parts.push(`GF ${rf.gf.toUpperCase()}`)
+            return parts.length > 0 ? ` （${parts.join('・')}）` : null
+          })()}
+        </span>
         {tournament.rate_cap && <span className="badge amber" style={{ fontSize: 10 }}>≤ {tournament.rate_cap}</span>}
         {tournament.prize && <span className="badge" style={{ fontSize: 10, background: 'rgba(255,215,0,0.15)', color: 'var(--gold, #ffd700)' }}>{tournament.prize}</span>}
       </div>
@@ -247,6 +261,9 @@ export default function TournamentDetailPage() {
               </div>
             )}
           </div>
+
+          {/* スケジュール (主催者は編集可) */}
+          <TournamentSchedule tournament={tournament} isHost={isHost} />
 
           {/* 締切済みの案内 */}
           {tournament.status === 'recruit' && !myEntry && entryDeadlinePassed && (
