@@ -993,7 +993,7 @@ export default function ScrimBoardPage() {
             <button type="button" className="btn-ghost" onClick={() => router.push('/rules')}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              GAルール
+              ルール
             </button>
             <button type="button" className="btn-ghost" onClick={() => { setContactInput(myPrefs.contact ?? ''); setWebhookOpen(true) }}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 14px' }}>
@@ -1758,7 +1758,7 @@ export default function ScrimBoardPage() {
                   <span>相手の受付範囲 (同格±1帯) の外です。成立は可能ですが、相手の想定と異なる可能性があります。</span>
                 </div>
               )}
-              <p style={{ margin: '14px 0 0', fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.6 }}>成立と同時に参加メンバーへ通知が送られ (チームはDiscord・混成ルームはサイト内通知)、試合ページ(チャット)が開きます。ホスト決め・ロビーコード共有はそこで行います。この対戦は unrated — レートは変動しません。対戦は <a href="/rules" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--cyan)', textDecoration: 'underline', textUnderlineOffset: 2 }}>GAルール</a> に準拠します(新しいタブで開きます)。</p>
+              <p style={{ margin: '14px 0 0', fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.6 }}>成立と同時に参加メンバーへ通知が送られ (チームはDiscord・混成ルームはサイト内通知)、試合ページ(チャット)が開きます。ホスト決め・ロビーコード共有はそこで行います。この対戦は unrated — レートは変動しません。対戦は <a href="/rules" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--cyan)', textDecoration: 'underline', textUnderlineOffset: 2 }}>ルール</a> に準拠します(新しいタブで開きます)。</p>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 22px', borderTop: `1px solid ${LINE}`, background: 'rgba(0,0,0,0.18)' }}>
               <button type="button" className="btn-ghost" onClick={() => setModal(null)} disabled={confirming}>閉じる</button>

@@ -548,7 +548,7 @@ export default function EightsLobbyPage() {
         <div className="card" style={{ padding: '16px 18px' }}>
           <div className="row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
             <span className="stat-label">8s ルール要約</span>
-            <button className="btn-ghost btn-sm" onClick={() => router.push('/rules')}>GAルール詳細を見る</button>
+            <button className="btn-ghost btn-sm" onClick={() => router.push('/rules')}>ルール詳細を見る</button>
           </div>
           <div className="stack-sm" style={{ fontSize: 12.5 }}>
             <div className="muted">・8人そろったらホストがチームを振り分け（ランダム / レート+ロール考慮）。レート変動はありません</div>
