@@ -149,6 +149,30 @@ export function estimateSchedule(
   }
 }
 
+// 試合のラウンドが解放される時刻 (SQLの _tournament_round_unlock_at と同ロジック)。
+// side は tournament_matches.bracket_side ('winners' | 'losers' | 'grand_final' | 'league')。
+// スケジュール未設定 = null (ロックなし)。未割当ラウンドは最終ブロック開始後に解放
+export function roundUnlockAt(
+  blocks: ScheduleBlock[] | null | undefined,
+  side: string,
+  round: number
+): Date | null {
+  if (!blocks || blocks.length === 0 || side === 'league') return null
+  let last: Date | null = null
+  for (const b of blocks) {
+    const d = b.start ? new Date(b.start) : null
+    if (!d || isNaN(d.getTime())) continue
+    if (!last || d > last) last = d
+    const covered =
+      side === 'winners' ? (b.wb_until ?? 0) >= round
+      : side === 'losers' ? (b.lb_until ?? 0) >= round
+      : side === 'grand_final' ? !!b.gf
+      : true
+    if (covered) return d
+  }
+  return last
+}
+
 export const fmtMinutes = (min: number): string => {
   const h = Math.floor(min / 60)
   const m = min % 60

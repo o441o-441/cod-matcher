@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
+import { roundUnlockAt, fmtBlockStart, type ScheduleBlock } from '@/lib/tournamentSchedule'
 import { LoadingSkeleton } from '@/components/UIState'
 
 // 全モード共通の5マッププール (2026-11-01 改定)
@@ -27,6 +28,7 @@ type MatchData = {
   bans: string[]; side_choice: string | null
   banpick_status: string; banpick_turn_entry_id: string | null; banpick_action: string | null
   score_a: number; score_b: number; status: string; bracket_side: string
+  round: number
   match_format: string; current_game: number; games: GameRecord[]
   host_entry_id: string | null
 }
@@ -50,6 +52,7 @@ export default function TournamentMatchPage() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [myUserId, setMyUserId] = useState<string | null>(null)
+  const [schedule, setSchedule] = useState<ScheduleBlock[] | null>(null)
 
   const loadData = useCallback(async () => {
     if (!matchId || !tournamentId) return
@@ -60,11 +63,13 @@ export default function TournamentMatchPage() {
 
     const [{ data: m }, { data: tData }, { data: chatData }] = await Promise.all([
       supabase.from('tournament_matches').select('*').eq('id', matchId).maybeSingle(),
-      supabase.from('tournaments').select('host_user_id').eq('id', tournamentId).maybeSingle(),
+      supabase.from('tournaments').select('host_user_id, metadata').eq('id', tournamentId).maybeSingle(),
       supabase.from('tournament_match_messages').select('*').eq('tournament_match_id', matchId).order('created_at', { ascending: true }),
     ])
     if (!m) { setLoading(false); return }
-    setIsHost(uid === (tData as { host_user_id: string } | null)?.host_user_id)
+    const tInfo = tData as { host_user_id: string; metadata: { schedule?: ScheduleBlock[] } | null } | null
+    setIsHost(uid === tInfo?.host_user_id)
+    setSchedule(tInfo?.metadata?.schedule ?? null)
     const mData = m as MatchData
     mData.bans = Array.isArray(mData.bans) ? mData.bans : []
     mData.games = Array.isArray(mData.games) ? mData.games : []
@@ -195,16 +200,37 @@ export default function TournamentMatchPage() {
         <button className="btn-ghost" onClick={() => router.push(`/tournaments/${tournamentId}/bracket`)}>← ブラケットに戻る</button>
       </div>
 
-      {/* バンピック開始前 */}
-      {match.banpick_status === 'waiting' && (isHost || myEntryId) && (
-        <div className="section card-strong" style={{ textAlign: 'center', padding: 32 }}>
-          <h2 style={{ marginTop: 0 }}>バンピックを開始</h2>
-          <p className="muted">対戦相手が揃っています。バンピックを開始すると先行チームが抽選されます。</p>
-          <button className="btn-primary" onClick={handleStartBanpick} disabled={busy}>
-            {busy ? '開始中...' : 'バンピック開始（先行抽選）'}
-          </button>
-        </div>
-      )}
+      {/* バンピック開始前 (スケジュールの解放時刻前はロック表示) */}
+      {match.banpick_status === 'waiting' && (isHost || myEntryId) && (() => {
+        const unlockAt = roundUnlockAt(schedule, match.bracket_side, match.round)
+        const locked = !!unlockAt && Date.now() < unlockAt.getTime()
+        return (
+          <div className="section card-strong" style={{ textAlign: 'center', padding: 32 }}>
+            <h2 style={{ marginTop: 0 }}>バンピックを開始</h2>
+            {locked ? (
+              <>
+                <p className="muted">
+                  🔒 この試合は <span style={{ color: 'var(--amber)', fontWeight: 700 }}>{fmtBlockStart(unlockAt!.toISOString())}</span> から開始できます（大会スケジュール）
+                </p>
+                {isHost ? (
+                  <button className="btn-primary" onClick={handleStartBanpick} disabled={busy}>
+                    {busy ? '開始中...' : '主催者権限で今すぐ開始'}
+                  </button>
+                ) : (
+                  <button className="btn-primary" disabled>開始時刻までお待ちください</button>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="muted">対戦相手が揃っています。バンピックを開始すると先行チームが抽選されます。</p>
+                <button className="btn-primary" onClick={handleStartBanpick} disabled={busy}>
+                  {busy ? '開始中...' : 'バンピック開始（先行抽選）'}
+                </button>
+              </>
+            )}
+          </div>
+        )
+      })()}
 
       {/* 完了済みゲーム一覧 */}
       {match.games.length > 0 && (

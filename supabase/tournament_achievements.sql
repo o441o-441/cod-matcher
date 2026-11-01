@@ -65,6 +65,8 @@ $$;
 
 -- ------------------------------------------------------------
 -- 完了トリガー: 優勝・準優勝を記録 + winner_info.name を補完
+-- ※ この定義は tournament_schedule_lock_notify.sql で上書き済み
+--   (3位記録 + 入賞者通知 + Discord結果発表)。変更はそちらで。
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.trg_record_tournament_achievements()
 RETURNS trigger
