@@ -38,7 +38,7 @@ const PROMPT = `これはCall of Duty (Modern Warfare 4) の試合終了時ス�
 
 {
   "mode": "hp" | "snd" | "ovl" | null,  // CDLハードポイント=hp, サーチ&デストロイ=snd, ハイジャック(旧オーバーロード)=ovl
-  "map": string | null,                  // マップ名。日本語の通称があれば日本語で (例: コール, シルクウォーム, ミューニション, ムンバイ, リアクター, ルーフトップ, ロータス)。不明ならそのままの表記
+  "map": string | null,                  // マップ名。日本語の通称があれば日本語で (例: シルクウォーム, セントリー, ミューニション, ムンバイ, リアクター, ルーフトップ, ロータス)。不明ならそのままの表記
   "duration_seconds": number | null,     // 総プレイ時間を秒に換算
   "team_a_score": number | null,         // 上のチーム(A)のスコア (画面上部の左側の数字)
   "team_b_score": number | null,

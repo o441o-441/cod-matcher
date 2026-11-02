@@ -7,9 +7,9 @@ import { useToast } from '@/components/ToastProvider'
 import { roundUnlockAt, fmtBlockStart, type ScheduleBlock } from '@/lib/tournamentSchedule'
 import { LoadingSkeleton } from '@/components/UIState'
 
-// 全モード共通の5マッププール (2026-11-01 改定)
+// 全モード共通の7マッププール (2026-11-02 改定)
 // ※ 'ovl' は旧オーバーロードの内部キー。表示はハイジャック
-const SHARED_POOL = ['シルクウォーム', 'ミューニション', 'リアクター', 'ルーフトップ', 'ロータス']
+const SHARED_POOL = ['シルクウォーム', 'セントリー', 'ミューニション', 'ムンバイ', 'リアクター', 'ルーフトップ', 'ロータス']
 const PHASE_POOLS: Record<string, string[]> = {
   hp: SHARED_POOL,
   snd: SHARED_POOL,
