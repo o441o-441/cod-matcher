@@ -57,6 +57,7 @@ const DAYS = 14
 const SLOT_COUNT = 48
 const EVENING_SLOT = 30 // 20:00 — ボードのデフォルト表示開始位置 (21時周辺が見える)
 const SLOT_PX = 56 // ボードのセル幅(px)。gap 5px と合わせて位置計算に使う
+const NIGHT_START = 28 // 19:00 — STEP1の初期表示はここから (全日表示はボタンで展開)
 const slotLabel = (i: number) => `${5 + Math.floor(i / 2)}:${i % 2 ? '30' : '00'}`
 const SLOTS = Array.from({ length: SLOT_COUNT }, (_, i) => slotLabel(i))
 
@@ -142,6 +143,8 @@ export default function ScrimBoardPage() {
   const [roomDay, setRoomDay] = useState(0)
   const [roomStart, setRoomStart] = useState(EVENING_SLOT) // 20:00
   const [roomEnd, setRoomEnd] = useState(EVENING_SLOT + 10) // 25:00
+  // STEP1: 初期は夜間 (NIGHT_START〜) のみ表示。全日はボタンで展開
+  const [showFullDay, setShowFullDay] = useState(false)
   const [roomNote, setRoomNote] = useState('')
   const [roomBusy, setRoomBusy] = useState(false)
   const [roomNotifyOn, setRoomNotifyOn] = useState(true) // 混成ルーム募集通知の受信設定 (行なし=ON)
@@ -1087,8 +1090,28 @@ export default function ScrimBoardPage() {
             {renderDayTabs(editDay, setEditDay, editDots)}
           </div>
 
+          {/* 初期表示は夜間 (19:00〜) のみ。全日はボタンで展開 */}
+          {(() => {
+            const dateStr = weekDays[editDay]?.dateStr
+            const dayHidden = !showFullDay && dateStr
+              ? (myMine[dateStr] ?? []).filter(s => s < NIGHT_START).length
+              : 0
+            return (
+              <div className="rowx" style={{ marginBottom: 8 }}>
+                <span style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>
+                  {showFullDay ? '全日表示 (5:00〜翌4:30)' : `夜間のみ表示 (${slotLabel(NIGHT_START)}〜翌4:30)`}
+                  {dayHidden > 0 && <span style={{ color: 'var(--cyan)', marginLeft: 8 }}>※ 非表示の時間帯に {dayHidden} 枠入力済み</span>}
+                </span>
+                <button type="button" className="btn-ghost btn-sm" onClick={() => setShowFullDay(v => !v)}>
+                  {showFullDay ? '🌙 夜間のみ表示' : '🌅 全日を表示 (5:00〜)'}
+                </button>
+              </div>
+            )
+          })()}
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))', gap: 5 }}>
             {SLOTS.map((s, i) => {
+              if (!showFullDay && i < NIGHT_START) return null
               const dateStr = weekDays[editDay]?.dateStr
               const on = dateStr ? (myMine[dateStr] ?? []).includes(i) : false
               return (
@@ -1134,6 +1157,7 @@ export default function ScrimBoardPage() {
                     <span style={{ width: 22, flex: 'none', fontSize: 12, fontWeight: 700, color: arr.length > 0 ? '#9df3ff' : 'var(--text-dim)' }}>{label}</span>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {Array.from({ length: SLOT_COUNT }, (_, s) => {
+                        if (!showFullDay && s < NIGHT_START && !arr.includes(s)) return null
                         const on = arr.includes(s)
                         return (
                           <button key={s} type="button" className="mono" aria-pressed={on}
