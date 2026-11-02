@@ -43,10 +43,15 @@ export default function RulesPage() {
         <p className="sec-title">マップ &amp; モード</p>
         <div className="card-strong">
           <div className="card">
-            <h3>ハードポイント</h3>
+            <h3>マッププール（全モード共通）</h3>
+            <p className="muted" style={{ fontSize: 13 }}>
+              ハードポイント / サーチ&amp;デストロイ / ハイジャックの全モードで以下の7マップを使用します。
+            </p>
             <ul>
               <li>シルクウォーム</li>
+              <li>セントリー</li>
               <li>ミューニション</li>
+              <li>ムンバイ</li>
               <li>リアクター</li>
               <li>ルーフトップ</li>
               <li>ロータス</li>
