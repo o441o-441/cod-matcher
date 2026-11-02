@@ -60,7 +60,8 @@ const GAME_MODE_LABEL: Record<string, string> = { hp: 'ハードポイント', s
 const DOW = ['日', '月', '火', '水', '木', '金', '土']
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-const slotLabel = (i: number) => `${20 + Math.floor(i / 2)}:${i % 2 ? '30' : '00'}`
+// スロットは 5:00 基準の48枠 (24h対応。24時以降は 25:00 等の表記)
+const slotLabel = (i: number) => `${5 + Math.floor(i / 2)}:${i % 2 ? '30' : '00'}`
 
 function matchLabel(m: { hp_maps: number; snd_maps: number; ovl_maps: number }) {
   if (m.hp_maps === 6 && m.snd_maps === 0 && m.ovl_maps === 0) return 'ハーポ回し'

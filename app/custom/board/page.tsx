@@ -52,8 +52,13 @@ type RoomMember = { uid: string; name: string; rating: number | null }
 // 表示・入力できる日数。サーバー側 (rpc_scrimboard_set_availability /
 // rpc_scrimboard_confirm) の許可範囲が「今日〜+13日」なので最大14
 const DAYS = 14
-const SLOTS = ['20:00', '20:30', '21:00', '21:30', '22:00', '22:30', '23:00', '23:30', '24:00', '24:30']
-const slotLabel = (i: number) => `${20 + Math.floor(i / 2)}:${i % 2 ? '30' : '00'}`
+// 1日 = 「その晩」単位で 5:00〜翌4:59 の48スロット (30分刻み)。
+// スロット30 = 20:00、32 = 21:00。24時以降は 24:30/25:00…28:30 表記
+const SLOT_COUNT = 48
+const EVENING_SLOT = 30 // 20:00 — ボードのデフォルト表示開始位置 (21時周辺が見える)
+const SLOT_PX = 56 // ボードのセル幅(px)。gap 5px と合わせて位置計算に使う
+const slotLabel = (i: number) => `${5 + Math.floor(i / 2)}:${i % 2 ? '30' : '00'}`
+const SLOTS = Array.from({ length: SLOT_COUNT }, (_, i) => slotLabel(i))
 
 // レート → ティア (既存ランキングと同じ閾値)
 function getTier(r: number | null): { label: string; idx: number; color: string } {
@@ -135,8 +140,8 @@ export default function ScrimBoardPage() {
   const [roomCreateOpen, setRoomCreateOpen] = useState(false)
   const [roomName, setRoomName] = useState('')
   const [roomDay, setRoomDay] = useState(0)
-  const [roomStart, setRoomStart] = useState(0)
-  const [roomEnd, setRoomEnd] = useState(10)
+  const [roomStart, setRoomStart] = useState(EVENING_SLOT) // 20:00
+  const [roomEnd, setRoomEnd] = useState(EVENING_SLOT + 10) // 25:00
   const [roomNote, setRoomNote] = useState('')
   const [roomBusy, setRoomBusy] = useState(false)
   const [roomNotifyOn, setRoomNotifyOn] = useState(true) // 混成ルーム募集通知の受信設定 (行なし=ON)
@@ -264,9 +269,9 @@ export default function ScrimBoardPage() {
     const rm: Record<string, { avg: (number | null)[]; min: (number | null)[]; max: (number | null)[] }> = {}
     for (const r of (countRows ?? []) as { team_id: string; date: string; slot_index: number; available: number; avg_rating: number | null; min_rating: number | null; max_rating: number | null }[]) {
       const key = `${r.team_id}|${r.date}`
-      if (!cm[key]) cm[key] = Array(10).fill(0)
+      if (!cm[key]) cm[key] = Array(SLOT_COUNT).fill(0)
       cm[key][r.slot_index] = r.available
-      if (!rm[key]) rm[key] = { avg: Array(10).fill(null), min: Array(10).fill(null), max: Array(10).fill(null) }
+      if (!rm[key]) rm[key] = { avg: Array(SLOT_COUNT).fill(null), min: Array(SLOT_COUNT).fill(null), max: Array(SLOT_COUNT).fill(null) }
       rm[key].avg[r.slot_index] = r.avg_rating
       rm[key].min[r.slot_index] = r.min_rating
       rm[key].max[r.slot_index] = r.max_rating
@@ -460,7 +465,7 @@ export default function ScrimBoardPage() {
   const need = slotsNeeded()
 
   const countsFor = (teamId: string, day: number): number[] =>
-    counts[`${teamId}|${weekDays[day]?.dateStr ?? ''}`] ?? Array(10).fill(0)
+    counts[`${teamId}|${weekDays[day]?.dateStr ?? ''}`] ?? Array(SLOT_COUNT).fill(0)
 
   const matchedSet = (teamId: string, day: number) => {
     const dateStr = weekDays[day]?.dateStr
@@ -473,16 +478,17 @@ export default function ScrimBoardPage() {
     return set
   }
   // 当日かつ開始から30分以上経過した枠 (終了済み) か
+  // スロットは 5:00 基準 (5*60=300分)。24時以降の枠は当日中は常に未来扱い
   const slotEnded = (day: number, i: number) =>
-    day === 0 && nowMins !== null && nowMins >= 1200 + 30 * (i + 1)
+    day === 0 && nowMins !== null && nowMins >= 300 + 30 * (i + 1)
 
   const runs = (teamId: string, day: number) => {
     const a = countsFor(teamId, day)
     const taken = matchedSet(teamId, day)
     const out: [number, number][] = []
     let s = -1
-    for (let i = 0; i <= 10; i++) {
-      const ok = i < 10 && a[i] >= 4 && !taken.has(i) && !slotEnded(day, i)
+    for (let i = 0; i <= SLOT_COUNT; i++) {
+      const ok = i < SLOT_COUNT && a[i] >= 4 && !taken.has(i) && !slotEnded(day, i)
       if (ok && s < 0) s = i
       if (!ok && s >= 0) { out.push([s, i - 1]); s = -1 }
     }
@@ -499,7 +505,7 @@ export default function ScrimBoardPage() {
     const avgs: number[] = []
     let mn: number | null = null
     let mx: number | null = null
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < SLOT_COUNT; i++) {
       if (c[i] > 0 && r.avg[i] != null) avgs.push(r.avg[i]!)
       if (c[i] > 0 && r.min[i] != null) mn = mn == null ? r.min[i]! : Math.min(mn, r.min[i]!)
       if (c[i] > 0 && r.max[i] != null) mx = mx == null ? r.max[i]! : Math.max(mx, r.max[i]!)
@@ -627,17 +633,28 @@ export default function ScrimBoardPage() {
     ? '空き状況の俯瞰 — モードを選ぶと開始マーカーが出ます'
     : mode === 'custom' && need === 0
       ? '複合 — 下の構成からモードを選んでください'
-      : `${currentModeLabel()} · 所要 ${need}枠 (${need * 30}分) · 最終開始 ${slotLabel(10 - need)}`
+      : `${currentModeLabel()} · 所要 ${need}枠 (${need * 30}分) · 最終開始 ${slotLabel(SLOT_COUNT - need)}`
 
-  // now ライン: 今日の表示のみ
+  // now ライン: 今日の表示のみ (セルは固定幅なのでスロット位置から算出)
   let nowLine: { left: string; label: string } | null = null
-  if (nowMins !== null && viewDay === 0 && nowMins >= 1200) {
-    const f = Math.min(1, (nowMins - 1200) / 300)
+  if (nowMins !== null && viewDay === 0 && nowMins >= 300) {
+    const slotFloat = Math.min(SLOT_COUNT, (nowMins - 300) / 30)
     nowLine = {
-      left: `calc(181px + (100% - 181px) * ${f.toFixed(4)})`,
+      left: `calc(181px + ${(slotFloat * (SLOT_PX + 5)).toFixed(0)}px)`,
       label: `${Math.floor(nowMins / 60)}:${String(nowMins % 60).padStart(2, '0')} 現在`,
     }
   }
+
+  // ボードは48枠あるため、初期表示は20:00 (スロット30) 付近へ自動スクロール
+  const boardScrollRef = useRef<HTMLDivElement | null>(null)
+  const boardScrolledRef = useRef(false)
+  useEffect(() => {
+    if (boardScrolledRef.current) return
+    const el = boardScrollRef.current
+    if (!el) return
+    el.scrollLeft = Math.max(0, EVENING_SLOT * (SLOT_PX + 5) - 8)
+    boardScrolledRef.current = true
+  })
 
   // ---- 空き入力 (楽観更新 + debounce 保存) ----
   const saveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
@@ -668,7 +685,7 @@ export default function ScrimBoardPage() {
     // 代表者のみ型は代表の入力がそのまま4人分 (サーバーのビューと同じ扱い)
     setCounts(prev => {
       const key = `${teamInfo.id}|${dateStr}`
-      const arr = (prev[key] ?? Array(10).fill(0)).slice()
+      const arr = (prev[key] ?? Array(SLOT_COUNT).fill(0)).slice()
       arr[slot] = teamInfo.isSolo ? (on ? 0 : 4) : Math.max(0, arr[slot] + (on ? -1 : 1))
       return { ...prev, [key]: arr }
     })
@@ -1070,7 +1087,7 @@ export default function ScrimBoardPage() {
             {renderDayTabs(editDay, setEditDay, editDots)}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(72px, 1fr))', gap: 6 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))', gap: 5 }}>
             {SLOTS.map((s, i) => {
               const dateStr = weekDays[editDay]?.dateStr
               const on = dateStr ? (myMine[dateStr] ?? []).includes(i) : false
@@ -1116,7 +1133,7 @@ export default function ScrimBoardPage() {
                   <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{ width: 22, flex: 'none', fontSize: 12, fontWeight: 700, color: arr.length > 0 ? '#9df3ff' : 'var(--text-dim)' }}>{label}</span>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {Array.from({ length: 10 }, (_, s) => {
+                      {Array.from({ length: SLOT_COUNT }, (_, s) => {
                         const on = arr.includes(s)
                         return (
                           <button key={s} type="button" className="mono" aria-pressed={on}
@@ -1439,10 +1456,10 @@ export default function ScrimBoardPage() {
             <p className="dim" style={{ fontSize: 12 }}>STEP1 で空き時間を入力すると、4人揃った枠（代表者のみ型チームは代表の入力だけ）が自動でここに公開されます</p>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto', padding: '28px 0 4px' }}>
-            <div style={{ minWidth: 920, position: 'relative' }}>
+          <div ref={boardScrollRef} style={{ overflowX: 'auto', padding: '28px 0 4px' }}>
+            <div style={{ width: 'max-content', position: 'relative' }}>
               {/* ヘッダ行 */}
-              <div style={{ display: 'grid', gridTemplateColumns: '176px repeat(10, minmax(66px, 1fr))', gap: 5, marginBottom: 9 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `176px repeat(${SLOT_COUNT}, ${SLOT_PX}px)`, gap: 5, marginBottom: 9 }}>
                 <div style={{ position: 'sticky', left: 0, zIndex: 2 }} />
                 {SLOTS.map(s => (
                   <div key={s} className="mono" style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', letterSpacing: '0.02em' }}>{s}</div>
@@ -1463,7 +1480,7 @@ export default function ScrimBoardPage() {
                 if (dimMode) { flag = `${currentModeLabel().split(' ')[0]} 不可`; flagCl = '#ff8fa5'; flagBd = 'rgba(255,77,109,0.4)' }
                 else if (hostRangeOut) { flag = '帯範囲外'; flagCl = '#ffb020'; flagBd = 'rgba(255,176,32,0.4)' }
                 return (
-                  <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '176px repeat(10, minmax(66px, 1fr))', gap: 5, alignItems: 'center', marginBottom: 5, opacity: dimNear || dimMode ? 0.3 : 1, transition: 'opacity .2s' }}>
+                  <div key={t.id} style={{ display: 'grid', gridTemplateColumns: `176px repeat(${SLOT_COUNT}, ${SLOT_PX}px)`, gap: 5, alignItems: 'center', marginBottom: 5, opacity: dimNear || dimMode ? 0.3 : 1, transition: 'opacity .2s' }}>
                     <div style={{ position: 'sticky', left: 0, zIndex: 2, background: 'linear-gradient(90deg, #0a0e20 82%, transparent)', minWidth: 0, padding: '4px 10px 4px 12px', borderLeft: `2px solid ${isMe ? 'var(--amber)' : 'transparent'}`, borderRadius: 2 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {t.name}{' '}
@@ -1479,7 +1496,7 @@ export default function ScrimBoardPage() {
                       // 自分の側が噛み合う枠か (自チーム4人+未成立 / 参加中ルームの時間内)。自分の行と判定不能時は常にtrue
                       const mutual = isMe ? true : (mySideOk(viewDay, i) ?? true)
                       const mutualRun = (start: number) => Array.from({ length: need }, (_, k) => (isMe ? true : (mySideOk(viewDay, start + k) ?? true))).every(Boolean)
-                      const canStart = !!r && mode !== 'all' && need > 0 && i + need - 1 <= r[1] && i + need <= 10 && mutualRun(i)
+                      const canStart = !!r && mode !== 'all' && need > 0 && i + need - 1 <= r[1] && i + need <= SLOT_COUNT && mutualRun(i)
                       const inRun = !!r
                       const hatch = inRun && mode !== 'all' && !canStart
                       const lit = !!hoverRun && !!r && hoverRun === `${t.id}-${r[0]}`
@@ -1513,7 +1530,7 @@ export default function ScrimBoardPage() {
                         const open = (start: number) => { setModal({ side: 'team', targetId: t.id, day: viewDay, start, len: need }); setModalAs(teamInfo ? 'team' : 'room') }
                         if (canStart) { open(i); return }
                         // 相手の空きに収まり、かつ自分の側とも噛み合う開始位置を探す
-                        let s = Math.min(r![1] - need + 1, 10 - need)
+                        let s = Math.min(r![1] - need + 1, SLOT_COUNT - need)
                         while (s >= r![0] && !mutualRun(s)) s--
                         if (s >= r![0]) open(s)
                         else showToast(`この空きには ${currentModeLabel()} が入りません`, '相手の空きと自チームの空きが噛み合う連続枠がありません')
@@ -1552,7 +1569,7 @@ export default function ScrimBoardPage() {
                 const canAct = !!(teamInfo || myRoomForDay(viewDay)) && !isMineRoom && mode !== 'all' && need > 0
                 const openModal = (start: number) => { setModal({ side: 'room', targetId: r.id, day: viewDay, start, len: need }); setModalAs(teamInfo ? 'team' : 'room') }
                 return (
-                  <div key={`room-${r.id}`} style={{ display: 'grid', gridTemplateColumns: '176px repeat(10, minmax(66px, 1fr))', gap: 5, alignItems: 'center', marginBottom: 5, opacity: dimNear ? 0.3 : 1, transition: 'opacity .2s' }}>
+                  <div key={`room-${r.id}`} style={{ display: 'grid', gridTemplateColumns: `176px repeat(${SLOT_COUNT}, ${SLOT_PX}px)`, gap: 5, alignItems: 'center', marginBottom: 5, opacity: dimNear ? 0.3 : 1, transition: 'opacity .2s' }}>
                     <div style={{ position: 'sticky', left: 0, zIndex: 2, background: 'linear-gradient(90deg, #0a0e20 82%, transparent)', minWidth: 0, padding: '4px 10px 4px 12px', borderLeft: `2px solid ${isMineRoom ? 'var(--violet)' : 'transparent'}`, borderRadius: 2 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {r.name}{' '}
@@ -1567,7 +1584,7 @@ export default function ScrimBoardPage() {
                       const inWin = i >= r.slot_start && i < r.slot_end && !ended
                       const mutual = isMineRoom ? true : (mySideOk(viewDay, i) ?? true)
                       const mutualRun = (start: number) => Array.from({ length: need }, (_, k) => (isMineRoom ? true : (mySideOk(viewDay, start + k) ?? true))).every(Boolean)
-                      const canStart = inWin && mode !== 'all' && need > 0 && i + need <= r.slot_end && i + need <= 10 && mutualRun(i)
+                      const canStart = inWin && mode !== 'all' && need > 0 && i + need <= r.slot_end && i + need <= SLOT_COUNT && mutualRun(i)
                       const hatch = inWin && mode !== 'all' && !canStart
                       const lit = !!hoverRun && hoverRun === `room-${r.id}` && inWin
                       const clickable = canAct && inWin && mutual
@@ -1588,7 +1605,7 @@ export default function ScrimBoardPage() {
                       }
                       const click = clickable ? () => {
                         if (canStart) { openModal(i); return }
-                        let s = Math.min(r.slot_end - need, 10 - need)
+                        let s = Math.min(r.slot_end - need, SLOT_COUNT - need)
                         while (s >= r.slot_start && (!mutualRun(s) || slotEnded(viewDay, s))) s--
                         if (s >= r.slot_start) openModal(s)
                         else showToast(`この時間帯には ${currentModeLabel()} が入りません`, '相手の時間と自分の側の空きが噛み合う連続枠がありません')
@@ -1867,11 +1884,11 @@ export default function ScrimBoardPage() {
               <label className="stat-label" style={{ display: 'block', margin: '14px 0 6px' }}>参加できる時間帯</label>
               <div className="row" style={{ gap: 8, alignItems: 'center' }}>
                 <select value={roomStart} onChange={e => setRoomStart(Number(e.target.value))} style={{ width: 110 }}>
-                  {Array.from({ length: 10 }, (_, i) => <option key={i} value={i}>{slotLabel(i)}</option>)}
+                  {Array.from({ length: SLOT_COUNT }, (_, i) => <option key={i} value={i}>{slotLabel(i)}</option>)}
                 </select>
                 <span className="muted">〜</span>
                 <select value={roomEnd} onChange={e => setRoomEnd(Number(e.target.value))} style={{ width: 110 }}>
-                  {Array.from({ length: 10 }, (_, i) => <option key={i + 1} value={i + 1}>{slotLabel(i + 1)}</option>)}
+                  {Array.from({ length: SLOT_COUNT }, (_, i) => <option key={i + 1} value={i + 1}>{slotLabel(i + 1)}</option>)}
                 </select>
               </div>
 
