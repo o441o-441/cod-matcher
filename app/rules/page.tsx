@@ -47,6 +47,9 @@ export default function RulesPage() {
             <p className="muted" style={{ fontSize: 13 }}>
               ハードポイント / サーチ&amp;デストロイ / ハイジャックの全モードで以下の7マップを使用します。
             </p>
+            <p style={{ fontSize: 12.5, color: 'var(--amber)', margin: '4px 0 8px' }}>
+              ※ 現在のマッププールは暫定です。競技シーンの動向に合わせて変更される場合があります。
+            </p>
             <ul>
               <li>シルクウォーム</li>
               <li>セントリー</li>
