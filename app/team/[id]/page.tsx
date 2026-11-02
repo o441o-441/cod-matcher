@@ -79,6 +79,7 @@ export default function TeamDetailPage() {
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [myTeamId, setMyTeamId] = useState<string | null>(null)
   const [myRole, setMyRole] = useState<string | null>(null)
+  const [accessDenied, setAccessDenied] = useState(false)
 
   const [searchName, setSearchName] = useState('')
   const [searchResults, setSearchResults] = useState<UserRow[]>([])
@@ -129,6 +130,21 @@ export default function TeamDetailPage() {
 
     setMyTeamId(myMembership?.team_id || null)
     setMyRole(myMembership?.role || null)
+
+    // チームページは所属メンバー (+管理者) のみ閲覧可。
+    // 部外者にはメンバー一覧・招待状況などを見せない (データ取得前にブロック)
+    if (myMembership?.team_id !== teamId) {
+      const { data: me } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', currentUserId)
+        .maybeSingle<{ is_admin: boolean | null }>()
+      if (!me?.is_admin) {
+        setAccessDenied(true)
+        setLoading(false)
+        return
+      }
+    }
 
     const { data: teamData, error: teamError } = await supabase
       .from('teams')
@@ -489,6 +505,29 @@ export default function TeamDetailPage() {
           <em>Team</em>
         </h1>
         <p className="muted">読み込み中...</p>
+      </main>
+    )
+  }
+
+  if (accessDenied) {
+    return (
+      <main>
+        <div className="eyebrow">TEAM DETAIL</div>
+        <h1 className="display" style={{ marginBottom: 8 }}>
+          <em>Team</em>
+        </h1>
+        <div className="section" style={{ maxWidth: 600, margin: '0 auto' }}>
+          <div className="card-strong">
+            <div className="sec-title">🔒 このページは閲覧できません</div>
+            <p className="muted" style={{ marginTop: 0, lineHeight: 1.8 }}>
+              チームページはそのチームのメンバーのみ閲覧できます。
+            </p>
+            <div className="row" style={{ marginTop: 12 }}>
+              <button className="btn-primary" onClick={() => router.push('/menu')}>メニューへ戻る</button>
+              <button className="btn-ghost" onClick={() => router.push('/custom/board')}>交流戦ボードへ</button>
+            </div>
+          </div>
+        </div>
       </main>
     )
   }

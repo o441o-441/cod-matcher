@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { LoadingCard, EmptyCard } from '@/components/UIState'
 
@@ -56,25 +55,24 @@ export default function TeamsPage() {
           <EmptyCard title="チームがありません" message="" />
         ) : (
           <div className="stack">
+            {/* チームページは所属メンバーのみ閲覧可のため、一覧からはリンクしない */}
             {teams.map((t) => (
-              <Link key={t.id} href={`/team/${t.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                <div className="card glow-hover">
-                  <div className="rowx">
-                    <div>
-                      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem' }}>
-                        {t.name}
-                      </div>
-                      <p className="muted">
-                        {t.wins ?? 0}勝 {t.losses ?? 0}敗 / {t.matches_played ?? 0}試合
-                      </p>
+              <div key={t.id} className="card">
+                <div className="rowx">
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem' }}>
+                      {t.name}
                     </div>
-                    <div className="stat">
-                      <span className="stat-label">RATING</span>
-                      <span className="stat-val">{t.rating ?? '-'}</span>
-                    </div>
+                    <p className="muted">
+                      {t.wins ?? 0}勝 {t.losses ?? 0}敗 / {t.matches_played ?? 0}試合
+                    </p>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-label">RATING</span>
+                    <span className="stat-val">{t.rating ?? '-'}</span>
                   </div>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}
