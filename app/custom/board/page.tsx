@@ -10,7 +10,7 @@ import { gtmEvent } from '@/lib/gtm'
 // ============================================================
 // 交流戦ボード (Scrim Board) — チームの空き時間を出し合い、
 // 相手チームの空き枠を選んでその場で対戦を確定するボード。
-// STEP1 で1週間分の自分の空きを入力し、STEP2 で日付を
+// STEP1 で2週間分の自分の空きを入力し、STEP2 で日付を
 // 切り替えて相手チームの空き枠を見る。
 // データは member_availability / scrim_slot_counts /
 // scrim_matches / scrim_team_prefs (Supabase) に接続済み。
@@ -49,7 +49,9 @@ type RoomRow = {
 
 type RoomMember = { uid: string; name: string; rating: number | null }
 
-const DAYS = 7
+// 表示・入力できる日数。サーバー側 (rpc_scrimboard_set_availability /
+// rpc_scrimboard_confirm) の許可範囲が「今日〜+13日」なので最大14
+const DAYS = 14
 const SLOTS = ['20:00', '20:30', '21:00', '21:30', '22:00', '22:30', '23:00', '23:30', '24:00', '24:30']
 const slotLabel = (i: number) => `${20 + Math.floor(i / 2)}:${i % 2 ? '30' : '00'}`
 
@@ -993,7 +995,7 @@ export default function ScrimBoardPage() {
             交流戦<em>ボード。</em>
           </h1>
           <p className="muted" style={{ margin: '12px 0 0', fontSize: 14, maxWidth: 560 }}>
-            1週間分のチームの空き時間を出し合って、対戦相手をその場で確定。成立すると両チームの Discord に通知が届きます。
+            2週間分のチームの空き時間を出し合って、対戦相手をその場で確定。成立すると両チームの Discord に通知が届きます。
           </p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
@@ -1023,7 +1025,7 @@ export default function ScrimBoardPage() {
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
             <div>
               <div className="sec-title" style={{ marginBottom: 4 }}>STEP 1</div>
-              <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.02em' }}>自分の空き時間を入れる（1週間分）</div>
+              <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.02em' }}>自分の空き時間を入れる（2週間分）</div>
             </div>
             <div className="mono" style={{ fontSize: 12, color: myOpenCount ? 'var(--success)' : 'var(--text-dim)', paddingTop: 6 }}>
               {dayLabel(editDay)}: {myStat}

@@ -439,7 +439,7 @@ export default function CustomPage() {
       {tab === 'scrim' && !featureLocked('scrim') && (
         <div className="section">
           <h2>交流戦ボード</h2>
-          <p className="muted">1週間分のチームの空き時間を出し合い、ボードから相手チームを選んでその場で対戦を確定します。成立すると両チームの Discord に通知されます。</p>
+          <p className="muted">2週間分のチームの空き時間を出し合い、ボードから相手チームを選んでその場で対戦を確定します。成立すると両チームの Discord に通知されます。</p>
           <div className="card-strong" style={{ marginTop: 16 }}>
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <div>
