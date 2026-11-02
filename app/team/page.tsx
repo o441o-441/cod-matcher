@@ -18,20 +18,33 @@ export default function TeamsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [teams, setTeams] = useState<TeamRow[]>([])
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     const init = async () => {
-      const { data, error } = await supabase
-        .from('teams')
-        .select('id, name, rating, wins, losses, matches_played')
-        .eq('is_disbanded', false)
-        .order('rating', { ascending: false })
-        .limit(50)
+      const [{ data, error }, sessionRes] = await Promise.all([
+        supabase
+          .from('teams')
+          .select('id, name, rating, wins, losses, matches_played')
+          .eq('is_disbanded', false)
+          .order('rating', { ascending: false })
+          .limit(50),
+        supabase.auth.getSession(),
+      ])
 
       if (error) {
         console.error('teams list error:', error)
       } else {
         setTeams((data ?? []) as TeamRow[])
+      }
+
+      // 管理者のみチーム詳細ページへのリンクを表示 (詳細ページは管理者バイパスあり)
+      const uid = sessionRes.data.session?.user?.id
+      if (uid) {
+        const { data: me } = await supabase
+          .from('profiles').select('is_admin').eq('id', uid)
+          .maybeSingle<{ is_admin: boolean | null }>()
+        setIsAdmin(!!me?.is_admin)
       }
       setLoading(false)
     }
@@ -55,9 +68,18 @@ export default function TeamsPage() {
           <EmptyCard title="チームがありません" message="" />
         ) : (
           <div className="stack">
-            {/* チームページは所属メンバーのみ閲覧可のため、一覧からはリンクしない */}
+            {/* チームページは所属メンバーのみ閲覧可のため、一般ユーザーにはリンクしない。
+                管理者のみ詳細ページへ飛べる (詳細ページ側に管理者バイパスあり) */}
             {teams.map((t) => (
-              <div key={t.id} className="card">
+              <div
+                key={t.id}
+                className={isAdmin ? 'card glow-hover' : 'card'}
+                style={isAdmin ? { cursor: 'pointer' } : undefined}
+                onClick={isAdmin ? () => router.push(`/team/${t.id}`) : undefined}
+                role={isAdmin ? 'button' : undefined}
+                tabIndex={isAdmin ? 0 : undefined}
+                onKeyDown={isAdmin ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/team/${t.id}`) } } : undefined}
+              >
                 <div className="rowx">
                   <div>
                     <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem' }}>
