@@ -58,7 +58,7 @@ const SLOT_COUNT = 48
 const EVENING_SLOT = 30 // 20:00 — ボードのデフォルト表示開始位置 (21時周辺が見える)
 const SLOT_PX = 56 // ボードのセル幅(px)。gap 5px と合わせて位置計算に使う
 const NIGHT_START = 28 // 19:00 — STEP1の初期表示の開始 (全日表示はボタンで展開)
-const NIGHT_END = 40 // 25:00 — STEP1の初期表示の終了 (この枠は含まない)
+const NIGHT_END = 42 // 26:00 — STEP1の初期表示の終了 (この枠は含まない)
 const slotLabel = (i: number) => `${5 + Math.floor(i / 2)}:${i % 2 ? '30' : '00'}`
 const SLOTS = Array.from({ length: SLOT_COUNT }, (_, i) => slotLabel(i))
 
