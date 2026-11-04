@@ -15,6 +15,7 @@ const MAP_GRADS: Record<string, [string, string, string]> = {
   coal:     ['#1a2430', '#3e617e', '#9ccfee'],
   silkworm: ['#241a30', '#5a3e7e', '#cfaaee'],
   sentry:   ['#1a2a1a', '#3e6e3e', '#aaeaaa'],
+  lithium:  ['#201a2e', '#4e3e8a', '#b8aaff'],
   munitions:['#302010', '#7e5a2e', '#eec88a'],
   mumbai:   ['#301a14', '#8a4a30', '#ffb288'],
   reactor:  ['#102820', '#2e6e52', '#8aeec0'],

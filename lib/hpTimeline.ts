@@ -22,6 +22,7 @@ export const MAP_HILL_CYCLES: Record<string, number> = {
   'コール': 5,
   'シルクウォーム': 6,
   'セントリー': 5,
+  'リチウム': 6,
   'ミューニション': 6,
   'ムンバイ': 5,
   'リアクター': 5,

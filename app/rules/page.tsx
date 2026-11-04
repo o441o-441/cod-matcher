@@ -42,23 +42,39 @@ export default function RulesPage() {
       <div className="section">
         <p className="sec-title">マップ &amp; モード</p>
         <div className="card-strong">
-          <div className="card">
-            <h3>マッププール（全モード共通）</h3>
-            <p className="muted" style={{ fontSize: 13 }}>
-              ハードポイント / サーチ&amp;デストロイ / ハイジャックの全モードで以下の7マップを使用します。
-            </p>
-            <p style={{ fontSize: 12.5, color: 'var(--amber)', margin: '4px 0 8px' }}>
-              ※ 現在のマッププールは暫定です。競技シーンの動向に合わせて変更される場合があります。
-            </p>
-            <ul>
-              <li>シルクウォーム</li>
-              <li>セントリー</li>
-              <li>ミューニション</li>
-              <li>ムンバイ</li>
-              <li>リアクター</li>
-              <li>ルーフトップ</li>
-              <li>ロータス</li>
-            </ul>
+          <p style={{ fontSize: 12.5, color: 'var(--amber)', margin: '0 0 10px' }}>
+            ※ 現在のマッププールは暫定です。競技シーンの動向に合わせて変更される場合があります。
+          </p>
+          <div className="grid grid-3">
+            <div className="card">
+              <h3>ハードポイント</h3>
+              <ul>
+                <li>セントリー</li>
+                <li>ミューニション</li>
+                <li>リアクター</li>
+                <li>リチウム</li>
+                <li>ルーフトップ</li>
+                <li>ロータス</li>
+              </ul>
+            </div>
+            <div className="card">
+              <h3>サーチ&amp;デストロイ</h3>
+              <ul>
+                <li>コール</li>
+                <li>ミューニション</li>
+                <li>リアクター</li>
+                <li>ルーフトップ</li>
+                <li>ロータス</li>
+              </ul>
+            </div>
+            <div className="card">
+              <h3>ハイジャック</h3>
+              <ul>
+                <li>ミューニション</li>
+                <li>リチウム</li>
+                <li>ロータス</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>

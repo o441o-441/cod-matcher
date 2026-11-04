@@ -131,12 +131,11 @@ type MatchMessageRow = {
   } | null;
 };
 
-// 全モード共通の7マッププール (2026-11-02 改定)
-const SHARED_POOL = ["シルクウォーム", "セントリー", "ミューニション", "ムンバイ", "リアクター", "ルーフトップ", "ロータス"];
+// モード別マッププール (2026-11-04 改定)
 const PHASE_POOLS: Record<"hp" | "snd" | "ovl", string[]> = {
-  hp: SHARED_POOL,
-  snd: SHARED_POOL,
-  ovl: SHARED_POOL,
+  hp: ["セントリー", "ミューニション", "リアクター", "リチウム", "ルーフトップ", "ロータス"],
+  snd: ["コール", "ミューニション", "リアクター", "ルーフトップ", "ロータス"],
+  ovl: ["ミューニション", "リチウム", "ロータス"],
 };
 
 const PHASE_LABEL: Record<BanpickPhase, string> = {
@@ -175,6 +174,7 @@ const MAP_META: Record<string, { id: string; en: string }> = {
   "コール": { id: "coal", en: "Coal" },
   "シルクウォーム": { id: "silkworm", en: "Silkworm" },
   "セントリー": { id: "sentry", en: "Sentry" },
+  "リチウム": { id: "lithium", en: "Lithium" },
   "ミューニション": { id: "munitions", en: "Munitions" },
   "ムンバイ": { id: "mumbai", en: "Mumbai" },
   "リアクター": { id: "reactor", en: "Reactor" },
