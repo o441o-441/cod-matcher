@@ -321,6 +321,12 @@ export default function MenuPage() {
               </button>
             )}
             {isAdmin && (
+              <button className="btn-ghost btn-block" onClick={() => router.push('/admin/lk')}>
+                LK解析・データ登録
+                <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            )}
+            {isAdmin && (
               <button className="btn-ghost btn-block" onClick={() => router.push('/admin/campaign')}>
                 キャンペーン集計・抽選
                 <svg width={12} height={12} viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>

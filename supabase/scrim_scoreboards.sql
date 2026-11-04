@@ -68,6 +68,8 @@ CREATE POLICY scoreboards_upload ON storage.objects
 -- ------------------------------------------------------------
 -- 保存RPC (試合参加者のみ。同じゲーム番号は上書き)
 -- p_players: [{side, raw_name, user_id?, kills, deaths, assists, damage, stats}]
+-- ※ submit_game / delete_game は admin_lk_register.sql で上書き済み
+--   (管理者バイパス追加)。変更はそちらで。
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.rpc_scrim_submit_game(
   p_match_id uuid,

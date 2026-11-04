@@ -92,6 +92,7 @@ export default function ScrimMatchPage() {
   const [contacts, setContacts] = useState<{ host: string | null; guest: string | null }>({ host: null, guest: null })
   const [memberNames, setMemberNames] = useState<Record<string, { name: string; side: 'host' | 'guest' }>>({})
   const [myRoomSide, setMyRoomSide] = useState(false) // 自分が混成ルーム側のメンバーか
+  const [isAdmin, setIsAdmin] = useState(false)
   const [messages, setMessages] = useState<MessageRow[]>([])
   const [input, setInput] = useState('')
   const [lobbyCode, setLobbyCode] = useState('')
@@ -153,6 +154,10 @@ export default function ScrimMatchPage() {
   const imageUrl = (path: string) =>
     supabase.storage.from('scoreboards').getPublicUrl(path).data.publicUrl
 
+  // 管理者はLK解析・スタッツ登録を代行できる (RPC側にもバイパスあり)
+  const canEditData = (!!match && (
+    (!!myTeamId && (match.host_team_id === myTeamId || match.guest_team_id === myTeamId)) || myRoomSide
+  )) || isAdmin
   const isMember = !!match && (
     (!!myTeamId && (match.host_team_id === myTeamId || match.guest_team_id === myTeamId)) || myRoomSide
   )
@@ -222,9 +227,13 @@ export default function ScrimMatchPage() {
         const roomMembersList = ((roomMemberRows ?? []) as unknown as { room_id: string; user_id: string; profiles: { display_name: string | null } }[])
 
         if (uid) {
-          const { data: tm } = await supabase.from('team_members').select('team_id').eq('user_id', uid).maybeSingle()
+          const [{ data: tm }, { data: me }] = await Promise.all([
+            supabase.from('team_members').select('team_id').eq('user_id', uid).maybeSingle(),
+            supabase.from('profiles').select('is_admin').eq('id', uid).maybeSingle<{ is_admin: boolean | null }>(),
+          ])
           const teamId = (tm as { team_id: string } | null)?.team_id ?? null
           setMyTeamId(teamId)
+          setIsAdmin(!!me?.is_admin)
           const inRoomSide = roomMembersList.some(r => r.user_id === uid)
           setMyRoomSide(inRoomSide)
 
@@ -398,7 +407,7 @@ export default function ScrimMatchPage() {
         <div className="card-strong">
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <div className="sec-title" style={{ margin: 0 }}>試合結果・スコアボード</div>
-            {isMember && !isCancelled && (
+            {canEditData && !isCancelled && (
               <button type="button" className="btn-primary btn-sm" onClick={() => setVideoOpen(v => !v)}>
                 🎬 LK動画から解析
               </button>
@@ -408,7 +417,7 @@ export default function ScrimMatchPage() {
             LK動画(観戦/配信視点の録画)を読み込んで、各ゲームのスコアボード画面を登録すると、AIがスタッツを読み取って保存します。ハードポイントは地点保持の推移も記録されます。間違っていた場合は「取り消す」で削除して再解析できます。
           </p>
 
-          {videoOpen && isMember && !isCancelled && (
+          {videoOpen && canEditData && !isCancelled && (
             <HpVideoAnalyzer
               matchId={matchId}
               games={games}
@@ -436,7 +445,7 @@ export default function ScrimMatchPage() {
                       <span style={{ color: (g.guest_score ?? 0) > (g.host_score ?? 0) ? 'var(--success)' : 'var(--text)' }}>{g.guest_score ?? '-'}</span> {guestName}
                     </span>
                     <a href={imageUrl(g.image_path)} target="_blank" rel="noopener noreferrer" className="muted" style={{ fontSize: 11.5, textDecoration: 'underline', marginLeft: 'auto' }}>📷 画像</a>
-                    {isMember && !isCancelled && (
+                    {canEditData && !isCancelled && (
                       <button type="button" className="btn-ghost btn-sm" style={{ fontSize: 11 }}
                         onClick={() => setDeleteGameTarget(g)}>取り消す</button>
                     )}
@@ -479,7 +488,7 @@ export default function ScrimMatchPage() {
               hostName={hostName}
               guestName={guestName}
               mySide={mySide}
-              canEdit={isMember && !isCancelled}
+              canEdit={canEditData && !isCancelled}
               refresh={tlRefresh}
               onChanged={() => setTlRefresh(x => x + 1)}
             />

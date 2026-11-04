@@ -34,6 +34,8 @@ CREATE POLICY scrim_game_hp_timeline_select_all ON public.scrim_game_hp_timeline
 
 -- ------------------------------------------------------------
 -- 保存RPC (試合参加メンバーのみ。同じゲームは上書き)
+-- ※ submit/delete とも admin_lk_register.sql で上書き済み
+--   (管理者バイパス追加)。変更はそちらで。
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.rpc_scrim_submit_hp_timeline(
   p_game_id uuid,
