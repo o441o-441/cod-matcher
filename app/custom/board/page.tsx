@@ -80,6 +80,9 @@ const DOW = ['日', '月', '火', '水', '木', '金', '土']
 // マップ数 → 30分枠数への換算。分/マップは scrim_formats テーブルから取得
 // ※ サーバー側 (rpc_scrimboard_confirm) にも同じ計算があり、そちらが正
 const mapsToSlots = (minutesPerMap: number, maps: number) => Math.ceil((minutesPerMap * maps) / 30)
+// ハーポは6マップ (ハーポ回し) のとき特例で60分 (サーバー側と同じ)
+const hpMapsToSlots = (minutesPerMap: number, maps: number) =>
+  maps === 6 ? 2 : mapsToSlots(minutesPerMap, maps)
 type FormatMinutes = { hp: number; snd: number; ovl: number }
 const DEFAULT_MINUTES: FormatMinutes = { hp: 15, snd: 20, ovl: 15 }
 const HP_MAP_OPTIONS = [1, 2, 3, 4, 5, 6]
@@ -446,10 +449,10 @@ export default function ScrimBoardPage() {
 
   // ---- 導出値 ----
   const slotsNeeded = () => {
-    if (mode === 'hp') return mapsToSlots(formats.hp, 6) // ハーポ回し = 6マップ
+    if (mode === 'hp') return hpMapsToSlots(formats.hp, 6) // ハーポ回し = 6マップ = 60分
     if (mode === 'snd') return mapsToSlots(formats.snd, sndMaps)
     if (mode === 'ovl') return mapsToSlots(formats.ovl, ovlMaps)
-    if (mode === 'custom') return mapsToSlots(formats.hp, combo.hp) + mapsToSlots(formats.snd, combo.snd) + mapsToSlots(formats.ovl, combo.ovl)
+    if (mode === 'custom') return hpMapsToSlots(formats.hp, combo.hp) + mapsToSlots(formats.snd, combo.snd) + mapsToSlots(formats.ovl, combo.ovl)
     return 0 // all
   }
   const comboLabel = () => {
@@ -959,7 +962,7 @@ export default function ScrimBoardPage() {
     ? (isMySide(cancelMatch, 'host') ? sideName(cancelMatch, 'guest') : sideName(cancelMatch, 'host'))
     : ''
 
-  const modeDefs: [Mode, string][] = [['hp', 'ハーポ回し · 90分'], ['snd', 'サーチ'], ['ovl', 'ハイジャック'], ['custom', '複合'], ['all', 'すべて (俯瞰)']]
+  const modeDefs: [Mode, string][] = [['hp', 'ハーポ回し · 60分'], ['snd', 'サーチ'], ['ovl', 'ハイジャック'], ['custom', '複合'], ['all', 'すべて (俯瞰)']]
   const showMaps = mode === 'snd' || mode === 'ovl'
 
   // 日付タブ

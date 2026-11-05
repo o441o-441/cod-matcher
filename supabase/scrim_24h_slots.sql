@@ -305,7 +305,9 @@ BEGIN
   SELECT minutes_per_map INTO v_ovl_min FROM scrim_formats WHERE format = 'ovl';
   v_hp_min := coalesce(v_hp_min, 15); v_snd_min := coalesce(v_snd_min, 20); v_ovl_min := coalesce(v_ovl_min, 15);
 
-  v_len := (v_hp_min * p_hp_maps + 29) / 30 + (v_snd_min * p_snd_maps + 29) / 30 + (v_ovl_min * p_ovl_maps + 29) / 30;
+  -- ハーポ回し (HP6マップ) は特例で60分 (回し運用のため1マップあたりが短い)
+  v_len := ((CASE WHEN p_hp_maps = 6 THEN 60 ELSE v_hp_min * p_hp_maps END) + 29) / 30
+    + (v_snd_min * p_snd_maps + 29) / 30 + (v_ovl_min * p_ovl_maps + 29) / 30;
   IF v_len <= 0 THEN RAISE EXCEPTION 'モードが選択されていません'; END IF;
 
   v_end := p_slot_start + v_len;
