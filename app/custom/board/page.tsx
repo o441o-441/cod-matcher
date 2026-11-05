@@ -84,7 +84,7 @@ const mapsToSlots = (minutesPerMap: number, maps: number) => Math.ceil((minutesP
 const hpMapsToSlots = (minutesPerMap: number, maps: number) =>
   maps === 6 ? 2 : mapsToSlots(minutesPerMap, maps)
 type FormatMinutes = { hp: number; snd: number; ovl: number }
-const DEFAULT_MINUTES: FormatMinutes = { hp: 15, snd: 20, ovl: 15 }
+const DEFAULT_MINUTES: FormatMinutes = { hp: 10, snd: 20, ovl: 15 }
 const HP_MAP_OPTIONS = [1, 2, 3, 4, 5, 6]
 const SND_MAP_OPTIONS = [1, 2, 3, 4, 5, 6]
 const OVL_MAP_OPTIONS = [1, 2, 3, 4]
