@@ -644,7 +644,7 @@ export default function TeamDetailPage() {
           <div className="card-strong">
             <div className="sec-title">
               {team?.roster_mode === 'solo'
-                ? `メンバー (代表1人 + ゲームID ${(team?.guest_game_ids || []).length}人)`
+                ? `メンバー (アカウント${members.length}人 + ゲームID ${(team?.guest_game_ids || []).length}人)`
                 : `メンバー (${members.length}/${MAX_MEMBERS})`}
             </div>
 
