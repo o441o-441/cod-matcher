@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ToastProvider'
 import { LoadingCard } from '@/components/UIState'
+import ScrimStatsDashboard from '@/components/ScrimStatsDashboard'
 
 // ============================================================
 // 運営用: LK動画解析・データ登録ページ
@@ -44,6 +45,8 @@ export default function AdminLkPage() {
   const [sndMaps, setSndMaps] = useState(0)
   const [ovlMaps, setOvlMaps] = useState(0)
   const [busy, setBusy] = useState(false)
+  // 累計データ表示用 (記録用チーム含む任意のチーム)
+  const [statsTeamId, setStatsTeamId] = useState('')
 
   const load = useCallback(async () => {
     const [{ data: teamRows }, { data: matchRows }] = await Promise.all([
@@ -203,6 +206,27 @@ export default function AdminLkPage() {
           </button>
         </div>
       </div>
+
+      {/* 累計データ (チームページと同じスタッツダッシュボード) */}
+      <div className="section card-strong">
+        <div className="rowx">
+          <div className="sec-title" style={{ marginBottom: 0 }}>累計データ</div>
+          <select
+            value={statsTeamId}
+            onChange={e => setStatsTeamId(e.target.value)}
+            style={{ width: 'auto', minWidth: 220 }}
+          >
+            <option value="">チームを選択 (記録用チームも可)</option>
+            {teams.map(t => (
+              <option key={t.id} value={t.id}>{t.name}{t.is_disbanded ? ' (記録用/解散済み)' : ''}</option>
+            ))}
+          </select>
+        </div>
+        <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
+          チームページの累計データと同じ集計です。管理者登録の対戦も、そのチームが参加した対戦として含まれます。
+        </p>
+      </div>
+      {statsTeamId && <ScrimStatsDashboard key={statsTeamId} teamId={statsTeamId} />}
 
       {/* 最近の対戦 */}
       <div className="section card-strong">
