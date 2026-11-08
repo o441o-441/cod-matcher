@@ -153,6 +153,37 @@ begin
   update public.parties p set status = 'matched', updated_at = now() where p.id in (select party_id from tmp_selected_entries) and p.status in ('open','queued');
   insert into public.match_messages (match_id, sender_user_id, message_type, body) values (v_match_id, null, 'system', 'match created');
 
+  -- ══ バンピック廃止 (2026-11-08): マップはローテーション順に自動選出、サイドはランダム ══
+  -- マッチ成立と同時に完了済みバンピックセッションを作成し、status を ready にする
+  -- (プレイヤーはバンピック画面を経由せず試合情報確定画面 /match/[id]/confirm に直行)。
+  -- ローテーション位置は app_settings.ranked_map_rotation_idx で全体共有
+  declare
+    v_rot_maps text[] := ARRAY['セントリー','ミューニション','リアクター','リチウム','ルーフトップ','ロータス'];
+    v_rot int;
+    v_rot_map text;
+    v_rot_side text;
+  begin
+    select coalesce(nullif(value, '')::int, 0) into v_rot from public.app_settings where key = 'ranked_map_rotation_idx';
+    v_rot := coalesce(v_rot, 0);
+    v_rot_map := v_rot_maps[1 + (v_rot % array_length(v_rot_maps, 1))];
+    insert into public.app_settings (key, value) values ('ranked_map_rotation_idx', (v_rot + 1)::text)
+    on conflict (key) do update set value = (v_rot + 1)::text;
+    v_rot_side := case when random() < 0.5 then 'JSOC' else 'ギルド' end;
+
+    insert into public.banpick_sessions (match_id, status, phase, selected_maps, completed_at, last_action_at,
+      current_turn_match_team_id, current_action_type, turn_number)
+    values (v_match_id, 'completed', 'completed', jsonb_build_object(
+      'team_a', v_alpha_match_team_id, 'team_b', v_bravo_match_team_id,
+      'selected_mode', 'hp',
+      'hp', jsonb_build_object('bans', '[]'::jsonb, 'map', v_rot_map, 'side', v_rot_side)
+    ), now(), now(), null, null, 0);
+
+    perform public._auto_assign_roles(v_match_id, 'hp');
+    update public.matches set status = 'ready', started_at = now() where id = v_match_id;
+    insert into public.match_messages (match_id, sender_user_id, message_type, body)
+    values (v_match_id, null, 'system', 'マップ自動選出 (HP / ' || v_rot_map || ' / ローテーション順) · サイド抽選: ' || v_rot_side);
+  end;
+
   match_id := v_match_id; alpha_match_team_id := v_alpha_match_team_id; bravo_match_team_id := v_bravo_match_team_id; alpha_member_count := v_alpha_players; bravo_member_count := v_bravo_players;
   return next;
 end;

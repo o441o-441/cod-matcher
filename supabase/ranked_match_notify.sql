@@ -29,13 +29,14 @@ BEGIN
   WHERE mt.match_id = NEW.id;
   IF v_user_ids IS NULL THEN RETURN NEW; END IF;
 
-  v_link := '/match/' || NEW.id || '/banpick';
+  -- バンピック廃止 (2026-11-08): マップ自動選出のため試合情報確定画面へ直行
+  v_link := '/match/' || NEW.id || '/confirm';
 
   -- サイト内通知 (8人全員)
   BEGIN
     INSERT INTO notifications (user_id, type, body, link, is_read)
     SELECT u, 'match_found',
-           '⚔️ ランクマッチが成立しました！BAN/PICKを開始してください',
+           '⚔️ ランクマッチが成立しました！試合情報を確認してください',
            v_link, false
     FROM unnest(v_user_ids) AS u;
   EXCEPTION WHEN OTHERS THEN NULL;
@@ -50,10 +51,10 @@ BEGIN
     PERFORM _discord_post_tracked('discord_ranked_webhook', jsonb_build_object(
       'content',
         coalesce((SELECT string_agg('<@' || x || '>', ' ') FROM unnest(v_mention_ids) AS x), '')
-        || E'\n⚔️ **ランクマッチが成立しました！BAN/PICKを開始してください**',
+        || E'\n⚔️ **ランクマッチが成立しました！試合情報を確認してください**',
       'allowed_mentions', jsonb_build_object('parse', jsonb_build_array(), 'users', coalesce(to_jsonb(v_mention_ids), '[]'::jsonb)),
       'embeds', jsonb_build_array(jsonb_build_object(
-        'title', '⚔️ マッチ成立 — BAN/PICKへ',
+        'title', '⚔️ マッチ成立 — 試合情報へ',
         'url', 'https://ascent-esports.com' || v_link,
         'color', 65535,
         'footer', jsonb_build_object('text', 'ASCENT · Ranked'),

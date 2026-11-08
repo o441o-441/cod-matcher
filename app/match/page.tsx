@@ -629,7 +629,7 @@ export default function MatchPage() {
         gtmEvent('match_found');
         playMatchFound();
         await loadMyState({ silent: true });
-        router.push(`/match/${row.match_id}/banpick`);
+        router.push(`/match/${row.match_id}/confirm`);
       } else {
         await loadMyState({ silent: true });
       }
@@ -642,12 +642,14 @@ export default function MatchPage() {
   useEffect(() => {
     if (!myActiveMatch?.id) return;
     if (routePushedRef.current) return;
-    if (myActiveMatch.status === "banpick") {
+    // バンピック廃止 (マップ自動選出) 後は ready で成立するが、
+    // 旧データ互換のため banpick ステータスも試合情報画面へ送る
+    if (myActiveMatch.status === "banpick" || myActiveMatch.status === "ready") {
       routePushedRef.current = true;
-      setInfoText("マッチが成立しました。バンピック画面へ移動します。");
+      setInfoText("マッチが成立しました。試合情報画面へ移動します。");
       gtmEvent('match_found');
       playMatchFound();
-      router.push(`/match/${myActiveMatch.id}/banpick`);
+      router.push(`/match/${myActiveMatch.id}/confirm`);
     }
   }, [myActiveMatch?.id, myActiveMatch?.status, router]);
 
@@ -1002,7 +1004,7 @@ export default function MatchPage() {
         setInfoText("マッチが成立しました。");
         playMatchFound();
         await loadMyState();
-        router.push(`/match/${row.match_id}/banpick`);
+        router.push(`/match/${row.match_id}/confirm`);
         return;
       }
 
@@ -1018,17 +1020,19 @@ export default function MatchPage() {
   const handleGoToMyMatch = () => {
     if (!myActiveMatch?.id) return;
 
-    if (myActiveMatch.status === "banpick") {
-      router.push(`/match/${myActiveMatch.id}/banpick`);
+    // バンピック廃止: 成立直後 (ready) は試合情報確定画面へ。
+    // 旧 banpick ステータスの残骸も同じ画面へ送る
+    if (myActiveMatch.status === "banpick" || myActiveMatch.status === "ready") {
+      router.push(`/match/${myActiveMatch.id}/confirm`);
       return;
     }
 
-    if (["ready", "in_progress", "report_pending"].includes(myActiveMatch.status)) {
+    if (["in_progress", "report_pending"].includes(myActiveMatch.status)) {
       router.push(`/match/${myActiveMatch.id}/report`);
       return;
     }
 
-    router.push(`/match/${myActiveMatch.id}/banpick`);
+    router.push(`/match/${myActiveMatch.id}/confirm`);
   };
 
   /* ── Compute avg rating for party ── */
