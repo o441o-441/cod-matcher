@@ -60,6 +60,7 @@ export default function RulesPage() {
             <div className="card">
               <h3>サーチ&amp;デストロイ</h3>
               <ul>
+                <li>シルクウォーム</li>
                 <li>コール</li>
                 <li>ミューニション</li>
                 <li>リアクター</li>
