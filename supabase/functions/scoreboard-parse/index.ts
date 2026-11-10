@@ -170,13 +170,20 @@ Deno.serve(async (req) => {
         keys: [normName(g.split('#')[0])].filter(Boolean),
       }))
     }
-    const hostRoster = [...buildRoster(hostIds), ...await soloGuestEntries(match.host_team_id)]
-    const guestRoster = [...buildRoster(guestIds), ...await soloGuestEntries(match.guest_team_id)]
-
     // OCR/AIが混同しやすい文字を同一視する (o↔0↔ø, l/i↔1 など)。
     // "o441o" を "o4410" と誤読しても本人に紐付くように、
     // 通常一致で見つからない時だけこの折りたたみ比較へフォールバックする
     const foldConfusables = (s: string) => s.replace(/[0øØ]/g, 'o').replace(/[1li]/g, 'l')
+
+    // ASCENT登録メンバーと同一視できるゲストID (代表が自分のゲーム内名も
+    // ゲスト登録しているケース) はロスターから除外し、本人 (user_id) に寄せる。
+    // 残すとゲスト側の完全一致が勝ち、同一人物が別キーに割れてしまう
+    const composeRoster = (regs: Roster[], guests: Roster[]): Roster[] => {
+      const regKeys = new Set(regs.flatMap(r => r.keys.map(foldConfusables)))
+      return [...regs, ...guests.filter(g => !g.keys.some(k => regKeys.has(foldConfusables(k))))]
+    }
+    const hostRoster = composeRoster(buildRoster(hostIds), await soloGuestEntries(match.host_team_id))
+    const guestRoster = composeRoster(buildRoster(guestIds), await soloGuestEntries(match.guest_team_id))
     const matchUser = (name: string, roster: Roster[]) => {
       const n = normName(name)
       if (!n) return null
