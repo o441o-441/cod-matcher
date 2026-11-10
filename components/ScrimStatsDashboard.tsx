@@ -29,8 +29,8 @@ const normName = (s: string) => s
   .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
   .replace(/\s+/g, '')
   .trim()
-// OCR/AIが混同しやすい文字の同一視 (o↔0, l/i↔1)
-const foldConfusables = (s: string) => s.replace(/0/g, 'o').replace(/[1li]/g, 'l')
+// OCR/AIが混同しやすい文字の同一視 (o↔0↔ø, l/i↔1)
+const foldConfusables = (s: string) => s.replace(/[0øØ]/g, 'o').replace(/[1li]/g, 'l')
 
 type GameRow = {
   id: string
