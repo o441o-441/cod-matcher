@@ -163,9 +163,9 @@ BEGIN
   SELECT team_id INTO v_existing FROM team_members WHERE user_id = v_uid LIMIT 1;
   IF v_existing IS NOT NULL THEN RAISE EXCEPTION '既にチームに所属しています'; END IF;
 
-  -- Check member cap (max 5)
+  -- Check member cap (max 6)
   SELECT count(*) INTO v_member_count FROM team_members WHERE team_id = p_team_id;
-  IF v_member_count >= 5 THEN RAISE EXCEPTION 'チームは最大5人までです'; END IF;
+  IF v_member_count >= 6 THEN RAISE EXCEPTION 'チームは最大6人までです'; END IF;
 
   INSERT INTO team_members (team_id, user_id, role)
   VALUES (p_team_id, v_uid, 'member');
@@ -201,7 +201,7 @@ begin
   end if;
 
   select count(*) into v_member_count from team_members where team_id = v_team.id;
-  if v_member_count >= 5 then raise exception 'チームは最大5人までです'; end if;
+  if v_member_count >= 6 then raise exception 'チームは最大6人までです'; end if;
 
   if exists (select 1 from team_invites where team_id = v_team.id and invitee_user_id = p_target_user_id and status = 'pending') then
     raise exception 'このユーザーには招待を送信済みです (承認待ち)';
@@ -262,7 +262,7 @@ begin
   end if;
 
   select count(*) into v_member_count from team_members where team_id = v_inv.team_id;
-  if v_member_count >= 5 then raise exception 'チームが満員です (最大5人)'; end if;
+  if v_member_count >= 6 then raise exception 'チームが満員です (最大6人)'; end if;
 
   insert into team_members (team_id, user_id, role) values (v_inv.team_id, v_uid, 'member');
   update team_invites set status = 'accepted', responded_at = now() where id = p_invite_id;

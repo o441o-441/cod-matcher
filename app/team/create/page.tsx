@@ -197,7 +197,7 @@ export default function CreateTeamPage() {
                     style={{ marginTop: 3 }}
                   />
                   <span>
-                    <b>メンバー登録型</b>（最大5人）
+                    <b>メンバー登録型</b>（最大6人）
                     <span className="muted" style={{ display: 'block', fontSize: 12 }}>
                       メンバーをASCENTに招待して登録。各自が交流戦の空き時間を入力します
                     </span>

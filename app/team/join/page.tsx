@@ -15,7 +15,7 @@ type TeamRow = {
   roster_mode?: 'members' | 'solo'
 }
 
-const MAX_MEMBERS = 5
+const MAX_MEMBERS = 6
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function TeamJoinInner() {
