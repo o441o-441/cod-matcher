@@ -333,6 +333,11 @@ Discord 一択。すでに Discord OAuth が動いているので provider_id �
 - チーム登録時（または設定画面）に通知先チャンネルの webhook URL を登録してもらう
 - 送信は Edge Function 経由。webhook URL をクライアントに露出させない
 - 送信失敗時もマッチ成立自体は成功扱いにする（通知はベストエフォート）
+- **webhook 未設定のチームへのフォールバック（2026-11-13 実装）**: 公式Discordサーバーの
+  交流戦チャンネル（`app_settings` key=`discord_scrim_webhook`）へメンバー全員を
+  メンションして通知する。両チーム未設定なら1投稿に合算。公開チャンネルのため
+  公開連絡先は載せない。reminder のみ30分後に自動削除（`_discord_post_tracked`）。
+  正: `supabase/scrim_official_fallback_notify.sql`（`_scrimboard_notify` の最新定義）
 
 通知内容: 相手チーム名 / 日時レンジ / ASCENT の該当ページへのリンク
 

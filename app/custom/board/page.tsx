@@ -1954,6 +1954,7 @@ export default function ScrimBoardPage() {
                 className="mono" style={{ width: '100%', boxSizing: 'border-box', fontSize: 12.5, padding: '11px 14px' }} />
               <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--text-dim)', lineHeight: 1.7 }}>
                 サーバー設定 → 連携サービス → ウェブフック から発行した URL を貼り付けてください。成立・キャンセルの通知がこのチャンネルに届きます。
+                未設定の場合は、ASCENT公式Discordサーバーの交流戦チャンネルでメンバーをメンションしてお知らせします。
                 {teamInfo && !teamInfo.isOwner && ' チーム設定への保存はオーナーのみ可能です（あなたの場合はこの端末に保存されます）。'}
               </p>
               {whError && (
