@@ -96,11 +96,26 @@ export default function RulesPage() {
             <h3>CDL ハードポイント</h3>
             <p>「CDL ハードポイント」を選択。ルール設定から以下を変更してください。</p>
             <ul>
-              <li>チームタブ → キルカメラ：<strong>ON</strong></li>
-              <li>チームタブ → リスポーンの無効期間：<strong>3秒</strong></li>
+              <li>チームタブ → リスポーンの無効期間：<strong>2.5秒</strong></li>
               <li>チームタブ → 味方への誤射：<strong>処罰</strong></li>
               <li>チームタブ → 味方への誤射の処罰リミット：<strong>5キル</strong></li>
+              <li>ゲームプレイタブ → タクティカルダッシュ：<strong>オン</strong></li>
             </ul>
+          </div>
+        </div>
+      </div>
+
+      <div className="section">
+        <p className="sec-title">個人設定【コントローラー】</p>
+        <div className="card-strong">
+          <div className="card">
+            <ul>
+              <li>移動 → ダッシュアシスト：<strong>オフ</strong></li>
+              <li>移動の詳細設定 → タクティカルダッシュの発動：<strong>2度押し</strong></li>
+            </ul>
+            <p style={{ fontSize: 12.5, color: 'var(--amber)', margin: '10px 0 0' }}>
+              ※ ダッシュアシストや自動タクティカルダッシュは禁止です。
+            </p>
           </div>
         </div>
       </div>
@@ -113,7 +128,6 @@ export default function RulesPage() {
               <h3>武器</h3>
               <ul>
                 <li>ショットガン・LMG・スナイパー・マークスマン全種</li>
-                <li>M4</li>
                 <li>HYEON BURST</li>
                 <li>KASTOV 762</li>
                 <li>PATRIOT XMR</li>
@@ -134,6 +148,7 @@ export default function RulesPage() {
                 <li>KRAIT P68</li>
                 <li>.50 GS</li>
                 <li>Mojave .357</li>
+                <li>その他新武器</li>
               </ul>
             </div>
 
@@ -149,6 +164,7 @@ export default function RulesPage() {
                 <li>アキンボ</li>
                 <li>高速弾以外の特殊弾全般</li>
                 <li>ピストル用全般</li>
+                <li>SMGのロングバレル</li>
               </ul>
             </div>
           </div>
@@ -161,17 +177,20 @@ export default function RulesPage() {
           <div className="grid grid-2">
             <div className="card">
               <h3>AR</h3>
-              <p className="mono">HAN 86</p>
+              <p className="mono">M4 / HAN 86</p>
+              <p className="muted" style={{ fontSize: 12 }}>ARは等倍サイト必須</p>
             </div>
 
             <div className="card">
               <h3>SMG</h3>
               <p className="mono">ISO NIGHTSHADE / VEL 46</p>
+              <p className="muted" style={{ fontSize: 12 }}>SMGはロングバレル禁止</p>
             </div>
 
             <div className="card">
               <h3>サブ</h3>
               <p className="mono">SANG 9MM</p>
+              <p className="muted" style={{ fontSize: 12 }}>アタッチメント禁止</p>
             </div>
 
             <div className="card">
@@ -191,7 +210,7 @@ export default function RulesPage() {
 
             <div className="card">
               <h3>キルストリーク</h3>
-              <p className="mono">無し</p>
+              <p className="mono">ミサイル斉射</p>
             </div>
 
             <div className="card">
