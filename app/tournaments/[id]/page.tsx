@@ -8,6 +8,7 @@ import { LoadingSkeleton } from '@/components/UIState'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import TournamentSchedule from '@/components/TournamentSchedule'
 import TournamentSeedEditor from '@/components/TournamentSeedEditor'
+import { localInputToJst, isoToLocalInput } from '@/lib/tournamentSchedule'
 
 type TournamentRow = {
   id: string; title: string; description: string | null; format: string; entry_mode: string
@@ -42,6 +43,61 @@ export default function TournamentDetailPage() {
   const [busy, setBusy] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+
+  // 大会情報の編集 (主催者)
+  const [editing, setEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editPrize, setEditPrize] = useState('')
+  const [editRules, setEditRules] = useState('')
+  const [editDeadline, setEditDeadline] = useState('')
+  const [editEventStart, setEditEventStart] = useState('')
+  const [editCapacity, setEditCapacity] = useState(8)
+  const [editRateCapOn, setEditRateCapOn] = useState(false)
+  const [editRateCap, setEditRateCap] = useState(2000)
+
+  const startEdit = () => {
+    if (!tournament) return
+    setEditTitle(tournament.title)
+    setEditDescription(tournament.description ?? '')
+    setEditPrize(tournament.prize ?? '')
+    setEditRules(tournament.rules ?? '')
+    setEditDeadline(tournament.entry_deadline ? isoToLocalInput(tournament.entry_deadline) : '')
+    setEditEventStart(tournament.event_start ? isoToLocalInput(tournament.event_start) : '')
+    setEditCapacity(tournament.capacity)
+    setEditRateCapOn(tournament.rate_cap != null)
+    setEditRateCap(tournament.rate_cap ?? 2000)
+    setEditing(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!tournament || !tournamentId) return
+    if (!editTitle.trim()) { showToast('タイトルを入力してください', 'error'); return }
+    setBusy(true)
+    const patch: Record<string, unknown> = {
+      title: editTitle.trim(),
+      description: editDescription.trim() || null,
+      prize: editPrize.trim() || null,
+      rules: editRules.trim() || null,
+      entry_deadline: editDeadline ? localInputToJst(editDeadline) : null,
+      event_start: editEventStart ? localInputToJst(editEventStart) : null,
+    }
+    if (tournament.status === 'recruit') {
+      if (editCapacity < entries.length) {
+        showToast(`定員を現在のエントリー数（${entries.length}）未満にはできません`, 'error')
+        setBusy(false)
+        return
+      }
+      patch.capacity = editCapacity
+      patch.rate_cap = editRateCapOn ? editRateCap : null
+    }
+    const { error } = await supabase.from('tournaments').update(patch).eq('id', tournamentId)
+    setBusy(false)
+    if (error) { showToast(error.message || '更新に失敗しました', 'error'); return }
+    showToast('大会情報を更新しました', 'success')
+    setEditing(false)
+    setReloadKey(k => k + 1)
+  }
 
   // エントリーフォーム
   const [weaponClass, setWeaponClass] = useState('ar')
@@ -521,6 +577,9 @@ export default function TournamentDetailPage() {
                 {busy ? '処理中...' : '決勝トーナメント開始'}
               </button>
             )}
+            <button className="btn-ghost" onClick={() => (editing ? setEditing(false) : startEdit())} disabled={busy}>
+              {editing ? '編集をやめる' : '大会情報を編集'}
+            </button>
             <button className="btn-ghost" onClick={() => router.push('/tournaments')}>
               一覧に戻る
             </button>
@@ -528,6 +587,67 @@ export default function TournamentDetailPage() {
               大会を削除
             </button>
           </div>
+
+          {editing && (
+            <div className="card stack" style={{ marginTop: 14, borderColor: 'rgba(0,229,255,0.3)' }}>
+              <div>
+                <label htmlFor="e-title" className="stat-label">大会タイトル</label>
+                <input id="e-title" value={editTitle} onChange={e => setEditTitle(e.target.value)} style={{ marginTop: 6 }} />
+              </div>
+              <div>
+                <label htmlFor="e-desc" className="stat-label">説明</label>
+                <textarea id="e-desc" value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={4} style={{ marginTop: 6 }} />
+              </div>
+              <div>
+                <label htmlFor="e-prize" className="stat-label">賞品・賞金</label>
+                <input id="e-prize" value={editPrize} onChange={e => setEditPrize(e.target.value)} placeholder="例: 優勝 ¥10,000" style={{ marginTop: 6 }} />
+              </div>
+              <div>
+                <label htmlFor="e-rules" className="stat-label">追加ルール</label>
+                <textarea id="e-rules" value={editRules} onChange={e => setEditRules(e.target.value)} rows={4} style={{ marginTop: 6 }} />
+              </div>
+              <div className="grid grid-2" style={{ gap: 8 }}>
+                <div>
+                  <label htmlFor="e-deadline" className="stat-label">エントリー締切</label>
+                  <input id="e-deadline" type="datetime-local" value={editDeadline} onChange={e => setEditDeadline(e.target.value)} style={{ marginTop: 6 }} />
+                </div>
+                <div>
+                  <label htmlFor="e-start" className="stat-label">開始日時</label>
+                  <input id="e-start" type="datetime-local" value={editEventStart} onChange={e => setEditEventStart(e.target.value)} style={{ marginTop: 6 }} />
+                </div>
+              </div>
+              {tournament.status === 'recruit' ? (
+                <div className="grid grid-2" style={{ gap: 8 }}>
+                  <div>
+                    <label htmlFor="e-capacity" className="stat-label">定員</label>
+                    <select id="e-capacity" value={editCapacity} onChange={e => setEditCapacity(Number(e.target.value))} style={{ marginTop: 6 }}>
+                      {[4, 8, 16, 32, 64].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="e-ratecap" className="stat-label">レート制限（ピーク）</label>
+                    <div className="row" style={{ gap: 8, marginTop: 6 }}>
+                      <input type="checkbox" checked={editRateCapOn} onChange={e => setEditRateCapOn(e.target.checked)} style={{ width: 'auto' }} />
+                      <input
+                        id="e-ratecap" type="number" value={editRateCap} min={1000} max={4000} step={50}
+                        onChange={e => setEditRateCap(Number(e.target.value))} disabled={!editRateCapOn}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="muted" style={{ fontSize: 11, margin: 0 }}>※ 定員・レート制限・形式は募集中のみ変更できます</p>
+              )}
+              <div className="row" style={{ gap: 8 }}>
+                <button className="btn-primary" onClick={handleSaveEdit} disabled={busy}>
+                  {busy ? '保存中...' : '保存する'}
+                </button>
+                <button className="btn-ghost" onClick={() => setEditing(false)} disabled={busy}>
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
