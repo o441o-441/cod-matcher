@@ -245,7 +245,7 @@ export default function TournamentMatchPage() {
                   <span className="badge" style={{ fontSize: 9 }}>GAME {g.game}</span>
                   <span style={{ fontWeight: 700 }}>{MODE_LABEL[g.mode] ?? g.mode}</span>
                   <span style={{ color: 'var(--success)' }}>{g.map}</span>
-                  <span className="muted">{g.side}</span>
+                  <span className="muted">{teamA?.teamName ?? 'A'}: {g.side === 'JSOC' ? 'チーム1' : 'チーム2'}</span>
                   <span className="muted" style={{ fontSize: 11 }}>BAN: {g.bans.join(', ')}</span>
                 </div>
               </div>

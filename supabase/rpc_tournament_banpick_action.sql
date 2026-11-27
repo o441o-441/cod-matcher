@@ -11,6 +11,12 @@
 --   pick_side 時点の banpick_turn_entry_id は今ゲームの後攻側なので、
 --   それを次ゲームの先行に引き継げば抽選結果に依らず先行が交互になる。
 --
+-- 修正内容2 (fix_banpick_side_normalize_to_entry_a): サイド表示反転バグ
+--   pick_side の p_target はピック実行チーム (後攻) が自分のサイドとして選んだ値だが、
+--   旧実装はそのまま保存しており、UI は常に entry_a のサイドとして解釈するため
+--   entry_b がピックした試合では表示が反転していた (チーム2を選んでもチーム1表示)。
+--   entry_b のピック時は反転し、常に entry_a 視点のサイドとして保存する。
+--
 -- ターン遷移 (1ゲーム内): ban(先行) → ban(後攻) → pick_map(先行) → pick_side(後攻)
 -- 主催者/管理者はターンに関係なく両チーム分を代行可能。
 -- ============================================================
@@ -33,6 +39,7 @@ DECLARE
   v_mode_order text[] := ARRAY['hp','snd','ovl','hp','snd'];
   v_next_game int;
   v_game_record jsonb;
+  v_side_a text;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'not authenticated'; END IF;
 
@@ -75,12 +82,20 @@ BEGIN
     UPDATE tournament_matches SET selected_map = p_target, banpick_turn_entry_id = v_next_turn, banpick_action = 'pick_side' WHERE id = p_tournament_match_id;
 
   ELSIF p_action = 'pick_side' THEN
-    v_game_record := jsonb_build_object('game', v_match.current_game, 'mode', v_match.selected_mode, 'map', v_match.selected_map, 'bans', v_bans, 'side', p_target);
+    -- p_target はピック実行チーム (= 現ターン保持者 = 後攻) が自分のサイドとして選んだ値。
+    -- 常に entry_a 視点に正規化して保存する (表示側は entry_a のサイドとして解釈する)
+    IF v_match.banpick_turn_entry_id = v_match.entry_b_id THEN
+      v_side_a := CASE WHEN p_target = 'JSOC' THEN 'ギルド' ELSE 'JSOC' END;
+    ELSE
+      v_side_a := p_target;
+    END IF;
+
+    v_game_record := jsonb_build_object('game', v_match.current_game, 'mode', v_match.selected_mode, 'map', v_match.selected_map, 'bans', v_bans, 'side', v_side_a);
     v_next_game := v_match.current_game + 1;
 
     IF v_next_game > v_total_games THEN
       UPDATE tournament_matches
-      SET side_choice = p_target, games = v_match.games || v_game_record,
+      SET side_choice = v_side_a, games = v_match.games || v_game_record,
           banpick_status = 'completed', banpick_action = NULL, banpick_turn_entry_id = NULL
       WHERE id = p_tournament_match_id;
     ELSE
@@ -90,7 +105,7 @@ BEGIN
       v_next_turn := v_match.banpick_turn_entry_id;
 
       UPDATE tournament_matches
-      SET side_choice = p_target, games = v_match.games || v_game_record,
+      SET side_choice = v_side_a, games = v_match.games || v_game_record,
           current_game = v_next_game, selected_mode = v_mode_order[v_next_game],
           selected_map = NULL, bans = '[]'::jsonb,
           banpick_turn_entry_id = v_next_turn,
