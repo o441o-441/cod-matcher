@@ -86,12 +86,15 @@ export default function TournamentMatchPage() {
       const myEntry = entryRows.find(e => e.user_id === uid)
       if (myEntry) {
         // 自分のチームのエントリー（a or b）を特定
+        // チーム型大会は assigned_team_index が NULL (ソロ型のみ採番)。
+        // NULL同士の === は true になり全員が entry_a 扱いになるため、index照合はソロ型に限定する
         const myTeamIdx = myEntry.assigned_team_index
         const aEntry = entryRows.find(e => e.id === mData.entry_a_id)
         const bEntry = entryRows.find(e => e.id === mData.entry_b_id)
-        if (aEntry && aEntry.assigned_team_index === myTeamIdx) setMyEntryId(mData.entry_a_id)
-        else if (bEntry && bEntry.assigned_team_index === myTeamIdx) setMyEntryId(mData.entry_b_id)
+        if (myTeamIdx != null && aEntry && aEntry.assigned_team_index === myTeamIdx) setMyEntryId(mData.entry_a_id)
+        else if (myTeamIdx != null && bEntry && bEntry.assigned_team_index === myTeamIdx) setMyEntryId(mData.entry_b_id)
         else if (myEntry.id === mData.entry_a_id || myEntry.id === mData.entry_b_id) setMyEntryId(myEntry.id)
+        else setMyEntryId(null)
       }
     }
 
